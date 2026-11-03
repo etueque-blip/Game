@@ -171,7 +171,8 @@ def dubai():
     pad(cx, cz, half, c=(196, 186, 165))
     roads(cx, cz, half, 145, 72.5)
     labels.append({"name": "DUBAI", "x": cx, "y": 1900, "z": cz})
-    zones = [(cx, cz, 240)]
+    frame = (cx - 720, cz + 640)
+    zones = [(cx, cz, 240), (frame[0], frame[1], 150)]
     for gx in range(-7, 8):
         for gz in range(-7, 8):
             x, z = cx + gx * 145, cz + gz * 145
@@ -205,6 +206,15 @@ def dubai():
         vcyl(cx, y, cz, hh, d, c=(225, 230, 235), m="Metal")
         y += hh
     ball((cx, y + 2, cz), 4, c=(255, 50, 50), m="Neon", solid=False)
+    # Дубайская рамка (150 м): две башни и перемычка, золотой фасад
+    fx, fz = frame
+    fh, fw = m2s(150), m2s(93)
+    GOLD = (214, 176, 72)
+    for s_ in (-1, 1):
+        box((fx + s_ * fw / 2, 0.45 + fh / 2, fz), (24, fh, 26), c=GOLD, m="Metal", refl=0.2)
+    box((fx, 0.45 + fh - 12, fz), (fw + 24, 24, 26), c=GOLD, m="Metal", refl=0.2)
+    box((fx, 0.45 + fh - 12, fz), (fw - 10, 14, 27), c=(120, 170, 200), m="Glass", solid=False, refl=0.3)
+    box((fx, 0.45 + 2, fz), (fw + 60, 4, 80), c=(200, 190, 170), m="Concrete", solid=False)
     # фонтан и пруд у основания
     vcyl(cx + 230, 0.45, cz + 120, 0.3, 260, c=(40, 110, 150), m="Glass", solid=False, refl=0.3)
 
@@ -257,7 +267,8 @@ def london():
     eye = (cx - 560, zr(cx - 560) + 175)
     shard = (cx + 320, zr(cx + 320) + 280)
     bridge_x = cx + 700
-    zones = [(bigben_x + 230, zr(bigben_x) - 120, 290), (eye[0], eye[1], 170), (shard[0], shard[1], 120),
+    stpaul = (cx + 60, zr(cx + 60) - 330)
+    zones = [(bigben_x + 230, zr(bigben_x) - 120, 290), (eye[0], eye[1], 170), (shard[0], shard[1], 120), (stpaul[0], stpaul[1], 130),
              (bridge_x, zr(bridge_x), 140), (cx + 520, zr(cx + 520) - 360, 260), (cx - 900, cz + 650, 260)]
     BR = [(150, 75, 60), (170, 95, 70), (225, 215, 190), (200, 195, 180), (140, 140, 145), (185, 120, 90)]
     for gx in range(-8, 9):
@@ -341,6 +352,22 @@ def london():
     ell((ccx, 0.45 + gh / 2, ccz), (34, gh / 2, 34), c=(55, 95, 110), m="Glass", refl=0.3)
     for i, (dx, dz, h, w) in enumerate(((120, 40, m2s(160), 70), (-110, -60, m2s(230), 60), (40, -160, m2s(200), 55), (-60, 140, m2s(140), 65), (160, -120, m2s(180), 50))):
         glass_tower(ccx + dx, ccz + dz, w, w * 0.8, h, "box" if i % 2 else "setback", rng.choice(GLASS[:3]))
+
+    # Собор Святого Павла (111 м): неф, барабан, купол, фонарь, две башни фасада
+    px_, pz_ = stpaul
+    STONE2 = (222, 214, 192)
+    box((px_, 0.45 + 22, pz_), (170, 44, 56), c=STONE2, m="Limestone")
+    box((px_ + 20, 0.45 + 18, pz_), (50, 36, 120), c=STONE2, m="Limestone")
+    vcyl(px_ + 20, 0.45 + 44, pz_, 34, 66, c=STONE2, m="Limestone")
+    vcyl(px_ + 20, 0.45 + 78, pz_, 6, 70, c=(200, 192, 170), m="Limestone", solid=False)
+    ell((px_ + 20, 0.45 + 84, pz_), (31, 40, 31), c=(150, 160, 160), m="Slate")
+    vcyl(px_ + 20, 0.45 + 122, pz_, 22, 10, c=STONE2, m="Limestone")
+    ball((px_ + 20, 0.45 + 147, pz_), 7, c=(220, 180, 60), m="Metal", solid=False)
+    vcyl(px_ + 20, 0.45 + 150, pz_, 14, 1.6, c=(220, 180, 60), m="Metal", solid=False)
+    for s_ in (-1, 1):
+        box((px_ - 78, 0.45 + 40, pz_ + s_ * 20), (16, 80, 16), c=STONE2, m="Limestone")
+        box((px_ - 78, 0.45 + 86, pz_ + s_ * 20), (10, 12, 10), c=(150, 160, 160), m="Slate", solid=False)
+    box((px_ - 92, 0.45 + 18, pz_), (14, 36, 44), c=STONE2, m="Limestone")
 
     # Тауэрский мост
     bz = zr(bridge_x)
