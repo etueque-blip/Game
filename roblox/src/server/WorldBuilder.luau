@@ -331,7 +331,12 @@ local function buildCity(folder: Folder)
 		p.Transparency = d[15] or 0
 		p.TopSurface = Enum.SurfaceType.Smooth
 		p.BottomSurface = Enum.SurfaceType.Smooth
-		if p.Material == Enum.Material.Neon or math.max(size.X, size.Z) < 2 then
+		-- тени — самое дорогое: их не отбрасывают неон, мелочь и весь декор (деревья, разметка, вода)
+		local decor = d[13] ~= 1 and math.max(size.X, size.Y, size.Z) < 40
+		if decor then
+			p.CanQuery = false
+		end
+		if p.Material == Enum.Material.Neon or math.max(size.X, size.Z) < 2 or decor or p.Material == Enum.Material.LeafyGrass then
 			p.CastShadow = false
 		end
 		p.Parent = f
@@ -450,6 +455,7 @@ local function buildNature(folder: Folder)
 					crown.CFrame = CFrame.new(x, h + 15 * s, z)
 					crown.Color = leafs[rng:NextInteger(1, #leafs)]
 					crown.Material = Enum.Material.LeafyGrass
+					crown.CastShadow = false
 					crown.Parent = f
 				end
 			end
