@@ -6356,6 +6356,47 @@ RunService:BindToRenderStep("SkyPilot", Enum.RenderPriority.Camera.Value + 1, fu
 	end
 end)
 
+-- ночной город: в сумерках стеклянные башни, терминалы и вышки светятся тёплым светом окон
+task.spawn(function()
+	local Lighting = game:GetService("Lighting")
+	local worldFolder = workspace:WaitForChild("SkyPilotWorld", 60)
+	if not worldFolder then
+		return
+	end
+	task.wait(5) -- даём серверу достроить город
+	local glass: { { p: BasePart, color: Color3, mat: Enum.Material } } = {}
+	for _, d in worldFolder:GetDescendants() do
+		if d:IsA("BasePart") and d.Material == Enum.Material.Glass and d.Size.Y > 20 and d.Transparency < 0.5 then
+			table.insert(glass, { p = d, color = d.Color, mat = d.Material })
+		end
+	end
+	local WARM = Color3.fromRGB(255, 205, 130)
+	local night: boolean? = nil
+	while true do
+		local t = Lighting.ClockTime
+		local isNight = t < 6.3 or t > 18.7
+		if isNight ~= night then
+			night = isNight
+			for i, g in glass do
+				if g.p.Parent then
+					if isNight then
+						local c = g.color:Lerp(WARM, 0.45)
+						g.p.Material = Enum.Material.Neon
+						g.p.Color = Color3.new(c.R * 0.42, c.G * 0.4, c.B * 0.34)
+					else
+						g.p.Material = g.mat
+						g.p.Color = g.color
+					end
+				end
+				if i % 300 == 0 then
+					task.wait()
+				end
+			end
+		end
+		task.wait(5)
+	end
+end)
+
 -- после крушения: «В ангар» сбрасывает полёт, «Снова» — новый запрос
 local baseToHangar = ui.showHangar
 ui.showHangar = function(on: boolean?)
