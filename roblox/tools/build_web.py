@@ -648,6 +648,10 @@ def main():
     s = add_weather(s)
     s = add_gates(s)
     s = add_atc(s)
+    s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
+              '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс
+    s = patch(s, "lastCfg = cfg; lastMode = mode; raceReset();", "lastCfg = cfg; lastMode = mode; lastDest = flightDest; raceReset();")
+    s = patch(s, "let gameMode = \"free\", flightDest = null, parkBrake = false;", "let gameMode = \"free\", flightDest = null, lastDest = null, parkBrake = false;")
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

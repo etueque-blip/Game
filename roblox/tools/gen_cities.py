@@ -400,8 +400,9 @@ def tashkent():
     tcity = (cx + 120, cz + 60)
     chorsu = (cx - 720, cz + 420)
     square = (cx - 180, cz - 30)
+    museum = (cx + 380, cz - 330)
     zones = [(tv[0], tv[1], 130), (mosque[0], mosque[1], 200), (minor[0], minor[1], 110), (tcity[0] + 100, tcity[1] + 100, 260),
-             (chorsu[0], chorsu[1], 110), (square[0], square[1], 130)]
+             (chorsu[0], chorsu[1], 110), (square[0], square[1], 130), (museum[0], museum[1], 95)]
     PANEL = [(232, 228, 214), (214, 208, 196), (205, 190, 165), (225, 215, 195), (190, 196, 200)]
     for gx in range(-7, 8):
         for gz in range(-7, 8):
@@ -475,6 +476,22 @@ def tashkent():
     vcyl(square[0], 0.85, square[1], 0.3, 60, c=(50, 120, 160), m="Glass", solid=False, refl=0.3)
     box((square[0], 0.45 + 6, square[1]), (10, 12, 10), c=(120, 110, 100), m="Granite")
     box((square[0], 0.45 + 16, square[1]), (5, 8, 8), c=(110, 80, 40), m="Metal", solid=False)
+    # Музей с бирюзовым ребристым куполом: круглый барабан, колоннада, купол из «долек»
+    mx_, mz_ = museum
+    WHITE = (238, 236, 228)
+    vcyl(mx_, 0.45, mz_, 4, 118, c=(200, 195, 185), m="Granite")
+    vcyl(mx_, 4.45, mz_, 34, 92, c=WHITE, m="Marble")
+    for i in range(16):
+        a = 2 * math.pi * i / 16
+        vcyl(mx_ + math.cos(a) * 52, 4.45, mz_ + math.sin(a) * 52, 34, 4, c=WHITE, m="Marble", solid=False)
+    vcyl(mx_, 38.45, mz_, 4, 112, c=WHITE, m="Marble")
+    ell((mx_, 42.45, mz_), (46, 40, 46), c=(40, 150, 190), m="SmoothPlastic", refl=0.15)
+    for i in range(12):
+        a = 2 * math.pi * i / 12
+        add("box", (mx_ + math.cos(a) * 30, 72, mz_ + math.sin(a) * 30), (1.5, 22, 1.5), (0, -a, math.radians(48) * 0), c=(220, 200, 120), m="Metal", solid=False)
+    vcyl(mx_, 82, mz_, 10, 4, c=(220, 190, 90), m="Metal", solid=False)
+    ball((mx_, 93, mz_), 5, c=(220, 190, 90), m="Metal", solid=False)
+
     # Гостиница «Узбекистан» — решётчатый фасад
     hx, hz = cx - 180, cz + 220
     box((hx, 0.45 + 45, hz), (150, 90, 32), c=(225, 225, 220), m="Concrete")
