@@ -44,7 +44,16 @@ local lastMode = "runway:A"
 local apTarget: Autopilot.Target? = nil
 local navIdx = 0 -- 0 = навигация выключена
 local parkBrake = false
-local gateTarget: any = nil -- стоянка, к которой надо зарулить после посадки
+local gateTarget: any = nil
+local callsign = "SKY000"
+local atcApproach = false -- разрешение на заход уже выдано
+
+local function runwayFor(ap: any, pos: Vector3): string
+	-- с какого торца заходим: локальная Z > 0 — с юга (полоса ap.south)
+	local dx, dz = pos.X - ap.cx, pos.Z - ap.cz
+	local lz = if ap.rot == 1 then dx else dz
+	return if lz > 0 then ap.south else ap.north
+end -- стоянка, к которой надо зарулить после посадки
 local lastDest: string? = nil
 local apFollowNav = false
 local vsSmooth = 0
@@ -240,6 +249,22 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 		engineSound = s
 	end
 	addLog(string.format("Старт: %s, %s", cfg.name, mode))
+	callsign = string.format("SKY%03d", math.random(100, 999))
+	atcApproach = false
+	do
+		local apId = World.runwayAt(spawnCF.Position.X, spawnCF.Position.Z, 20)
+		local ap = apId and World.airportById(apId)
+		task.delay(4.5, function()
+			if not flight or flight.crashed then
+				return
+			end
+			if ap then
+				ui.atc(string.format("Вышка %s: %s, полоса %s, взлёт разрешён. Ветер штиль.", ap.code, callsign, runwayFor(ap, spawnCF.Position + spawnCF.LookVector * -100)))
+			else
+				ui.atc(string.format("Подход: %s, наблюдаю вас на радаре, %d ft. Курс по навигации.", callsign, math.round(spawnCF.Position.Y * FT)))
+			end
+		end)
+	end
 	parkBrake = mode ~= "air"
 	-- рейс: навигация сразу на аэропорт назначения
 	if lastDest then
@@ -308,6 +333,12 @@ local function handleEvents(f: FlightPhysics.Flight)
 			ui.toast(ev.text, if ev.good then "green" else "amber")
 			addLog(ev.text)
 			Landing:FireServer(ev.fpm)
+			if ev.airport then
+				local ap = World.airportById(ev.airport)
+				if ap then
+					ui.atc(string.format("Вышка %s: %s, посадка в %s. Освободите полосу.", ap.code, callsign, os.date("%H:%M")))
+				end
+			end
 			-- после посадки в аэропорту назначения — рулим к свободной стоянке
 			if lastDest and ev.airport == lastDest and not gateTarget then
 				local list = World.STANDS[lastDest]
@@ -324,6 +355,7 @@ local function handleEvents(f: FlightPhysics.Flight)
 				tireSmoke(model, f.cfg)
 			end
 		elseif ev.type == "takeoff" then
+			ui.atc(string.format("%s, взлёт в %s. Набирайте 3000 ft, курс по навигации.", callsign, os.date("%H:%M")))
 			addLog(ev.text)
 		elseif ev.type == "crash" then
 			ui.toast("💥 " .. ev.text, "red")
@@ -443,12 +475,21 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	ui.setWeather(f.pos.Y * FT)
 
 	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
+	-- разрешение на заход: рейс, до аэропорта назначения меньше 6 км
+	if lastDest and not atcApproach and not f.onGround then
+		local dst = World.airportById(lastDest)
+		if dst and Vector3.new(f.pos.X - dst.cx, 0, f.pos.Z - dst.cz).Magnitude * World.METERS_PER_STUD < 6000 then
+			atcApproach = true
+			ui.atc(string.format("Вышка %s: %s, заход на полосу %s разрешён. Шасси, закрылки.", dst.code, callsign, runwayFor(dst, f.pos)))
+		end
+	end
 	local ringPos, ringName = race.target()
 	if gateTarget then
 		local gp = Vector3.new(gateTarget.x, 0, gateTarget.z)
 		local d = Vector3.new(f.pos.X, 0, f.pos.Z) - gp
 		if f.onGround and f.speed < 3 and d.Magnitude < 45 then
 			GateParked:FireServer(gateTarget.id)
+			ui.atc(string.format("Земля: %s, стоянка %s, двигатели выключить. До связи!", callsign, gateTarget.id))
 			gateTarget = nil
 		else
 			ringPos, ringName = Vector3.new(gp.X, 0, gp.Z), "стоянка " .. gateTarget.id
@@ -519,6 +560,7 @@ RunService:BindToRenderStep("SkyPilot", Enum.RenderPriority.Camera.Value + 1, fu
 	local now = os.clock()
 	fps += ((1 / math.max(dt, 1e-3)) - fps) * 0.05
 	ui.tick(dt)
+	ui.atcTick(dt)
 	Animator.step(dt, now)
 	local f = flight
 	if f then

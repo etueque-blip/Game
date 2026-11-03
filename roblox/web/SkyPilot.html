@@ -48,6 +48,7 @@ button:focus-visible { outline: 2px solid var(--magenta); outline-offset: 2px; }
 #htape { position: absolute; top: calc(118px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(440px, calc(100% - 140px)); height: 34px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 #wx { position: absolute; right: calc(10px + env(safe-area-inset-right, 0px)); top: calc(256px + env(safe-area-inset-top, 0px)); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; line-height: 1.35; }
 #wx small { display: block; color: var(--dim); font-family: var(--f-num); font-size: 11px; }
+#atc { position: absolute; left: 50%; bottom: calc(262px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--panel-solid); border: 1px solid rgba(77,255,149,.4); color: var(--green); border-radius: 8px; padding: 6px 12px; font-family: var(--f-num); font-size: 13px; max-width: calc(100% - 32px); text-align: center; }
 #warn { position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%); font-family: var(--f-display); font-size: clamp(20px, 5vw, 34px); letter-spacing: .06em; text-shadow: 0 2px 12px rgba(0,0,0,.6); pointer-events: none; text-align: center; white-space: nowrap; }
 #toast { position: absolute; top: calc(198px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 140px); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 14px; text-align: center; pointer-events: none; }
 #touch { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px)); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
@@ -164,6 +165,7 @@ kbd { font-family: var(--f-num); font-size: 11px; border: 1px solid var(--line);
   <canvas id="adi" width="184" height="184" hidden></canvas>
   <canvas id="htape" width="880" height="68" hidden></canvas>
   <div id="nav" hidden></div>
+  <div id="atc" hidden></div>
   <div id="wx" hidden></div>
   <button id="park" hidden>Ⓟ Стояночный тормоз · пробел или нажми, чтобы отключить</button>
   <canvas id="radar" width="280" height="280" hidden></canvas>
@@ -1160,7 +1162,7 @@ let gearAnim = 1;
 function startFlight(cfg, mode) {
   if (planeObj) scene.remove(planeObj);
   debris.forEach((d) => scene.remove(d.m)); debris.length = 0;
-  lastCfg = cfg; lastMode = mode; raceReset(); gateTarget = null;
+  lastCfg = cfg; lastMode = mode; raceReset(); gateTarget = null; atcStart(mode);
   parkBrake = mode.startsWith("runway"); if (mode === "race") navIdx = 0;
   if (flightDest) { navIdx = AIRPORTS.findIndex((a) => a.id === flightDest) + 1; setTimeout(() => { const d = AIRPORTS[navIdx - 1]; toast("Рейс в " + d.code + " · " + d.title + " — навигация включена", "var(--magenta)"); }, 3200); }
   flight = newFlight(cfg, mode);
@@ -1185,7 +1187,7 @@ function doCrash(reason) {
     debris.push({ m, v: flight.vel.clone().multiplyScalar(0.25).add(new V3(R(-1, 1), R(0.3, 1.5), R(-1, 1)).multiplyScalar(R(20, 80))), w: new V3(R(-3, 3), R(-3, 3), R(-3, 3)) }); } });
   const sz = flight.cfg.length;
   for (let i = 0; i < 26; i++) spawnPuff(flight.pos.clone().add(new V3(R(-1, 1), R(0, 1), R(-1, 1)).multiplyScalar(sz * 0.3)), i < 12 ? 0xffa030 : 0x2a2a2a, sz * 0.3, i < 12 ? 1.4 : 6, sz * (i < 12 ? 0.8 : 0.35), new V3(R(-8, 8), R(10, 30), R(-8, 8)), i < 12 ? 1 : 0.8);
-  crashTimer = 1.8; $("crashReason").textContent = reason; $("hud").hidden = true; $("adi").hidden = true; $("radar").hidden = true; $("htape").hidden = true; $("wx").hidden = true; $("race").hidden = true; $("nav").hidden = true; raceReset(); $("warn").textContent = "";
+  crashTimer = 1.8; $("crashReason").textContent = reason; $("hud").hidden = true; $("adi").hidden = true; $("radar").hidden = true; $("atc").hidden = true; $("htape").hidden = true; $("wx").hidden = true; $("race").hidden = true; $("nav").hidden = true; raceReset(); $("warn").textContent = "";
 }
 
 // ============================================================ INPUT
@@ -1254,6 +1256,24 @@ function setThrottleUI(v) { $("thrLevel").style.height = v * 100 + "%"; $("thrHa
 }
 
 // ============================================================ HUD
+
+// ===== радиосвязь с диспетчером
+let callsign = "SKY000", atcApproach = false, atcT = 0;
+const hhmm = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+function atc(text) { const el = $("atc"); el.textContent = "📻 " + text; el.hidden = false; atcT = 7; }
+function runwayFor(ap, x, z) { const lz = ap.rot ? x - ap.cx : z - ap.cz; return lz > 0 ? ap.south : ap.north; }
+function atcStart(mode) {
+  callsign = "SKY" + (100 + Math.floor(Math.random() * 900)); atcApproach = false;
+  const ap = AIRPORTS.find((a) => "runway:" + a.id === mode);
+  setTimeout(() => { if (!flight || flight.crashed) return;
+    if (ap) atc(`Вышка ${ap.code}: ${callsign}, полоса ${runwayFor(ap, flight.pos.x, flight.pos.z + 0)}, взлёт разрешён. Ветер штиль.`);
+    else atc(`Подход: ${callsign}, наблюдаю вас на радаре, ${Math.round(flight.pos.y * FT)} ft. Курс по навигации.`); }, 4500);
+}
+function atcTick(f, dt) {
+  if (atcT > 0) { atcT -= dt; if (atcT <= 0) $("atc").hidden = true; }
+  if (flightDest && !atcApproach && !f.onGround) { const d = AIRPORTS.find((a) => a.id === flightDest);
+    if (d && Math.hypot(f.pos.x - d.cx, f.pos.z - d.cz) * 0.515 < 6000) { atcApproach = true; atc(`Вышка ${d.code}: ${callsign}, заход на полосу ${runwayFor(d, f.pos.x, f.pos.z)} разрешён. Шасси, закрылки.`); } }
+}
 
 // ===== стоянки (гейты) на перронах — тот же алгоритм, что в World.luau
 const STANDS = {};
@@ -1466,7 +1486,8 @@ function updateHUD(f) {
   drawRadar(f, hdg);
   $("htape").hidden = f.crashed; drawTape(hdg);
   updateSound(f);
-  if (gateTarget && f.onGround && f.speed < 3 && Math.hypot(f.pos.x - gateTarget.x, f.pos.z - gateTarget.z) < 45) { toast("Рейс завершён у гейта " + gateTarget.id + " · +500", "var(--green)"); addLog("Гейт " + gateTarget.id); gateTarget = null; }
+  atcTick(f, 1 / 60);
+  if (gateTarget && f.onGround && f.speed < 3 && Math.hypot(f.pos.x - gateTarget.x, f.pos.z - gateTarget.z) < 45) { toast("Рейс завершён у гейта " + gateTarget.id + " · +500", "var(--green)"); atc(`Земля: ${callsign}, стоянка ${gateTarget.id}, двигатели выключить. До связи!`); addLog("Гейт " + gateTarget.id); gateTarget = null; }
   { const el = $("wx"); el.hidden = f.crashed; const tC = Math.max(-56.5, 15 - 1.98 * f.pos.y * FT / 1000); el.innerHTML = `☀ Ясно · день<small>за бортом ${tC >= 0 ? "+" : ""}${Math.round(tC)} °C</small>`; }
   if (!f.onGround) parkBrake = false;
   $("park").hidden = !parkBrake || f.crashed;
@@ -1527,10 +1548,10 @@ function frame(t) {
     for (const ev of f.events) {
       if (ev.type === "landing") {
         toast(ev.text, ev.good ? "var(--green)" : "var(--amber)"); addLog(ev.text);
-        { const ap = airportAt(f.pos.x, f.pos.z); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
+        { const ap = airportAt(f.pos.x, f.pos.z); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
         for (const g of planeObj.userData.mainGear) for (let i = 0; i < 5; i++) spawnPuff(g.clone().applyQuaternion(f.att).add(f.pos), 0xdcdcdc, f.cfg.diameter * 0.5, 1.8, f.cfg.diameter * 1.2, new V3(R(-3, 3), R(1, 4), R(-3, 3)).add(f.vel.clone().multiplyScalar(0.3)), 0.7);
       }
-      else if (ev.type === "log") addLog(ev.text);
+      else if (ev.type === "log") { addLog(ev.text); if (ev.text.startsWith("Отрыв")) atc(`${callsign}, взлёт в ${hhmm()}. Набирайте 3000 ft, курс по навигации.`); }
       else if (ev.type === "crash") { toast("💥 " + ev.text, "var(--red)"); doCrash(ev.text); }
     }
     f.events.length = 0;

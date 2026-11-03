@@ -582,6 +582,41 @@ def add_gates(s):
     return s
 
 
+ATC_JS = r"""
+// ===== радиосвязь с диспетчером
+let callsign = "SKY000", atcApproach = false, atcT = 0;
+const hhmm = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+function atc(text) { const el = $("atc"); el.textContent = "📻 " + text; el.hidden = false; atcT = 7; }
+function runwayFor(ap, x, z) { const lz = ap.rot ? x - ap.cx : z - ap.cz; return lz > 0 ? ap.south : ap.north; }
+function atcStart(mode) {
+  callsign = "SKY" + (100 + Math.floor(Math.random() * 900)); atcApproach = false;
+  const ap = AIRPORTS.find((a) => "runway:" + a.id === mode);
+  setTimeout(() => { if (!flight || flight.crashed) return;
+    if (ap) atc(`Вышка ${ap.code}: ${callsign}, полоса ${runwayFor(ap, flight.pos.x, flight.pos.z + 0)}, взлёт разрешён. Ветер штиль.`);
+    else atc(`Подход: ${callsign}, наблюдаю вас на радаре, ${Math.round(flight.pos.y * FT)} ft. Курс по навигации.`); }, 4500);
+}
+function atcTick(f, dt) {
+  if (atcT > 0) { atcT -= dt; if (atcT <= 0) $("atc").hidden = true; }
+  if (flightDest && !atcApproach && !f.onGround) { const d = AIRPORTS.find((a) => a.id === flightDest);
+    if (d && Math.hypot(f.pos.x - d.cx, f.pos.z - d.cz) * 0.515 < 6000) { atcApproach = true; atc(`Вышка ${d.code}: ${callsign}, заход на полосу ${runwayFor(d, f.pos.x, f.pos.z)} разрешён. Шасси, закрылки.`); } }
+}
+"""
+
+
+def add_atc(s):
+    """Радиосвязь с диспетчером: взлёт, набор, заход, посадка, стоянка."""
+    s = patch(s, "#warn {", "#atc { position: absolute; left: 50%; bottom: calc(262px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--panel-solid); border: 1px solid rgba(77,255,149,.4); color: var(--green); border-radius: 8px; padding: 6px 12px; font-family: var(--f-num); font-size: 13px; max-width: calc(100% - 32px); text-align: center; }\n#warn {")
+    s = patch(s, '<div id="nav" hidden></div>', '<div id="nav" hidden></div>\n  <div id="atc" hidden></div>')
+    s = patch(s, "// ============================================================ HUD\n", "// ============================================================ HUD\n" + ATC_JS)
+    s = patch(s, "lastCfg = cfg; lastMode = mode; raceReset(); gateTarget = null;", "lastCfg = cfg; lastMode = mode; raceReset(); gateTarget = null; atcStart(mode);")
+    s = patch(s, "  updateSound(f);\n", "  updateSound(f);\n  atcTick(f, 1 / 60);\n")
+    s = patch(s, "      else if (ev.type === \"log\") addLog(ev.text);", "      else if (ev.type === \"log\") { addLog(ev.text); if (ev.text.startsWith(\"Отрыв\")) atc(`${callsign}, взлёт в ${hhmm()}. Набирайте 3000 ft, курс по навигации.`); }")
+    s = patch(s, "toast(\"Рейс завершён у гейта \" + gateTarget.id + \" · +500\", \"var(--green)\");", "toast(\"Рейс завершён у гейта \" + gateTarget.id + \" · +500\", \"var(--green)\"); atc(`Земля: ${callsign}, стоянка ${gateTarget.id}, двигатели выключить. До связи!`);")
+    s = patch(s, "{ const ap = airportAt(f.pos.x, f.pos.z);", "{ const ap = airportAt(f.pos.x, f.pos.z); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`);")
+    s = patch(s, '$("radar").hidden = true; $("htape").hidden = true;', '$("radar").hidden = true; $("atc").hidden = true; $("htape").hidden = true;')
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -612,6 +647,7 @@ def main():
     s = add_sound(s)
     s = add_weather(s)
     s = add_gates(s)
+    s = add_atc(s)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

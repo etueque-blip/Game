@@ -227,6 +227,25 @@ function Ui.new(cb: Callbacks)
 	banner.Activated:Connect(function()
 		cb.onAction("park")
 	end)
+	-- радиосвязь с диспетчером: последняя реплика, держится 7 секунд
+	local atc = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -256), Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.green, Text = "", Visible = false }, root)
+	corner(atc, 8)
+	stroke(atc, C.green, 0.6)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, atc)
+	local atcT = 0
+	function self.atc(text: string)
+		atc.Text = "📻 " .. text
+		atc.Visible = hud.Visible
+		atcT = 7
+	end
+	function self.atcTick(dt: number)
+		if atcT > 0 then
+			atcT -= dt
+			if atcT <= 0 or not hud.Visible then
+				atc.Visible = false
+			end
+		end
+	end
 	function self.setBanner(text: string?)
 		banner.Visible = text ~= nil and hud.Visible
 		if text then
