@@ -1,0 +1,35 @@
+{
+  "name": "SkyPilot",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "SkyPilot": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "SkyPilotServer": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "EnableMouseLockOption": false,
+        "CameraMaxZoomDistance": 400
+      },
+      "StarterPlayerScripts": {
+        "SkyPilotClient": { "$path": "src/client" }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "FallenPartsDestroyHeight": -2000
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "ClockTime": 14.5,
+        "Brightness": 2.5,
+        "GlobalShadows": true,
+        "Technology": "Future"
+      }
+    }
+  }
+}
