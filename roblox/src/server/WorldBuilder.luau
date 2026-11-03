@@ -279,23 +279,83 @@ local function buildAirport(folder: Folder, ap: any)
 	spawn.Parent = f
 end
 
+-- Города из CityData: каждая запись — деталь (коробка, цилиндр, шар, эллипсоид, клин)
 local function buildCity(folder: Folder)
+	local data = World.CityData
 	local f = Instance.new("Folder")
-	f.Name = "City"
+	f.Name = "Cities"
 	f.Parent = folder
-	part(f, Vector3.new(1900, 0.45, 1900), CFrame.new(World.CITY.x, 0.225, World.CITY.z), Color3.fromRGB(154, 154, 160), Enum.Material.Concrete, true)
-	local tints = {
-		Color3.fromRGB(223, 227, 232), Color3.fromRGB(185, 196, 208), Color3.fromRGB(159, 183, 207),
-		Color3.fromRGB(230, 217, 195), Color3.fromRGB(143, 161, 179),
-	}
-	for _, b in World.buildings do
-		local p = part(f, Vector3.new(b.w, b.h, b.d), CFrame.new(b.x, b.h / 2 + 0.45, b.z), tints[b.c], if b.h > 200 then Enum.Material.Glass else Enum.Material.Concrete, true)
-		if b.h > 200 then
-			p.Reflectance = 0.15
+	for i, d in data.props do
+		local kind = d[1]
+		local p: BasePart
+		if kind == "wedge" then
+			p = Instance.new("WedgePart")
+		else
+			local q = Instance.new("Part")
+			if kind == "cyl" then
+				q.Shape = Enum.PartType.Cylinder
+			elseif kind == "ball" then
+				q.Shape = Enum.PartType.Ball
+			end
+			p = q
 		end
-		if b.h > 250 then
-			neon(f, Vector3.new(3, 3, 3), CFrame.new(b.x, b.h + 3, b.z), Color3.fromRGB(255, 48, 48))
+		local size = Vector3.new(d[5], d[6], d[7])
+		if kind == "ell" then
+			local cap = Vector3.new(math.min(size.X, 2048), math.min(size.Y, 2048), math.min(size.Z, 2048))
+			p.Size = cap
+			local m = Instance.new("SpecialMesh")
+			m.MeshType = Enum.MeshType.Sphere
+			m.Scale = size / cap
+			m.Parent = p
+		else
+			p.Size = size
 		end
+		p.CFrame = CFrame.new(d[2], d[3], d[4]) * CFrame.Angles(d[8], d[9], d[10])
+		p.Color = Color3.fromHex(string.format("%06x", d[11]))
+		local ok, mat = pcall(function()
+			return (Enum.Material :: any)[d[12]]
+		end)
+		p.Material = if ok and mat then mat else Enum.Material.SmoothPlastic
+		p.Anchored = true
+		p.CanCollide = d[13] == 1
+		p.CanQuery = d[13] == 1
+		p.CanTouch = false
+		p.Reflectance = d[14] or 0
+		p.Transparency = d[15] or 0
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		if p.Material == Enum.Material.Neon or math.max(size.X, size.Z) < 2 then
+			p.CastShadow = false
+		end
+		p.Parent = f
+		if i % 400 == 0 then
+			task.wait() -- не подвешиваем сервер на старте
+		end
+	end
+	-- подписи городов: видно издалека, помогают ориентироваться
+	for _, l in data.labels do
+		local anchor = Instance.new("Part")
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false
+		anchor.Transparency = 1
+		anchor.Size = Vector3.one
+		anchor.Position = Vector3.new(l.x, l.y, l.z)
+		local bb = Instance.new("BillboardGui")
+		bb.Size = UDim2.fromOffset(320, 60)
+		bb.MaxDistance = 30000
+		bb.LightInfluence = 0
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundTransparency = 1
+		t.Font = Enum.Font.GothamBlack
+		t.TextScaled = true
+		t.Text = l.name
+		t.TextColor3 = Color3.fromRGB(255, 255, 255)
+		t.TextStrokeTransparency = 0.3
+		t.Parent = bb
+		bb.Parent = anchor
+		anchor.Parent = f
 	end
 end
 
@@ -303,7 +363,11 @@ local function buildNature(folder: Folder)
 	local f = Instance.new("Folder")
 	f.Name = "Nature"
 	f.Parent = folder
-	local avoid = { { 400, 0, 3800 }, { 14000, -16000, 3600 }, { World.CITY.x, World.CITY.z, 1500 } }
+	local avoid = { { 400, 0, 3800 }, { 14000, -16000, 3600 } }
+	for _, c in World.CITIES do
+		table.insert(avoid, { c.x, c.z, c.r })
+	end
+	table.insert(avoid, { 5500, -9800, 3300 }) -- море у Дубая
 	for _, lk in World.LAKES do
 		if World.terrainH(lk[1], lk[2]) <= 5 then
 			local water = Instance.new("Part")

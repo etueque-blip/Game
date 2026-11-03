@@ -160,15 +160,47 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 		local cp = ellipsoid(ctx, "Canopy", Vector3.new(D * 0.3, D * 0.32, L * 0.13), CFrame.new(0, D * 0.42, -L / 2 + L * 0.3), Color3.fromRGB(60, 80, 100), Enum.Material.Glass)
 		cp.Transparency = 0.25
 	else
-		local wsZ = -L / 2 + Ln * 0.55
-		block(ctx, "Windshield", Vector3.new(D * 0.55, D * 0.16, Ln * 0.3), CFrame.new(0, D * 0.3, wsZ) * CFrame.Angles(math.rad(-25), 0, 0), DARK, Enum.Material.Glass)
+		-- остекление кабины: 3 панели на сторону по поверхности носового эллипсоида
+		local z0 = -L / 2 + Ln
+		for i, f in { 0.8, 0.7, 0.58 } do
+			local zc = z0 - Ln * f
+			local r = D / 2 * math.sqrt(1 - f * f)
+			for _, s in { -1, 1 } do
+				local ang = math.rad(18 + (i - 1) * 24)
+				local x, y = s * r * math.sin(ang), r * math.cos(ang) * 0.92
+				local pane = block(ctx, "CockpitWindow", Vector3.new(r * 0.42, 0.08 * D, Ln * 0.11), CFrame.new(x, y, zc) * CFrame.Angles(math.rad(-38 + i * 8), 0, -s * ang), DARK, Enum.Material.Glass)
+				pane.CastShadow = false
+			end
+		end
 	end
-	-- окна и полоса ливреи
+	-- иллюминаторы и двери (как у настоящих лайнеров), полоса ливреи
 	for _, s in { -1, 1 } do
 		if cfg.windows then
-			block(ctx, "Windows", Vector3.new(D * 0.04, D * 0.09, cylLen * 0.9), CFrame.new(s * D * 0.485, D * 0.12, cylMid), DARK, Enum.Material.Glass)
+			local pitch = math.max(D * 0.11, 1.1)
+			local z0 = -L / 2 + Ln * 1.05
+			local z1 = L / 2 - Lt * 0.95
+			local n = math.min(math.floor((z1 - z0) / pitch), 70)
+			local step = (z1 - z0) / math.max(n, 1)
+			local wy = D * 0.13
+			local wx = s * math.sqrt(0.25 - 0.0169) * D
+			for i = 0, n do
+				local z = z0 + i * step
+				if i ~= 1 and i ~= n - 1 then
+					local w = block(ctx, "Window", Vector3.new(D * 0.025, D * 0.06, D * 0.045), CFrame.new(wx, wy, z), DARK, Enum.Material.Glass)
+					w.CastShadow = false
+				end
+			end
+			for _, z in { z0 + step * 1, z1 - step * 1 } do
+				local door = block(ctx, "Door", Vector3.new(D * 0.02, D * 0.2, D * 0.085), CFrame.new(wx * 1.005, D * 0.05, z), Color3.fromRGB(170, 175, 182))
+				door.CastShadow = false
+			end
 		end
-		block(ctx, "Cheatline", Vector3.new(D * 0.04, D * 0.06, cylLen), CFrame.new(s * D * 0.49, -D * 0.06, cylMid), col.accent)
+		block(ctx, "Cheatline", Vector3.new(D * 0.04, D * 0.05, cylLen), CFrame.new(s * D * 0.49, -D * 0.06, cylMid), col.accent)
+	end
+	-- брюхо светло-серое, как у настоящих лайнеров
+	if L > 50 then
+		local belly = ellipsoid(ctx, "Belly", Vector3.new(D * 0.47, D * 0.22, cylLen * 0.5), CFrame.new(0, -D * 0.3, cylMid), Color3.fromRGB(205, 210, 216))
+		belly.CastShadow = false
 	end
 
 	-- ===== крыло
@@ -199,7 +231,25 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	for _, s in { -1, 1 } do
 		local rLE = Vector3.new(s * rootX, wy, rootLEz)
 		local tLE, tChord = wingPoint(s, 1)
-		panel(ctx, "Wing", rLE, chord, tLE, tChord, wingThick, col.body)
+		local WINGC = if cfg.id == "F16" then col.body else Color3.fromRGB(214, 218, 224)
+		panel(ctx, "Wing", rLE, chord, tLE, tChord, wingThick, WINGC)
+		-- обтекатели механизации закрылков под задней кромкой
+		if L > 80 then
+			for _, fr in { 0.22, 0.42, 0.62 } do
+				local le, ch = wingPoint(s, fr)
+				ellipsoid(ctx, "FlapFairing", Vector3.new(chord * 0.03, chord * 0.045, ch * 0.28), CFrame.new(le.X, le.Y - wingThick * 0.6, le.Z + ch * 0.95), WINGC)
+			end
+		end
+		-- подкосы крыла у лёгкого самолёта
+		if cfg.wing == "high" then
+			local a0 = Vector3.new(s * D * 0.45, -D * 0.3, wz)
+			local tipP = wingPoint(s, 0.55)
+			local a1 = Vector3.new(tipP.X, tipP.Y - wingThick * 0.5, wz)
+			local mid = (a0 + a1) / 2
+			local dir = (a1 - a0).Unit
+			local strut = block(ctx, "Strut", Vector3.new((a1 - a0).Magnitude, 0.3, 0.6), CFrame.fromMatrix(mid, dir, Vector3.zAxis:Cross(dir).Unit), col.body)
+			strut.CastShadow = false
+		end
 		-- закрылки на внутренней половине
 		if not cfg.noFlaps then
 			local fi, ci = wingPoint(s, 0.04)
@@ -263,6 +313,11 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 		end
 	end
 
+	-- обтекатель стыка крыла и фюзеляжа
+	if cfg.wing == "low" and L > 50 then
+		ellipsoid(ctx, "WingFairing", Vector3.new(D * 0.46, D * 0.28, chord * 0.85), CFrame.new(0, -D * 0.28, wz + chord * 0.1), Color3.fromRGB(205, 210, 216))
+	end
+
 	-- ===== хвостовое оперение
 	local finRoot = math.max(cfg.finHeight * 0.95, L * 0.1)
 	local finLE = Vector3.new(0, D * 0.3, L / 2 - finRoot - L * 0.02)
@@ -274,6 +329,11 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	triangle(ctx, "Fin", finLE, finLE + Vector3.new(0, 0, finRoot), finTipLE + Vector3.new(0, 0, finTip), finThick, col.tail)
 	triangle(ctx, "Fin", finLE, finTipLE + Vector3.new(0, 0, finTip), finTipLE, finThick, col.tail)
 	light(ctx, "beacon", finTipLE + Vector3.new(0, 0.4, finTip * 0.5), Color3.fromRGB(255, 40, 40), math.max(0.5, D * 0.07))
+	-- форкиль и выхлоп ВСУ
+	triangle(ctx, "Dorsal", finLE + Vector3.new(0, 0, -finRoot * 0.45), finLE, finLE + Vector3.new(0, cfg.finHeight * 0.18, finRoot * 0.12), finThick * 0.8, col.tail)
+	if L > 50 then
+		cylZ(ctx, "APU", 0.4, D * 0.09, Vector3.new(0, 0, L / 2 - 0.1), DARK, Enum.Material.Metal)
+	end
 	light(ctx, "beacon", Vector3.new(0, -D / 2 - 0.2, cylMid), Color3.fromRGB(255, 40, 40), math.max(0.5, D * 0.07))
 
 	local hsRootChord = math.max(cfg.hstabSpan * 0.3, D * 0.6)
@@ -304,10 +364,14 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	local eD = cfg.engineD or D * 0.4
 	local eL = cfg.engineLen or eD * 2
 
+	-- турбовентиляторный двигатель: губа воздухозаборника, вентилятор, кок, мотогондола, сопло и конус
 	local function nacelle(pos: Vector3)
-		cylZ(ctx, "Nacelle", eL, eD, pos, col.engine, Enum.Material.Metal, engines)
-		cylZ(ctx, "Intake", 0.3, eD * 0.86, pos + Vector3.new(0, 0, -eL / 2 - 0.1), DARK, Enum.Material.Metal, engines)
-		cylZ(ctx, "Nozzle", eL * 0.25, eD * 0.6, pos + Vector3.new(0, 0, eL / 2 + eL * 0.1), DARK, Enum.Material.Metal, engines)
+		cylZ(ctx, "Nacelle", eL * 0.78, eD, pos + Vector3.new(0, 0, eL * 0.02), col.engine, Enum.Material.SmoothPlastic, engines)
+		cylZ(ctx, "Lip", eL * 0.08, eD * 1.02, pos + Vector3.new(0, 0, -eL * 0.4), Color3.fromRGB(225, 228, 232), Enum.Material.Metal, engines)
+		cylZ(ctx, "Fan", 0.2, eD * 0.86, pos + Vector3.new(0, 0, -eL * 0.38), Color3.fromRGB(45, 48, 54), Enum.Material.Metal, engines)
+		ellipsoid(ctx, "Spinner", Vector3.new(eD * 0.15, eD * 0.15, eD * 0.2), CFrame.new(pos + Vector3.new(0, 0, -eL * 0.38)), Color3.fromRGB(200, 204, 210), Enum.Material.Metal, engines)
+		cylZ(ctx, "Nozzle", eL * 0.2, eD * 0.72, pos + Vector3.new(0, 0, eL * 0.5), Color3.fromRGB(150, 154, 160), Enum.Material.Metal, engines)
+		ellipsoid(ctx, "Plug", Vector3.new(eD * 0.22, eD * 0.22, eL * 0.18), CFrame.new(pos + Vector3.new(0, 0, eL * 0.6)), Color3.fromRGB(70, 72, 78), Enum.Material.Metal, engines)
 	end
 
 	if cfg.engines == "wing2" or cfg.engines == "wing4" then
@@ -331,6 +395,12 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 		local ab = cylZ(ctx, "Afterburner", 0.4, eD * 0.75, Vector3.new(0, 0, L / 2 + eL * 0.3 - 0.3), Color3.fromRGB(255, 140, 50), Enum.Material.Neon, engines)
 		ab.Transparency = 1
 		ab.CastShadow = false
+		-- подфюзеляжные гребни и пусковые на законцовках
+		for _, s in { -1, 1 } do
+			triangle(ctx, "Ventral", Vector3.new(s * D * 0.25, -D * 0.45, L / 2 - L * 0.2), Vector3.new(s * D * 0.25, -D * 0.45, L / 2 - L * 0.08), Vector3.new(s * D * 0.35, -D * 0.85, L / 2 - L * 0.09), 0.25, col.body)
+			local tLE2, tC2 = wingPoint(s, 1)
+			cylZ(ctx, "Rail", tC2 * 1.6, 0.6, Vector3.new(tLE2.X + s * 0.4, tLE2.Y, tLE2.Z + tC2 * 0.4), Color3.fromRGB(220, 220, 220), Enum.Material.Metal, engines)
+		end
 		-- воздухозаборник под фюзеляжем
 		block(ctx, "Intake", Vector3.new(D * 0.6, D * 0.4, L * 0.12), CFrame.new(0, -D * 0.45, wz - chord * 0.6), DARK, Enum.Material.Metal, engines)
 	elseif cfg.engines == "prop" then
@@ -364,27 +434,51 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	local wheelW = math.max(0.6, wheelR * 0.8)
 	local wheelY = -cfg.gearHeight + wheelR
 	local mainGear = {}
-	local function leg(x: number, z: number, wheels: number)
+	local function leg(x: number, z: number, wheels: number, bogie: boolean?)
 		local top = -D * 0.35
 		cylY(ctx, "Strut", top - wheelY, math.max(0.25, wheelR * 0.35), Vector3.new(x, (top + wheelY) / 2, z), METAL, gearFolder)
-		for k = 1, wheels do
-			local off = if wheels == 1 then 0 else (k - 1.5) * wheelW * 1.15
-			local w = basePart(ctx, "Part", "Wheel", TIRE, Enum.Material.Rubber)
-			w.Shape = Enum.PartType.Cylinder
-			w.Size = Vector3.new(wheelW, wheelR * 2, wheelR * 2)
-			w.CFrame = root.CFrame * CFrame.new(x + off, wheelY, z)
-			attach(ctx, w, gearFolder)
+		local rows = if bogie then { -wheelR * 1.15, wheelR * 1.15 } else { 0 }
+		if bogie then
+			block(ctx, "Bogie", Vector3.new(wheelW * 0.5, wheelR * 0.4, wheelR * 3.2), CFrame.new(x, wheelY, z), METAL, Enum.Material.Metal, gearFolder)
+		end
+		for _, dzz in rows do
+			for k = 1, wheels do
+				local off = if wheels == 1 then 0 else (k - 1.5) * wheelW * 1.15
+				local w = basePart(ctx, "Part", "Wheel", TIRE, Enum.Material.Rubber)
+				w.Shape = Enum.PartType.Cylinder
+				w.Size = Vector3.new(wheelW, wheelR * 2, wheelR * 2)
+				w.CFrame = root.CFrame * CFrame.new(x + off, wheelY, z + dzz)
+				attach(ctx, w, gearFolder)
+				local hub = basePart(ctx, "Part", "Hub", Color3.fromRGB(190, 192, 196), Enum.Material.Metal)
+				hub.Shape = Enum.PartType.Cylinder
+				hub.Size = Vector3.new(wheelW * 1.02, wheelR * 1.1, wheelR * 1.1)
+				hub.CFrame = w.CFrame
+				hub.CastShadow = false
+				attach(ctx, hub, gearFolder)
+			end
 		end
 	end
 	local big = L > 100
-	leg(0, -L / 2 + math.max(L * 0.12, Ln * 0.9), if big then 2 else 1)
+	local noseZ = -L / 2 + math.max(L * 0.12, Ln * 0.9)
+	leg(0, noseZ, if big then 2 else 1)
+	-- посадочная фара на передней стойке
+	local lampPart = block(ctx, "LandingLight", Vector3.one * math.max(0.4, wheelR * 0.4), CFrame.new(0, -D * 0.4 - gearLen * 0.3, noseZ - 0.5), Color3.fromRGB(255, 250, 230), Enum.Material.Neon, gearFolder)
+	lampPart.CastShadow = false
+	if not static then
+		local sl = Instance.new("SpotLight")
+		sl.Brightness = 4
+		sl.Range = 60
+		sl.Angle = 40
+		sl.Face = Enum.NormalId.Front
+		sl.Parent = lampPart
+	end
 	local mainZ = wz + chord * 0.25
 	local mainX = if cfg.wing == "high" then D * 0.75 else math.max(D * 0.55, span * 0.08)
 	for _, s in { -1, 1 } do
-		leg(s * mainX, mainZ, if big then 2 else 1)
+		leg(s * mainX, mainZ, if big then 2 else 1, L > 130)
 		table.insert(mainGear, Vector3.new(s * mainX, -cfg.gearHeight, mainZ))
 		if cfg.id == "B747" then
-			leg(s * D * 0.3, mainZ + chord * 0.15, 2)
+			leg(s * D * 0.3, mainZ + chord * 0.15, 2, true)
 		end
 	end
 	if not static then
@@ -471,6 +565,10 @@ function PlaneBuilder.setGearVisible(model: Model, visible: boolean)
 	for _, p in g:GetChildren() do
 		if p:IsA("BasePart") then
 			p.LocalTransparencyModifier = if visible then 0 else 1
+			local sl = p:FindFirstChildOfClass("SpotLight")
+			if sl then
+				sl.Enabled = visible
+			end
 		end
 	end
 end

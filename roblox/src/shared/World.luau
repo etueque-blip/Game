@@ -64,8 +64,18 @@ for _, ap in World.AIRPORTS do
 	addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1500, -1000, 0.49, "apron")
 end
 
-World.CITY = { x = 5500, z = -7500 }
-table.insert(World.flatRects, { x0 = World.CITY.x - 950, x1 = World.CITY.x + 950, z0 = World.CITY.z - 950, z1 = World.CITY.z + 950, h = 0.45, kind = "city" })
+-- Города (Дубай, Лондон, Ташкент) — данные из tools/gen_cities.py, общие с веб-версией
+local CityData = require(script.Parent.CityData)
+World.CityData = CityData
+World.CITY = { x = 5500, z = -7500 } -- Дубай (для совместимости)
+World.CITIES = {
+	{ name = "DUBAI", x = 5500, z = -7500, r = 1700 },
+	{ name = "LONDON", x = -4000, z = 12500, r = 1300 },
+	{ name = "TASHKENT", x = 10500, z = 3000, r = 1200 },
+}
+for _, p in CityData.pads do
+	table.insert(World.flatRects, { x0 = p[1], x1 = p[2], z0 = p[3], z1 = p[4], h = p[5], kind = "city" })
+end
 
 -- Горы: эллипсоиды (полуоси r, h, r), высота рельефа = максимум по всем.
 -- Визуально строятся теми же эллипсоидами — физика и картинка совпадают точно.
@@ -100,21 +110,8 @@ end
 -- Препятствия (AABB) и здания города
 export type Box = { min: Vector3, max: Vector3 }
 World.obstacles = {} :: { Box }
-World.buildings = {} :: { { x: number, z: number, w: number, d: number, h: number, c: number } }
-for gx = -6, 6 do
-	for gz = -6, 6 do
-		if rng:NextNumber() < 0.85 then
-			local w, d = R(50, 105), R(50, 105)
-			local dist = math.min(1, math.sqrt(gx * gx + gz * gz) / 8.5)
-			local h = 30 + (1 - dist) ^ 2 * R(150, 520) + R(0, 60)
-			local b = { x = World.CITY.x + gx * 140, z = World.CITY.z + gz * 140, w = w, d = d, h = h, c = rng:NextInteger(1, 5) }
-			table.insert(World.buildings, b)
-			table.insert(World.obstacles, {
-				min = Vector3.new(b.x - w / 2, 0, b.z - d / 2),
-				max = Vector3.new(b.x + w / 2, h + 0.45, b.z + d / 2),
-			})
-		end
-	end
+for _, o in CityData.obstacles do
+	table.insert(World.obstacles, { min = Vector3.new(o[1], o[2], o[3]), max = Vector3.new(o[4], o[5], o[6]) })
 end
 
 -- Постройки аэропорта в локальных координатах — общие для визуала и столкновений
@@ -155,8 +152,39 @@ function World.groundAt(x: number, z: number): number
 	return h
 end
 
-function World.hitsObstacle(p: Vector3): boolean
+-- Сетка для быстрого поиска препятствий (их больше тысячи)
+local CELL = 256
+local grid: { [number]: { Box } }? = nil
+local function cellKey(ix: number, iz: number): number
+	return ix * 4096 + iz
+end
+local function buildGrid()
+	local g: { [number]: { Box } } = {}
 	for _, o in World.obstacles do
+		for ix = math.floor(o.min.X / CELL), math.floor(o.max.X / CELL) do
+			for iz = math.floor(o.min.Z / CELL), math.floor(o.max.Z / CELL) do
+				local k = cellKey(ix, iz)
+				local list = g[k]
+				if not list then
+					list = {}
+					g[k] = list
+				end
+				table.insert(list, o)
+			end
+		end
+	end
+	grid = g
+end
+
+function World.hitsObstacle(p: Vector3): boolean
+	if not grid then
+		buildGrid()
+	end
+	local list = (grid :: any)[cellKey(math.floor(p.X / CELL), math.floor(p.Z / CELL))]
+	if not list then
+		return false
+	end
+	for _, o in list do
 		if p.X > o.min.X and p.X < o.max.X and p.Y > o.min.Y and p.Y < o.max.Y and p.Z > o.min.Z and p.Z < o.max.Z then
 			return true
 		end
