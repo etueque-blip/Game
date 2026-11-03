@@ -131,6 +131,43 @@ def roads(cx, cz, half, step, offset=0.0):
         box((cx, 0.47, cz + t), (half * 2, 0.05, 16), c=(55, 56, 60), m="Asphalt", solid=False)
 
 
+def street_trees(cx, cz, half, step, offset, kind, zones, skip=None, avenues=3, spacing=80, side=11):
+    """Деревья вдоль главных улиц: пальмы (Дубай), чинары (Ташкент), лиственные (Лондон).
+    Декоративные: пролетаются насквозь, не ставятся в здания, реки и у достопримечательностей."""
+    n = int(half * 2 // step)
+    lines = [-half + offset + i * step for i in range(n + 1) if abs(-half + offset + i * step) <= half]
+    if not lines:
+        return
+    pick = [lines[int(len(lines) * (k + 0.5) / avenues)] for k in range(avenues)]
+    def blocked(x, z):
+        if not free(x, z, zones) or (skip and skip(x, z)):
+            return True
+        for o in obstacles:
+            if o[0] - 7 < x < o[3] + 7 and o[2] - 7 < z < o[5] + 7:
+                return True
+        return False
+    def tree(x, z):
+        if blocked(x, z):
+            return
+        if kind == "palm":
+            h = R(13, 19)
+            vcyl(x, 0.45, z, h, 1.5, c=(120, 92, 60), m="Wood", solid=False)
+            ell((x, 0.45 + h, z), (6.5, 2.2, 6.5), c=(62, 120, 58), m="LeafyGrass", solid=False)
+        elif kind == "plane":
+            vcyl(x, 0.45, z, 6, 1.6, c=(96, 76, 54), m="Wood", solid=False)
+            ball((x, 0.45 + 10, z), R(10, 13), c=rng.choice([(70, 125, 60), (82, 138, 66), (60, 112, 52)]), m="LeafyGrass", solid=False)
+        else:
+            vcyl(x, 0.45, z, 5, 1.4, c=(90, 72, 52), m="Wood", solid=False)
+            ball((x, 0.45 + 8.5, z), R(8, 10), c=rng.choice([(64, 110, 56), (76, 122, 60)]), m="LeafyGrass", solid=False)
+    for t in pick:
+        k = -half + 20
+        while k < half - 20:
+            for sd in (-side, side):
+                tree(cx + t + sd, cz + k)   # вдоль улиц север-юг
+                tree(cx + k, cz + t + sd)   # вдоль улиц запад-восток
+            k += spacing
+
+
 def free(x, z, zones):
     return all((x - zx) ** 2 + (z - zz) ** 2 > r * r for zx, zz, r in zones)
 
@@ -218,6 +255,8 @@ def dubai():
     # фонтан и пруд у основания
     vcyl(cx + 230, 0.45, cz + 120, 0.3, 260, c=(40, 110, 150), m="Glass", solid=False, refl=0.3)
 
+    street_trees(cx, cz, half, 145, 72.5, "palm", zones + [(cx, cz, 300)])
+
     # море, Пальма и «парус» на острове
     box((cx, 0.3, -9800), (6400, 0.2, 2000), c=(28, 98, 140), m="Glass", solid=False, refl=0.35)
     pcx, pcz = 4000.0, -9900.0
@@ -289,6 +328,13 @@ def london():
                 box((x + w * 0.3, 0.45 + h + rh, z), (4, 10, 4), c=(130, 70, 55), m="Brick", solid=False)
     # Гайд-парк
     box((cx - 900, 0.47, cz + 650), (480, 0.1, 420), c=(92, 140, 70), m="Grass", solid=False)
+
+    street_trees(cx, cz, half, 128, 64, "leaf", zones, skip=lambda x, z: abs(z - zr(x)) < 95, side=9)
+    # деревья Гайд-парка
+    for _ in range(70):
+        street_x, street_z = cx - 900 + R(-220, 220), cz + 650 + R(-190, 190)
+        vcyl(street_x, 0.45, street_z, 5, 1.4, c=(90, 72, 52), m="Wood", solid=False)
+        ball((street_x, 0.45 + 8.5, street_z), R(9, 13), c=rng.choice([(64, 110, 56), (76, 122, 60), (58, 100, 50)]), m="LeafyGrass", solid=False)
 
     # Биг-Бен (96 м) и Вестминстерский дворец
     SAND = (214, 196, 150)
@@ -491,6 +537,8 @@ def tashkent():
         add("box", (mx_ + math.cos(a) * 30, 72, mz_ + math.sin(a) * 30), (1.5, 22, 1.5), (0, -a, math.radians(48) * 0), c=(220, 200, 120), m="Metal", solid=False)
     vcyl(mx_, 82, mz_, 10, 4, c=(220, 190, 90), m="Metal", solid=False)
     ball((mx_, 93, mz_), 5, c=(220, 190, 90), m="Metal", solid=False)
+
+    street_trees(cx, cz, half, 135, 67.5, "plane", zones)
 
     # Гостиница «Узбекистан» — решётчатый фасад
     hx, hz = cx - 180, cz + 220
