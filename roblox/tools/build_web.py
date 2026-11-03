@@ -422,6 +422,40 @@ def add_menu(s):
     s = patch(s, '  if (a === "hangar") { $("hangar").hidden = !$("hangar").hidden; return; }', '  if (a === "hangar") { $("bHangar").onclick(); return; }')
     s = patch(s, '$("loading").hidden = true;', MENU_JS + '$("loading").hidden = true;')
     s = patch(s, '<button class="tb primary" id="bHangar">✈ Ангар</button>', '<button class="tb primary" id="bHangar">✈ Меню</button>')
+    s = patch(s, '$("hangar").hidden = true; $("crash").hidden = true;', '$("hangar").hidden = true; $("menu").hidden = true; $("flow").hidden = true; $("crash").hidden = true;')
+    return s
+
+
+TAPE_JS = r"""
+// ===== шкала курса
+const tapeCv = document.getElementById("htape"), tctx = tapeCv.getContext("2d");
+function drawTape(hdg) {
+  const W = tapeCv.width, H = tapeCv.height, ppd = W / 110;
+  tctx.clearRect(0, 0, W, H);
+  tctx.textAlign = "center"; tctx.textBaseline = "middle"; tctx.font = "600 26px IBM Plex Mono, monospace";
+  const base = Math.floor(hdg / 5) * 5;
+  for (let h = base - 60; h <= base + 60; h += 5) {
+    const x = W / 2 + (h - hdg) * ppd; const big = h % 10 === 0;
+    tctx.fillStyle = "rgba(142,163,196,.8)"; tctx.fillRect(x - 1.5, 0, 3, big ? 16 : 9);
+    if (big && Math.abs(h - hdg) > 9.5) tctx.fillText(String(((h % 360) + 360) % 360).padStart(3, "0"), x, 42);
+  }
+  tctx.fillStyle = "#0e1a30"; tctx.fillRect(W / 2 - 58, 6, 116, 56);
+  tctx.strokeStyle = "rgba(120,170,255,.5)"; tctx.lineWidth = 2; tctx.strokeRect(W / 2 - 58, 6, 116, 56);
+  tctx.fillStyle = "#e4eeff"; tctx.font = "600 38px IBM Plex Mono, monospace"; tctx.fillText(String(Math.round(hdg) % 360).padStart(3, "0"), W / 2, 36);
+  tctx.fillStyle = "#ff4fd8"; tctx.fillRect(W / 2 - 24, H - 5, 48, 5);
+}
+"""
+
+
+def add_tape(s):
+    """Шкала курса вверху (лента с делениями)."""
+    s = patch(s, "#warn {", "#htape { position: absolute; top: calc(118px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(440px, calc(100% - 140px)); height: 34px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }\n#warn {")
+    s = patch(s, "#nav { position: absolute; top: calc(122px", "#nav { position: absolute; top: calc(158px")
+    s = patch(s, "#toast { position: absolute; top: calc(162px", "#toast { position: absolute; top: calc(198px")
+    s = patch(s, '<div id="nav" hidden></div>', '<canvas id="htape" width="880" height="68" hidden></canvas>\n  <div id="nav" hidden></div>')
+    s = patch(s, "// ============================================================ HUD\n", "// ============================================================ HUD\n" + TAPE_JS)
+    s = patch(s, "  drawRadar(f, hdg);\n", "  drawRadar(f, hdg);\n  $(\"htape\").hidden = f.crashed; drawTape(hdg);\n")
+    s = patch(s, '$("radar").hidden = true; $("race").hidden = true;', '$("radar").hidden = true; $("htape").hidden = true; $("race").hidden = true;')
     return s
 
 
@@ -451,6 +485,7 @@ def main():
     s = add_race_radar(s)
     s = add_flow(s)
     s = add_menu(s)
+    s = add_tape(s)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

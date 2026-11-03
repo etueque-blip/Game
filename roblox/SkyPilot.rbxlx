@@ -6059,6 +6059,7 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local pitchDeg = math.deg(math.asin(clamp(look.Y, -1, 1)))
 	local bankDeg = math.deg(math.atan2(-right.Y, up.Y))
 	ui.setAdi(pitchDeg, bankDeg)
+	ui.setHeading(hdg)
 
 	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
 	local ringPos, ringName = race.target()
@@ -6942,8 +6943,34 @@ function Ui.new(cb: Callbacks)
 	local apTag = new("TextLabel", { Size = UDim2.fromOffset(96, 22), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 218), BackgroundColor3 = C.green, Font = FONT, TextSize = 13, TextColor3 = C.dark, Text = "АВТОПИЛОТ", Visible = false }, root)
 	corner(apTag, 6)
 
+	-- шкала курса: лента с делениями, текущий курс в центре
+	local TAPE_W, PPD_T = 440, 4
+	local tape = glass(root, { Size = UDim2.fromOffset(TAPE_W, 34), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 112), ClipsDescendants = true, Visible = false })
+	local tapeMarks: { { label: TextLabel, tick: Frame } } = {}
+	for _ = 1, 15 do
+		local tk = new("Frame", { Size = UDim2.fromOffset(2, 7), AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = C.dim, BorderSizePixel = 0 }, tape)
+		local lb = new("TextLabel", { Size = UDim2.fromOffset(40, 20), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(0, 10), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 14, TextColor3 = C.dim, Text = "" }, tape)
+		table.insert(tapeMarks, { label = lb, tick = tk })
+	end
+	local tapeNow = new("TextLabel", { Size = UDim2.fromOffset(58, 30), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 2), BackgroundColor3 = C.panelSolid, Font = FONT_NUM, TextSize = 20, TextColor3 = C.fg, Text = "000", ZIndex = 3 }, tape)
+	corner(tapeNow, 6)
+	new("Frame", { Size = UDim2.fromOffset(26, 3), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), BackgroundColor3 = C.magenta, BorderSizePixel = 0, ZIndex = 4 }, tape)
+	function self.setHeading(hdg: number)
+		tape.Visible = hud.Visible
+		tapeNow.Text = string.format("%03d", math.round(hdg) % 360)
+		local base = math.floor(hdg / 10) * 10
+		for i, m in tapeMarks do
+			local h = base + (i - 8) * 10
+			local x = TAPE_W / 2 + (h - hdg) * PPD_T
+			m.tick.Position = UDim2.fromOffset(x, 0)
+			m.label.Position = UDim2.fromOffset(x, 11)
+			m.label.Text = string.format("%03d", h % 360)
+			m.label.Visible = math.abs(h - hdg) > 9
+		end
+	end
+
 	-- навигация: стрелка на цель + расстояние и курс
-	local nav = glass(root, { Size = UDim2.fromOffset(300, 30), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 112), Visible = false })
+	local nav = glass(root, { Size = UDim2.fromOffset(300, 30), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 150), Visible = false })
 	local navArrow = new("TextLabel", { Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, Font = FONT, TextSize = 22, TextColor3 = C.magenta, Text = "↑" }, nav)
 	local navText = new("TextLabel", { Size = UDim2.new(1, -36, 1, 0), Position = UDim2.fromOffset(32, 0), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, nav)
 
@@ -6962,7 +6989,7 @@ function Ui.new(cb: Callbacks)
 	end
 
 	local warn = new("TextLabel", { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromScale(0, 0.32), BackgroundTransparency = 1, Font = FONT, TextSize = 32, TextColor3 = C.red, Text = "", TextStrokeTransparency = 0.4 }, root)
-	local toastF = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 150), Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.05, Font = FONT, TextSize = 15, TextColor3 = C.fg, Text = "", Visible = false }, root)
+	local toastF = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 188), Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.05, Font = FONT, TextSize = 15, TextColor3 = C.fg, Text = "", Visible = false }, root)
 	corner(toastF, 8)
 	stroke(toastF)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }, toastF)
@@ -7436,6 +7463,7 @@ function Ui.new(cb: Callbacks)
 			warn.Text = ""
 			apTag.Visible = false
 			nav.Visible = false
+			tape.Visible = false
 			raceTag.Visible = false
 			banner.Visible = false
 		end

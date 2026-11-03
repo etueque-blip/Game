@@ -40,13 +40,14 @@ button:focus-visible { outline: 2px solid var(--magenta); outline-offset: 2px; }
 .cell .u { font-family: var(--f-num); font-size: 9px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
 #thrFill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--magenta); opacity: .28; }
 #adi { position: absolute; top: calc(122px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 92px; height: 92px; border-radius: 50%; border: 1px solid var(--line); pointer-events: none; }
-#nav { position: absolute; top: calc(122px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px 5px 8px; font-family: var(--f-num); font-size: 13px; white-space: nowrap; max-width: calc(100% - 140px); overflow: hidden; text-overflow: ellipsis; backdrop-filter: blur(6px); }
+#nav { position: absolute; top: calc(158px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px 5px 8px; font-family: var(--f-num); font-size: 13px; white-space: nowrap; max-width: calc(100% - 140px); overflow: hidden; text-overflow: ellipsis; backdrop-filter: blur(6px); }
 #nav .arrow { display: inline-block; color: var(--magenta); margin-right: 8px; font-weight: 700; font-size: 16px; }
 #radar { position: absolute; left: calc(8px + env(safe-area-inset-left, 0px)); top: calc(122px + env(safe-area-inset-top, 0px)); width: 140px; height: 140px; }
 #race { position: absolute; right: calc(10px + env(safe-area-inset-right, 0px)); top: calc(224px + env(safe-area-inset-top, 0px)); background: var(--magenta); color: #1a0216; border-radius: 6px; padding: 3px 9px; font-family: var(--f-num); font-weight: 600; font-size: 13px; }
 #debug { top: calc(272px + env(safe-area-inset-top, 0px)) !important; }
+#htape { position: absolute; top: calc(118px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(440px, calc(100% - 140px)); height: 34px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 #warn { position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%); font-family: var(--f-display); font-size: clamp(20px, 5vw, 34px); letter-spacing: .06em; text-shadow: 0 2px 12px rgba(0,0,0,.6); pointer-events: none; text-align: center; white-space: nowrap; }
-#toast { position: absolute; top: calc(162px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 140px); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 14px; text-align: center; pointer-events: none; }
+#toast { position: absolute; top: calc(198px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 140px); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 14px; text-align: center; pointer-events: none; }
 #touch { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px)); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
 #touch > * { pointer-events: auto; }
 #stickWrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -158,6 +159,7 @@ kbd { font-family: var(--f-num); font-size: 11px; border: 1px solid var(--line);
     <div class="cell"><div class="k">Закрылки</div><div class="v" id="vFlaps">0</div><div class="u" id="uGear">шасси ▼</div></div>
   </div>
   <canvas id="adi" width="184" height="184" hidden></canvas>
+  <canvas id="htape" width="880" height="68" hidden></canvas>
   <div id="nav" hidden></div>
   <button id="park" hidden>Ⓟ Стояночный тормоз · пробел или нажми, чтобы отключить</button>
   <canvas id="radar" width="280" height="280" hidden></canvas>
@@ -1159,7 +1161,7 @@ function startFlight(cfg, mode) {
   gearAnim = flight.gear ? 1 : 0;
   camRot.copy(flight.att); camPos.copy(flight.pos);
   orbit.dist = cfg.length * 1.2 + 40;
-  $("hangar").hidden = true; $("crash").hidden = true; $("hud").hidden = false; $("adi").hidden = false; $("radar").hidden = false;
+  $("hangar").hidden = true; $("menu").hidden = true; $("flow").hidden = true; $("crash").hidden = true; $("hud").hidden = false; $("adi").hidden = false; $("radar").hidden = false;
   $("planeName").textContent = cfg.name;
   addLog(`Старт: ${cfg.name}, ${mode === "air" ? "в воздухе" : "на полосе"}`);
   toast(mode === "air" ? "Вы в воздухе на 3000 ft — аэропорт впереди" : "На полосе: тяга 100%, на Vr " + cfg.vrKts + " kt тяни на себя", "var(--magenta)");
@@ -1175,7 +1177,7 @@ function doCrash(reason) {
     debris.push({ m, v: flight.vel.clone().multiplyScalar(0.25).add(new V3(R(-1, 1), R(0.3, 1.5), R(-1, 1)).multiplyScalar(R(20, 80))), w: new V3(R(-3, 3), R(-3, 3), R(-3, 3)) }); } });
   const sz = flight.cfg.length;
   for (let i = 0; i < 26; i++) spawnPuff(flight.pos.clone().add(new V3(R(-1, 1), R(0, 1), R(-1, 1)).multiplyScalar(sz * 0.3)), i < 12 ? 0xffa030 : 0x2a2a2a, sz * 0.3, i < 12 ? 1.4 : 6, sz * (i < 12 ? 0.8 : 0.35), new V3(R(-8, 8), R(10, 30), R(-8, 8)), i < 12 ? 1 : 0.8);
-  crashTimer = 1.8; $("crashReason").textContent = reason; $("hud").hidden = true; $("adi").hidden = true; $("radar").hidden = true; $("race").hidden = true; $("nav").hidden = true; raceReset(); $("warn").textContent = "";
+  crashTimer = 1.8; $("crashReason").textContent = reason; $("hud").hidden = true; $("adi").hidden = true; $("radar").hidden = true; $("htape").hidden = true; $("race").hidden = true; $("nav").hidden = true; raceReset(); $("warn").textContent = "";
 }
 
 // ============================================================ INPUT
@@ -1244,6 +1246,24 @@ function setThrottleUI(v) { $("thrLevel").style.height = v * 100 + "%"; $("thrHa
 }
 
 // ============================================================ HUD
+
+// ===== шкала курса
+const tapeCv = document.getElementById("htape"), tctx = tapeCv.getContext("2d");
+function drawTape(hdg) {
+  const W = tapeCv.width, H = tapeCv.height, ppd = W / 110;
+  tctx.clearRect(0, 0, W, H);
+  tctx.textAlign = "center"; tctx.textBaseline = "middle"; tctx.font = "600 26px IBM Plex Mono, monospace";
+  const base = Math.floor(hdg / 5) * 5;
+  for (let h = base - 60; h <= base + 60; h += 5) {
+    const x = W / 2 + (h - hdg) * ppd; const big = h % 10 === 0;
+    tctx.fillStyle = "rgba(142,163,196,.8)"; tctx.fillRect(x - 1.5, 0, 3, big ? 16 : 9);
+    if (big && Math.abs(h - hdg) > 9.5) tctx.fillText(String(((h % 360) + 360) % 360).padStart(3, "0"), x, 42);
+  }
+  tctx.fillStyle = "#0e1a30"; tctx.fillRect(W / 2 - 58, 6, 116, 56);
+  tctx.strokeStyle = "rgba(120,170,255,.5)"; tctx.lineWidth = 2; tctx.strokeRect(W / 2 - 58, 6, 116, 56);
+  tctx.fillStyle = "#e4eeff"; tctx.font = "600 38px IBM Plex Mono, monospace"; tctx.fillText(String(Math.round(hdg) % 360).padStart(3, "0"), W / 2, 36);
+  tctx.fillStyle = "#ff4fd8"; tctx.fillRect(W / 2 - 24, H - 5, 48, 5);
+}
 
 // ===== гонка через кольца и радар (те же кольца, что в Roblox)
 const RINGS = CITYDATA.rings.map((d) => {
@@ -1351,6 +1371,7 @@ function updateHUD(f) {
   drawADI(pitchDeg, bankDeg);
   updateNav(f, hdg);
   drawRadar(f, hdg);
+  $("htape").hidden = f.crashed; drawTape(hdg);
   if (!f.onGround) parkBrake = false;
   $("park").hidden = !parkBrake || f.crashed;
   { const el = $("race"); if (raceStart !== null) { el.hidden = false; el.textContent = `КОЛЬЦА ${raceIdx}/${RINGS.length} · ${fmtT(performance.now() / 1000 - raceStart)}`; } else el.hidden = true; }

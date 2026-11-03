@@ -424,6 +424,7 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local pitchDeg = math.deg(math.asin(clamp(look.Y, -1, 1)))
 	local bankDeg = math.deg(math.atan2(-right.Y, up.Y))
 	ui.setAdi(pitchDeg, bankDeg)
+	ui.setHeading(hdg)
 
 	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
 	local ringPos, ringName = race.target()
