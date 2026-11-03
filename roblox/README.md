@@ -124,6 +124,14 @@ roblox/
     Ui.luau                   весь интерфейс
 ```
 
+## Фото в меню и ангаре
+
+Все фото сняты прямо в игре (`node tools/make_photos.js` → `python3 tools/pack_photos.py`) и лежат в
+`assets/photos/*.jpg`: 12 самолётов, 3 режима и 2 кадра «Что нового». В веб-версии они уже встроены.
+Для Roblox загрузите их в Studio (Asset Manager → Bulk Import) и вставьте ID в `PHOTOS`
+(`src/shared/PlaneConfigs.luau`), например `plane_A380 = "rbxassetid://1234567890"`. Пока ID пустые,
+в ангаре показывается живое 3D-превью самолёта.
+
 ## Настройка
 
 - Звук двигателя: впишите id звука в `ENGINE_SOUND_ID` (`src/shared/PlaneConfigs.luau`).

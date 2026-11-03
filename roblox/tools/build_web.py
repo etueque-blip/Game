@@ -262,6 +262,169 @@ def add_flow(s):
     return s
 
 
+MENU_CSS = """
+#menu, #flow { z-index: 30; background: radial-gradient(1200px 700px at 20% 0%, rgba(30,50,90,.55), rgba(4,8,16,.92)); align-items: start; overflow: auto; }
+.mwrap { width: min(1160px, 100%); display: grid; gap: 14px; padding-block: 56px 24px; }
+.tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.tile, .ncard, .pcard, .fprev { position: relative; border: 1px solid var(--line); border-radius: 18px; background: #0e1a30 center / cover no-repeat; overflow: hidden; color: #fff; }
+.tile { min-height: 190px; padding: 18px; display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; text-align: right; grid-column: span 2; }
+.tile.big { grid-column: span 3; min-height: 250px; }
+.tile::before, .ncard::before, .pcard::before, .fprev::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to top left, rgba(4,8,16,.88), rgba(4,8,16,.15) 60%, rgba(4,8,16,0)); }
+.tile > *, .ncard > *, .pcard > *, .fprev > * { position: relative; }
+.tile .ic { margin-bottom: auto; font-size: 34px; color: #fff; opacity: .9; }
+.tile b { font-family: var(--f-display); font-weight: 400; font-size: clamp(22px, 3.2vw, 38px); line-height: 1.05; text-shadow: 0 2px 14px rgba(0,0,0,.6); }
+.tile small { color: #dfe8f7; text-shadow: 0 1px 8px rgba(0,0,0,.7); font-size: 13px; margin-top: 6px; max-width: 34ch; }
+.tile:hover, .ncard:hover, .pcard:hover { border-color: var(--magenta); }
+.mh { color: var(--dim); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.news { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 4px; }
+.ncard { min-height: 140px; padding: 14px; display: flex; flex-direction: column; justify-content: flex-end; text-align: left; }
+.ncard b { font-size: 17px; }
+.ncard i { font-style: normal; color: #dfe8f7; font-size: 12px; text-shadow: 0 1px 8px rgba(0,0,0,.7); }
+.ncard .tag { position: absolute; top: 10px; right: 10px; background: #36b7ff; color: #041018; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
+.mbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.mbar .who { margin-left: auto; color: var(--dim); font-size: 13px; }
+.flow { width: min(1180px, 100%); height: min(720px, calc(100vh - 84px)); margin-block: 56px 20px; display: grid; grid-template-columns: minmax(0, 470px) minmax(0, 1fr); gap: 16px; }
+.flist { overflow: auto; display: grid; align-content: start; gap: 10px; padding-right: 6px; }
+.flist h3 { margin: 10px 0 0; font-family: var(--f-display); font-weight: 400; font-size: 26px; letter-spacing: .03em; }
+.pgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pcard { aspect-ratio: 16 / 10; padding: 10px 12px; display: flex; align-items: flex-end; text-align: left; font-family: var(--f-display); font-size: 17px; }
+.pcard[aria-pressed="true"] { border: 2px solid #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.18); }
+.acard { text-align: left; background: rgba(14,26,48,.85); border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px; display: grid; gap: 2px; }
+.acard b { font-family: var(--f-display); font-weight: 400; font-size: 30px; }
+.acard span { color: var(--dim); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+.acard[aria-pressed="true"] { background: #fff; color: #0b1324; }
+.acard[aria-pressed="true"] span { color: #4b5870; }
+.fprev { display: flex; flex-direction: column; justify-content: flex-end; padding: 20px; min-height: 260px; }
+.fprev h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: clamp(26px, 4vw, 44px); }
+.fprev p { margin: 4px 0 0; color: #dfe8f7; max-width: 60ch; text-shadow: 0 1px 8px rgba(0,0,0,.7); }
+.fbtns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+.fbtns .go { background: #2ea050; border-color: transparent; color: #fff; font-size: 16px; padding: 11px 26px; }
+.fbtns .tb { font-size: 15px; padding: 11px 22px; }
+@media (max-width: 760px) {
+  .tile, .tile.big { grid-column: span 6; min-height: 150px; }
+  .flow { grid-template-columns: 1fr; height: auto; }
+  .flist { max-height: 55vh; }
+}
+"""
+
+MENU_HTML = """
+  <div class="overlay" id="menu">
+    <div class="mwrap">
+      <div class="tiles">
+        <button class="tile big" data-m="free" data-ph="mode_free"><span class="ic">✈</span><b>Свободный<br>полёт</b><small>Любой самолёт, любой из 5 аэропортов</small></button>
+        <button class="tile big" data-m="career" data-ph="mode_career"><span class="ic">⇄</span><b>Режим<br>рейсов</b><small>Вылет из одного аэропорта и посадка в другом</small></button>
+        <button class="tile" data-m="race" data-ph="mode_race"><span class="ic">◎</span><b>Гонка колец</b><small>13 колец: Дубай → Ташкент → Лондон</small></button>
+        <button class="tile" data-m="help" data-ph="news_airports"><span class="ic">⌨</span><b>Управление</b><small>Клавиши, телефон, геймпад</small></button>
+        <button class="tile" data-m="spot" data-ph="news_tashkent"><span class="ic">⌖</span><b>Обзор<br>самолётов</b><small>Все 12 самолётов в ангаре</small></button>
+      </div>
+      <div class="mh">Что нового</div>
+      <div class="news">
+        <div class="ncard" data-ph="news_airports"><span class="tag">Последнее обновление</span><b>5 аэропортов и рейсы</b><i>London West, Dubai Coast, Tashkent East</i></div>
+        <div class="ncard" data-ph="plane_A380"><b>Strato 320 / 330 / 350 / 380</b><i>Самолёты типа Airbus</i></div>
+        <div class="ncard" data-ph="mode_race"><b>Гонка колец</b><i>Под Тауэрским мостом</i></div>
+        <div class="ncard" data-ph="mode_free"><b>Дубай, Лондон, Ташкент</b><i>Бурдж-Халифа, Биг-Бен, телебашня</i></div>
+      </div>
+      <div class="mbar"><button class="tb primary" id="mPlay">Полёт</button><button class="tb" id="mHelp2">Клавиши</button><span class="who" id="mBest"></span></div>
+    </div>
+  </div>
+  <div class="overlay" id="flow" hidden>
+    <div class="flow">
+      <div class="flist" id="fList"></div>
+      <div class="fprev" id="fPrev"><h2 id="fTitle"></h2><p id="fText"></p>
+        <div class="fbtns"><button class="tb" id="fMenu">Меню</button><button class="tb" id="fBack">Назад</button><button class="tb go" id="fNext">Далее →</button></div>
+      </div>
+    </div>
+  </div>
+"""
+
+MENU_JS = r"""
+// ===== главное меню с фото, ангар с фото самолётов, выбор аэропорта
+const FL = { mode: "free", plane: null, from: "A", to: null, step: "planes" };
+const ph = (k) => (PHOTOS[k] ? `url(${PHOTOS[k]})` : "");
+document.querySelectorAll("[data-ph]").forEach((el) => (el.style.backgroundImage = ph(el.dataset.ph)));
+function openMenu() {
+  for (const id of ["hangar", "flow", "crash", "help"]) $(id).hidden = true;
+  let best = null; try { best = parseFloat(localStorage.getItem("skypilot.bestRace")); } catch (e) {}
+  $("mBest").textContent = best > 0 ? "Рекорд гонки: " + fmtT(best) : "Пилот: гость";
+  $("menu").hidden = false;
+}
+function openFlow(mode) { FL.mode = mode; FL.step = "planes"; $("menu").hidden = true; $("flow").hidden = false; renderFlow(); }
+const PLANE_TEXT = (c) => `${c.cls} · макс ${c.maxKts} kt · отрыв ${c.vrKts} kt · сваливание ${c.stallKts} kt · потолок ${c.ceilingFt.toLocaleString("ru-RU")} ft`;
+function renderFlow() {
+  const L = $("fList"); L.innerHTML = "";
+  const prev = $("fPrev");
+  if (FL.step === "planes") {
+    for (const [cat, ids] of CATS) {
+      const h = document.createElement("h3"); h.textContent = cat; L.appendChild(h);
+      const g = document.createElement("div"); g.className = "pgrid"; L.appendChild(g);
+      for (const id of ids) {
+        const c = PLANES[id], b = document.createElement("button");
+        b.className = "pcard"; b.style.backgroundImage = ph("plane_" + id); b.textContent = c.name; b.setAttribute("aria-pressed", FL.plane === id);
+        b.onclick = () => { FL.plane = id; renderFlow(); };
+        g.appendChild(b);
+      }
+    }
+    const c = PLANES[FL.plane];
+    prev.style.backgroundImage = c ? ph("plane_" + FL.plane) : ph("mode_" + (FL.mode === "race" ? "race" : FL.mode === "career" ? "career" : "free"));
+    $("fTitle").textContent = c ? c.name : FL.mode === "race" ? "Гонка колец" : FL.mode === "career" ? "Режим рейсов" : "Свободный полёт";
+    $("fText").textContent = c ? PLANE_TEXT(c) : "Выберите самолёт слева.";
+  } else {
+    const key = FL.step === "from" ? "from" : "to";
+    for (const ap of AIRPORTS) {
+      if (key === "to" && ap.id === FL.from) continue;
+      const b = document.createElement("button"); b.className = "acard"; b.setAttribute("aria-pressed", FL[key] === ap.id);
+      b.innerHTML = `<b>${ap.code} / ${ap.id}</b><span>${ap.title} · полоса ${ap.south}/${ap.north} · ${Math.round(ap.L * 0.515)} м</span>`;
+      b.onclick = () => { FL[key] = ap.id; renderFlow(); };
+      L.appendChild(b);
+    }
+    prev.style.backgroundImage = ph(FL.from === "C" || FL.to === "C" ? "news_airports" : "mode_career");
+    const ap = AIRPORTS.find((a) => a.id === FL[key]);
+    $("fTitle").textContent = key === "from" ? "Аэропорт вылета" : "Аэропорт назначения";
+    $("fText").textContent = ap ? ap.code + " · " + ap.title : "Выберите аэропорт слева.";
+  }
+  const last = FL.step === "to" || (FL.step === "from" && FL.mode !== "career") || (FL.step === "planes" && FL.mode === "race");
+  $("fNext").textContent = last ? "Полёт ✈" : "Далее →";
+}
+function flowNext() {
+  if (FL.step === "planes") { if (!FL.plane) return toast("Выберите самолёт", "var(--amber)"); if (FL.mode === "race") return launchFlow(); FL.step = "from"; }
+  else if (FL.step === "from") { if (FL.mode !== "career") return launchFlow(); if (FL.to === FL.from) FL.to = null; FL.step = "to"; }
+  else if (FL.step === "to") { if (!FL.to) return toast("Выберите аэропорт назначения", "var(--amber)"); return launchFlow(); }
+  renderFlow();
+}
+function launchFlow() {
+  gameMode = FL.mode; flightDest = FL.mode === "career" ? FL.to : null;
+  $("flow").hidden = true;
+  startFlight(PLANES[FL.plane], FL.mode === "race" ? "race" : "runway:" + FL.from);
+}
+$("fNext").onclick = flowNext;
+$("fBack").onclick = () => { if (FL.step === "to") FL.step = "from"; else if (FL.step === "from") FL.step = "planes"; else return openMenu(); renderFlow(); };
+$("fMenu").onclick = openMenu;
+document.querySelectorAll("#menu .tile").forEach((t) => (t.onclick = () => {
+  const m = t.dataset.m;
+  if (m === "help") { $("help").hidden = false; return; }
+  openFlow(m === "spot" ? "free" : m);
+}));
+$("mPlay").onclick = () => openFlow("free");
+$("mHelp2").onclick = () => { $("help").hidden = false; };
+openMenu();
+"""
+
+
+def add_menu(s):
+    """Главное меню с фото-плитками, «Что нового», ангар с фото каждого самолёта."""
+    import json as _json
+    photos = _json.load(open(os.path.join(ROOT, "tools", "photos.json")))
+    s = patch(s, "<script>const CITYDATA = ", "<script>const PHOTOS = " + _json.dumps(photos) + ";</script>\n<script>const CITYDATA = ")
+    s = patch(s, ".card:hover {", MENU_CSS + ".card:hover {")
+    s = patch(s, '  <div class="overlay" id="hangar">', MENU_HTML + '  <div class="overlay" id="hangar" hidden>')
+    s = patch(s, '$("bHangar").onclick = () => { $("hangar").hidden = !$("hangar").hidden; };', '$("bHangar").onclick = () => { if ($("menu").hidden && $("flow").hidden) openMenu(); else { $("menu").hidden = true; $("flow").hidden = true; } };')
+    s = patch(s, '$("toHangar").onclick = () => { $("crash").hidden = true; $("hangar").hidden = false; };', '$("toHangar").onclick = () => { $("crash").hidden = true; openMenu(); };')
+    s = patch(s, '  if (a === "hangar") { $("hangar").hidden = !$("hangar").hidden; return; }', '  if (a === "hangar") { $("bHangar").onclick(); return; }')
+    s = patch(s, '$("loading").hidden = true;', MENU_JS + '$("loading").hidden = true;')
+    s = patch(s, '<button class="tb primary" id="bHangar">✈ Ангар</button>', '<button class="tb primary" id="bHangar">✈ Меню</button>')
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -287,6 +450,7 @@ def main():
     s = add_nav(s)
     s = add_race_radar(s)
     s = add_flow(s)
+    s = add_menu(s)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

@@ -57,4 +57,26 @@ return {
 	ORDER = ORDER,
 	-- Звук двигателя: вставьте сюда id своего звука (rbxassetid://...), пусто = без звука
 	ENGINE_SOUND_ID = "",
+	-- Фото для меню и ангара. Файлы лежат в roblox/assets/photos/*.jpg — загрузите их в Studio
+	-- (Asset Manager → Bulk Import или Create → Decals) и вставьте сюда "rbxassetid://ЧИСЛО".
+	-- Пустая строка = вместо фото показывается 3D-превью самолёта.
+	PHOTOS = {
+		mode_free = "",
+		mode_career = "",
+		mode_race = "",
+		news_airports = "",
+		news_tashkent = "",
+		plane_C172 = "",
+		plane_LEAR75 = "",
+		plane_G650 = "",
+		plane_GL7500 = "",
+		plane_B737 = "",
+		plane_A320 = "",
+		plane_B787 = "",
+		plane_A330 = "",
+		plane_A350 = "",
+		plane_B747 = "",
+		plane_A380 = "",
+		plane_F16 = "",
+	} :: { [string]: string },
 }

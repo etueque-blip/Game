@@ -359,11 +359,28 @@ function Ui.new(cb: Callbacks)
 		new("UIGridLayout", { CellSize = cell, CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, g)
 		return g
 	end
+	-- фото-фон карточки (если ID загружен) с затемнением снизу
+	local function photoBg(parent: Instance, key: string): boolean
+		local id = (PlaneConfigs :: any).PHOTOS and (PlaneConfigs :: any).PHOTOS[key]
+		if type(id) ~= "string" or id == "" then
+			return false
+		end
+		new("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = id, ScaleType = Enum.ScaleType.Crop, ZIndex = 23 }, parent)
+		local shade = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(4, 8, 16), BorderSizePixel = 0, ZIndex = 23 }, parent)
+		new("UIGradient", { Rotation = -90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.6, 0.85), NumberSequenceKeypoint.new(1, 1) }) }, shade)
+		return true
+	end
 	local selectables: { [string]: { TextButton } } = {}
 	local function selectCard(group: string, card: TextButton)
 		for _, c in selectables[group] or {} do
 			local on = c == card
 			c.BackgroundColor3 = if on then Color3.fromRGB(235, 240, 250) else Color3.fromRGB(22, 34, 58)
+			local st = c:FindFirstChildOfClass("UIStroke")
+			if st then
+				st.Thickness = if on then 3 else 1
+				st.Color = if on then Color3.new(1, 1, 1) else C.line
+				st.Transparency = if on then 0 else 0.78
+			end
 			for _, t in c:GetDescendants() do
 				if t:IsA("TextLabel") and t:GetAttribute("Role") then
 					t.TextColor3 = if on then C.dark elseif t:GetAttribute("Role") == "title" then C.fg else C.dim
@@ -394,6 +411,7 @@ function Ui.new(cb: Callbacks)
 		{ "race", "Гонка колец", "13 колец: Дубай → Ташкент → Лондон и под Тауэрским мостом. +1500.", "◎" },
 	} do
 		local c = card(modes, "mode", i)
+		photoBg(c, "mode_" .. m[1])
 		new("TextLabel", { Size = UDim2.new(1, -24, 0, 60), Position = UDim2.fromOffset(12, 12), BackgroundTransparency = 1, Font = FONT, TextSize = 44, TextColor3 = C.magenta, TextXAlignment = Enum.TextXAlignment.Right, Text = m[4], ZIndex = 24 }, c)
 		new("TextLabel", { Size = UDim2.new(1, -24, 0, 30), Position = UDim2.new(0, 12, 1, -100), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 22, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = m[2], ZIndex = 24 }, c):SetAttribute("Role", "title")
 		new("TextLabel", { Size = UDim2.new(1, -24, 0, 54), Position = UDim2.new(0, 12, 1, -64), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 13, TextColor3 = C.dim, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Text = m[3], ZIndex = 24 }, c):SetAttribute("Role", "text")
@@ -425,6 +443,7 @@ function Ui.new(cb: Callbacks)
 			local c = PlaneConfigs.PLANES[id]
 			if c then
 				local cd = card(g, "plane", i)
+				local hasPhoto = photoBg(cd, "plane_" .. id)
 				local vp = new("ViewportFrame", { Size = UDim2.new(1, 0, 1, -40), BackgroundTransparency = 1, Ambient = Color3.fromRGB(170, 175, 190), LightColor = Color3.fromRGB(255, 250, 240), LightDirection = Vector3.new(-0.4, -1, -0.3), ZIndex = 24 }, cd)
 				local m = PlaneBuilder.build(c, { static = true })
 				m.Parent = vp
@@ -434,6 +453,7 @@ function Ui.new(cb: Callbacks)
 				camV.CFrame = CFrame.lookAt(Vector3.new(-0.78, 0.36, -0.62).Unit * dist, Vector3.new(0, -c.diameter * 0.2, 0))
 				camV.Parent = vp
 				vp.CurrentCamera = camV
+				vp.Visible = not hasPhoto
 				new("TextLabel", { Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 10, 1, -40), BackgroundTransparency = 1, Font = FONT, TextSize = 16, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = c.name, ZIndex = 25 }, cd):SetAttribute("Role", "title")
 				new("TextLabel", { Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 10, 1, -20), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 11, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = string.format("%s · %d kt", c.cls, c.maxKts), ZIndex = 25 }, cd):SetAttribute("Role", "text")
 				cd.Activated:Connect(function()
