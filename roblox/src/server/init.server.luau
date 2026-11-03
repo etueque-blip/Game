@@ -46,6 +46,7 @@ local Landing = remote("Landing")
 local CrashEvent = remote("Crash")
 local EndFlight = remote("EndFlight")
 local Notify = remote("Notify")
+local RaceFinished = remote("RaceFinished")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -329,6 +330,28 @@ CrashEvent.OnServerEvent:Connect(function(p, reason)
 	end)
 end)
 
+-- гонка через кольца: минимальное правдоподобное время ~60 с даже для истребителя
+local lastRace: { [Player]: number } = {}
+RaceFinished.OnServerEvent:Connect(function(p, t)
+	local a = active[p]
+	if not a or type(t) ~= "number" or t < 60 or t > 3600 then
+		return
+	end
+	local now = os.clock()
+	if lastRace[p] and now - lastRace[p] < 60 then
+		return
+	end
+	lastRace[p] = now
+	Scores.add(p, 1500, false)
+	local best = p:GetAttribute("BestRace")
+	local msg = string.format("+1500 очков за гонку · %d:%04.1f", math.floor(t / 60), t % 60)
+	if type(best) ~= "number" or t < best then
+		p:SetAttribute("BestRace", t)
+		msg ..= " · новый рекорд!"
+	end
+	Notify:FireClient(p, msg, "green")
+end)
+
 EndFlight.OnServerEvent:Connect(function(p)
 	if active[p] then
 		cleanup(p, true)
@@ -345,6 +368,7 @@ end
 Players.PlayerRemoving:Connect(function(p)
 	cleanup(p, true)
 	lastRequest[p] = nil
+	lastRace[p] = nil
 	Scores.unload(p)
 end)
 

@@ -1,6 +1,6 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
-<Item class="Workspace" referent="RBX00000011"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
-<Item class="ReplicatedStorage" referent="RBX00000012"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000007"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Autopilot</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="Workspace" referent="RBX00000013"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX00000014"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000007"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Autopilot</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Автопилот: держит курс / высоту / скорость, выдавая обычный ввод штурвала.
 -- Им пользуется игрок (клавиша P) и ИИ-трафик на сервере — одна и та же физика.
 local World = require(script.Parent.World)
@@ -3357,7 +3357,22 @@ local LABELS = {
 {name="LONDON", x=-4000, y=900, z=12500},
 {name="TASHKENT", x=10500, y=1000, z=3000},
 }
-return { props = P, obstacles = O, pads = PADS, labels = LABELS }
+local RINGS = {
+{0, 300, -3500, 90, -0.8961, "Старт · Skyport"},
+{2500, 450, -5500, 90, -0.9243, "К Дубаю"},
+{5300, 950, -7500, 90, -0.8567, "Бурдж-Халифа"},
+{7000, 200, -9400, 90, 0.4636, "Отель-«парус»"},
+{4000, 120, -10100, 90, -3.0073, "Пальма"},
+{8000, 600, -2000, 90, -2.6698, "К Ташкенту"},
+{10950, 450, 3520, 90, -2.7576, "Телебашня"},
+{9980, 150, 2900, 90, 2.1743, "Медресе"},
+{3000, 700, 9000, 90, 2.1491, "К Лондону"},
+{-4560, 200, 12390, 90, 2.0922, "Лондонский глаз"},
+{-3300, 50, 12619, 32, -1.5708, "Под Тауэрским мостом"},
+{-1500, 400, 6000, 90, -0.2885, "Домой"},
+{0, 200, 1500, 90, -0.3218, "Финиш · полоса A"},
+}
+return { props = P, obstacles = O, pads = PADS, labels = LABELS, rings = RINGS }
 ]]></ProtectedString></Properties></Item>
 <Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Порт FlightClient.step / physicsStep из Sky Pilot 1:1.
@@ -4496,7 +4511,7 @@ return World
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX00000013"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000B"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ServerScriptService" referent="RBX00000015"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000B"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — сервер: мир, выдача самолётов, посадка пилота, очки, крушения, ИИ-трафик.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -4544,6 +4559,7 @@ local Landing = remote("Landing")
 local CrashEvent = remote("Crash")
 local EndFlight = remote("EndFlight")
 local Notify = remote("Notify")
+local RaceFinished = remote("RaceFinished")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -4827,6 +4843,28 @@ CrashEvent.OnServerEvent:Connect(function(p, reason)
 	end)
 end)
 
+-- гонка через кольца: минимальное правдоподобное время ~60 с даже для истребителя
+local lastRace: { [Player]: number } = {}
+RaceFinished.OnServerEvent:Connect(function(p, t)
+	local a = active[p]
+	if not a or type(t) ~= "number" or t < 60 or t > 3600 then
+		return
+	end
+	local now = os.clock()
+	if lastRace[p] and now - lastRace[p] < 60 then
+		return
+	end
+	lastRace[p] = now
+	Scores.add(p, 1500, false)
+	local best = p:GetAttribute("BestRace")
+	local msg = string.format("+1500 очков за гонку · %d:%04.1f", math.floor(t / 60), t % 60)
+	if type(best) ~= "number" or t < best then
+		p:SetAttribute("BestRace", t)
+		msg ..= " · новый рекорд!"
+	end
+	Notify:FireClient(p, msg, "green")
+end)
+
 EndFlight.OnServerEvent:Connect(function(p)
 	if active[p] then
 		cleanup(p, true)
@@ -4843,6 +4881,7 @@ end
 Players.PlayerRemoving:Connect(function(p)
 	cleanup(p, true)
 	lastRequest[p] = nil
+	lastRace[p] = nil
 	Scores.unload(p)
 end)
 
@@ -5528,7 +5567,7 @@ return WorldBuilder
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX00000015"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000014"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000010"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="StarterPlayer" referent="RBX00000017"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000016"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000012"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — клиент: локальная физика полёта (как FlightClient), ввод, камера, приборы.
 -- Самолёт принадлежит игроку по сети (SetNetworkOwner), поэтому управление без задержки,
 -- а другие игроки видят движение через обычную репликацию физики Roblox.
@@ -5547,6 +5586,8 @@ local Ui = require(script:WaitForChild("Ui"))
 local Controls = require(script:WaitForChild("Controls"))
 local CameraRig = require(script:WaitForChild("CameraRig"))
 local Animator = require(script:WaitForChild("Animator"))
+local Race = require(script:WaitForChild("Race"))
+local Radar = require(script:WaitForChild("Radar"))
 
 local remotes = ReplicatedStorage:WaitForChild("SkyPilotRemotes")
 local function R(name: string): RemoteEvent
@@ -5554,6 +5595,7 @@ local function R(name: string): RemoteEvent
 end
 local RequestFlight, FlightStarted, ClientReady = R("RequestFlight"), R("FlightStarted"), R("ClientReady")
 local PlaneState, Landing, CrashEvent, EndFlight, Notify = R("PlaneState"), R("Landing"), R("Crash"), R("EndFlight"), R("Notify")
+local RaceFinished = R("RaceFinished")
 
 local FT = FlightPhysics.FT
 local clamp = FlightPhysics.clamp
@@ -5696,6 +5738,14 @@ ui = Ui.new({
 	end,
 })
 controls = Controls.new(ui, onAction)
+local radar = Radar.new(ui.root, Ui.Colors)
+local race = Race.new(function(name, i, n)
+	ui.toast(string.format("Кольцо %d/%d · %s", i, n, name), "magenta")
+end, function(t)
+	ui.toast(string.format("ФИНИШ гонки: %d:%04.1f", math.floor(t / 60), t % 60), "green")
+	addLog(string.format("Гонка: %.1f с", t))
+	RaceFinished:FireServer(t)
+end)
 cameraRig = CameraRig.new(ui)
 
 local function stopFlight()
@@ -5705,6 +5755,8 @@ local function stopFlight()
 		engineSound = nil
 	end
 	Animator.setLocal(nil)
+	race.reset()
+	radar.setVisible(false)
 	ui.setFlying(false)
 	ui.setAutopilot(false)
 	setCharacterControls(true)
@@ -5726,6 +5778,8 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 	cameraRig.reset(spawnCF.Rotation, cfg)
 	Animator.setLocal(m, f.gear, f.flaps, f.throttle)
 	ui.setFlying(true, cfg.name)
+	radar.setVisible(true)
+	race.reset()
 	ui.showHangar(false)
 	ui.hideCrash()
 	ui.setThrottleFill(f.throttle)
@@ -5810,6 +5864,8 @@ local function handleEvents(f: FlightPhysics.Flight)
 			crashTimer = 1.8
 			apTarget = nil
 			ui.setFlying(false)
+			radar.setVisible(false)
+			race.reset()
 			CrashEvent:FireServer(ev.text)
 			if engineSound then
 				engineSound:Destroy()
@@ -5866,7 +5922,11 @@ RunService.PreSimulation:Connect(function(dt)
 			input = ap
 		end
 	end
+	local prevPos = f.pos
 	FlightPhysics.step(f, input, dt)
+	if not f.crashed then
+		race.step(prevPos, f.pos, os.clock())
+	end
 	handleEvents(f)
 	if f.crashed then
 		return
@@ -5905,9 +5965,16 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local bankDeg = math.deg(math.atan2(-right.Y, up.Y))
 	ui.setAdi(pitchDeg, bankDeg)
 
-	-- навигация
+	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
+	local ringPos, ringName = race.target()
+	radar.update(f.pos, hdg, model, ringPos or race.firstRing())
+	ui.setRace(race.status(now))
 	local n = World.NAV[navIdx]
-	if n then
+	if ringPos then
+		local brg = Autopilot.bearingDeg(f.pos, ringPos)
+		local dist = Vector3.new(f.pos.X - ringPos.X, 0, f.pos.Z - ringPos.Z).Magnitude * World.METERS_PER_STUD / 1000
+		ui.setNav(string.format("КОЛЬЦО · %s · %.1f км · высота %d ft", ringName or "", dist, math.round(ringPos.Y * FT)), Autopilot.wrap180(brg - hdg))
+	elseif n then
 		local brg = Autopilot.bearingDeg(f.pos, Vector3.new(n.x, 0, n.z))
 		local dist = Vector3.new(f.pos.X - n.x, 0, f.pos.Z - n.z).Magnitude * World.METERS_PER_STUD / 1000
 		ui.setNav(string.format("%s · %.1f км · курс %03d°", n.name, dist, math.round(brg) % 360), Autopilot.wrap180(brg - hdg))
@@ -6336,7 +6403,279 @@ end
 
 return Controls
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Гонка через кольца: маршрут Skyport → Дубай → Ташкент → Лондон → Skyport.
+-- Кольца строятся у каждого игрока локально, поэтому подсветка своя у каждого.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("SkyPilot")
+local World = require(Shared:WaitForChild("World"))
+
+local Race = {}
+
+local SEGMENTS = 28
+local COLOR_NEXT = Color3.fromRGB(255, 79, 216)
+local COLOR_DONE = Color3.fromRGB(77, 255, 149)
+local COLOR_IDLE = Color3.fromRGB(235, 240, 255)
+
+type Ring = { cf: CFrame, r: number, name: string, parts: { BasePart } }
+
+function Race.new(onPass: (string, number, number) -> (), onFinish: (number) -> ())
+	local self: any = {}
+	local rings: { Ring } = {}
+	local folder = Instance.new("Folder")
+	folder.Name = "SkyPilotRings"
+	folder.Parent = workspace
+
+	for _, d in World.CityData.rings do
+		local cf = CFrame.new(d[1], d[2], d[3]) * CFrame.Angles(0, d[5], 0)
+		local r = d[4]
+		local ring: Ring = { cf = cf, r = r, name = d[6], parts = {} }
+		local seg = 2 * math.pi * r / SEGMENTS * 1.08
+		local thick = math.max(2, r * 0.07)
+		for i = 0, SEGMENTS - 1 do
+			local t = 2 * math.pi * i / SEGMENTS
+			local p = Instance.new("Part")
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.CanTouch = false
+			p.CastShadow = false
+			p.Material = Enum.Material.Neon
+			p.Size = Vector3.new(seg, thick, thick)
+			p.CFrame = cf * CFrame.new(r * math.cos(t), r * math.sin(t), 0) * CFrame.Angles(0, 0, t + math.pi / 2)
+			p.Parent = folder
+			table.insert(ring.parts, p)
+		end
+		table.insert(rings, ring)
+	end
+
+	local nextIdx = 1
+	local startT: number? = nil
+
+	local function paint()
+		for i, ring in rings do
+			local color = if i < nextIdx then COLOR_DONE elseif i == nextIdx then COLOR_NEXT else COLOR_IDLE
+			local tr = if i < nextIdx then 0.7 elseif i == nextIdx then 0 else 0.45
+			for _, p in ring.parts do
+				p.Color = color
+				p.Transparency = tr
+			end
+		end
+	end
+	paint()
+
+	function self.reset()
+		nextIdx = 1
+		startT = nil
+		paint()
+	end
+
+	-- prev/pos — позиция самолёта на прошлом и текущем шаге
+	function self.step(prev: Vector3, pos: Vector3, now: number)
+		local ring = rings[nextIdx]
+		if not ring then
+			return
+		end
+		local a = ring.cf:PointToObjectSpace(prev)
+		local b = ring.cf:PointToObjectSpace(pos)
+		if (a.Z > 0) == (b.Z > 0) or math.abs(a.Z - b.Z) < 1e-6 then
+			return
+		end
+		local p = a:Lerp(b, a.Z / (a.Z - b.Z))
+		if p.X * p.X + p.Y * p.Y > (ring.r * 1.1) ^ 2 then
+			return
+		end
+		if nextIdx == 1 then
+			startT = now
+		end
+		local elapsed = now - (startT or now)
+		nextIdx += 1
+		paint()
+		if nextIdx > #rings then
+			onFinish(elapsed)
+			startT = nil
+			nextIdx = 1
+			task.delay(3, paint)
+		else
+			onPass(ring.name, nextIdx - 1, #rings)
+		end
+	end
+
+	-- следующее кольцо для навигации (nil, если гонка не начата)
+	function self.target(): (Vector3?, string?)
+		if not startT then
+			return nil, nil
+		end
+		local ring = rings[nextIdx]
+		if not ring then
+			return nil, nil
+		end
+		return ring.cf.Position, ring.name
+	end
+
+	function self.firstRing(): Vector3
+		return rings[1].cf.Position
+	end
+
+	function self.status(now: number): string?
+		if not startT then
+			return nil
+		end
+		local t = now - startT
+		return string.format("КОЛЬЦА %d/%d · %d:%04.1f", nextIdx - 1, #rings, math.floor(t / 60), t % 60)
+	end
+
+	return self
+end
+
+return Race
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Радар: курс вверх, радиус 12 000 stud (~6 км). Аэропорты, города, самолёты, следующее кольцо.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("SkyPilot")
+local World = require(Shared:WaitForChild("World"))
+
+local Radar = {}
+
+local SIZE = 150
+local RANGE = 12000
+
+function Radar.new(parent: Instance, colors: any)
+	local self: any = {}
+	local frame = Instance.new("CanvasGroup")
+	frame.Name = "Radar"
+	frame.Size = UDim2.fromOffset(SIZE, SIZE)
+	frame.Position = UDim2.fromOffset(0, 116)
+	frame.BackgroundColor3 = colors.panel
+	frame.BackgroundTransparency = 0.25
+	frame.Visible = false
+	frame.Parent = parent
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0.5, 0)
+	c.Parent = frame
+	local st = Instance.new("UIStroke")
+	st.Color = colors.line
+	st.Transparency = 0.5
+	st.Parent = frame
+	for _, k in { 0.33, 0.66 } do
+		local ring = Instance.new("Frame")
+		ring.AnchorPoint = Vector2.new(0.5, 0.5)
+		ring.Position = UDim2.fromScale(0.5, 0.5)
+		ring.Size = UDim2.fromScale(k, k)
+		ring.BackgroundTransparency = 1
+		local rc = Instance.new("UICorner")
+		rc.CornerRadius = UDim.new(0.5, 0)
+		rc.Parent = ring
+		local rs = Instance.new("UIStroke")
+		rs.Color = colors.line
+		rs.Transparency = 0.75
+		rs.Parent = ring
+		ring.Parent = frame
+	end
+	local me = Instance.new("TextLabel")
+	me.AnchorPoint = Vector2.new(0.5, 0.5)
+	me.Position = UDim2.fromScale(0.5, 0.5)
+	me.Size = UDim2.fromOffset(16, 16)
+	me.BackgroundTransparency = 1
+	me.Text = "✈"
+	me.Rotation = -90
+	me.TextColor3 = colors.amber
+	me.TextSize = 16
+	me.Font = Enum.Font.GothamBold
+	me.ZIndex = 5
+	me.Parent = frame
+
+	local function blip(text: string, color: Color3, size: number): TextLabel
+		local t = Instance.new("TextLabel")
+		t.AnchorPoint = Vector2.new(0.5, 0.5)
+		t.Size = UDim2.fromOffset(if #text > 1 then 70 else size, size)
+		t.BackgroundTransparency = 1
+		t.Text = text
+		t.TextColor3 = color
+		t.TextSize = size
+		t.Font = Enum.Font.GothamBold
+		t.TextStrokeTransparency = 0.5
+		t.Parent = frame
+		return t
+	end
+
+	local fixed: { { label: TextLabel, x: number, z: number, edge: boolean } } = {}
+	table.insert(fixed, { label = blip("A", colors.fg, 13), x = 0, z = 0, edge = true })
+	table.insert(fixed, { label = blip("B", colors.fg, 13), x = 14000, z = -16000, edge = true })
+	for _, city in World.CITIES do
+		local name = if city.name == "DUBAI" then "Дубай" elseif city.name == "LONDON" then "Лондон" else "Ташкент"
+		table.insert(fixed, { label = blip(name, colors.dim, 11), x = city.x, z = city.z, edge = true })
+	end
+	local ringBlip = blip("◎", colors.magenta, 14)
+	local planeBlips: { [Instance]: TextLabel } = {}
+
+	local function place(label: TextLabel, pos: Vector3, x: number, z: number, hdg: number, edge: boolean): boolean
+		local east, north = x - pos.X, -(z - pos.Z)
+		local h = math.rad(hdg)
+		local right = east * math.cos(h) - north * math.sin(h)
+		local up = east * math.sin(h) + north * math.cos(h)
+		local d = math.sqrt(right * right + up * up)
+		local maxR = RANGE * (if #label.Text > 1 then 0.6 else 0.85)
+		if d > maxR then
+			if not edge then
+				label.Visible = false
+				return false
+			end
+			right, up = right / d * maxR, up / d * maxR
+		end
+		local k = (SIZE / 2) / RANGE
+		label.Position = UDim2.fromOffset(SIZE / 2 + right * k, SIZE / 2 - up * k)
+		label.Visible = true
+		return true
+	end
+
+	function self.setVisible(on: boolean)
+		frame.Visible = on
+	end
+
+	function self.update(pos: Vector3, hdg: number, ownModel: Instance?, ringPos: Vector3?)
+		for _, f in fixed do
+			place(f.label, pos, f.x, f.z, hdg, f.edge)
+		end
+		if ringPos then
+			place(ringBlip, pos, ringPos.X, ringPos.Z, hdg, true)
+		else
+			ringBlip.Visible = false
+		end
+		local folder = workspace:FindFirstChild("Planes")
+		local seen: { [Instance]: boolean } = {}
+		if folder then
+			for _, m in folder:GetChildren() do
+				local root = m:IsA("Model") and m.PrimaryPart
+				if root and m ~= ownModel and m.Name ~= "Wreck" then
+					seen[m] = true
+					local b = planeBlips[m]
+					if not b then
+						local isPlayer = m:GetAttribute("Owner") ~= nil
+						b = blip("•", if isPlayer then colors.green else Color3.fromRGB(255, 230, 120), 18)
+						planeBlips[m] = b
+					end
+					place(b, pos, root.Position.X, root.Position.Z, hdg, false)
+				end
+			end
+		end
+		for m, b in planeBlips do
+			if not seen[m] then
+				b:Destroy()
+				planeBlips[m] = nil
+			end
+		end
+	end
+
+	return self
+end
+
+return Radar
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Интерфейс Sky Pilot: верхняя панель, приборы, авиагоризонт, ангар, справка,
 -- экран крушения и сенсорное управление (штурвал, РУД, кнопки).
 local Players = game:GetService("Players")
@@ -6493,6 +6832,11 @@ function Ui.new(cb: Callbacks)
 	end
 	new("Frame", { Size = UDim2.fromOffset(8, 8), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.amber, BorderSizePixel = 0, ZIndex = 3 }, adi)
 
+	-- гонка через кольца: таймер
+	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 246), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = C.dark, Text = "", Visible = false }, root)
+	corner(raceTag, 6)
+	self.root = root
+
 	-- автопилот-индикатор
 	local apTag = new("TextLabel", { Size = UDim2.fromOffset(96, 22), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 218), BackgroundColor3 = C.green, Font = FONT, TextSize = 13, TextColor3 = C.dark, Text = "АВТОПИЛОТ", Visible = false }, root)
 	corner(apTag, 6)
@@ -6508,7 +6852,7 @@ function Ui.new(cb: Callbacks)
 	stroke(toastF)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }, toastF)
 
-	local debug = glass(root, { Size = UDim2.fromOffset(330, 250), Position = UDim2.fromOffset(0, 116), Visible = false })
+	local debug = glass(root, { Size = UDim2.fromOffset(330, 250), Position = UDim2.fromOffset(0, 276), Visible = false })
 	local debugText = new("TextLabel", { Size = UDim2.new(1, -16, 1, -12), Position = UDim2.fromOffset(8, 6), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Text = "", RichText = true }, debug)
 
 	-- ================= сенсорное управление
@@ -6708,6 +7052,7 @@ function Ui.new(cb: Callbacks)
 		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)",
 		"V — камера (сзади / кабина / орбита)      M — ангар      C — мышь-штурвал",
 		"N — навигация: стрелка на аэропорт или город; с выбранной целью автопилот (P) летит к ней сам",
+		"Гонка: пролети сквозь розовое кольцо у Skyport — маршрут Дубай → Ташкент → Лондон → домой, 13 колец, +1500 очков",
 		"",
 		"Геймпад: левый стик — штурвал, R2/L2 — тяга, R1/L1 — руль, Y — шасси,",
 		"крестовина ↑/↓ — закрылки, → — навигация, X — реверс, B — тормоз, A — автопилот, Select — камера.",
@@ -6793,6 +7138,7 @@ function Ui.new(cb: Callbacks)
 			warn.Text = ""
 			apTag.Visible = false
 			nav.Visible = false
+			raceTag.Visible = false
 		end
 	end
 	function self.showHangar(on: boolean?)
@@ -6823,6 +7169,12 @@ function Ui.new(cb: Callbacks)
 	end
 	function self.setCamLabel(name: string)
 		bCam.Text = "Камера: " .. name
+	end
+	function self.setRace(text: string?)
+		raceTag.Visible = text ~= nil and hud.Visible
+		if text then
+			raceTag.Text = text
+		end
 	end
 	function self.setNav(text: string?, relDeg: number?)
 		nav.Visible = text ~= nil and hud.Visible

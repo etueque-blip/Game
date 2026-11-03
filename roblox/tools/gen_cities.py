@@ -455,11 +455,42 @@ def tashkent():
         box((hx - 70 + i * 12.7, 0.45 + 45, hz - 16.5), (2, 88, 1), c=(170, 170, 168), m="Concrete", solid=False)
 
 
+# ================================================================ ГОНКА ЧЕРЕЗ КОЛЬЦА
+RING_PATH = [
+    (0, 300, -3500, 90, "Старт · Skyport"),
+    (2500, 450, -5500, 90, "К Дубаю"),
+    (5300, 950, -7500, 90, "Бурдж-Халифа"),
+    (7000, 200, -9400, 90, "Отель-«парус»"),
+    (4000, 120, -10100, 90, "Пальма"),
+    (8000, 600, -2000, 90, "К Ташкенту"),
+    (10950, 450, 3520, 90, "Телебашня"),
+    (9980, 150, 2900, 90, "Медресе"),
+    (3000, 700, 9000, 90, "К Лондону"),
+    (-4560, 200, 12390, 90, "Лондонский глаз"),
+    (-3300, 50, 12619, 32, "Под Тауэрским мостом", -math.pi / 2),  # вдоль Темзы на восток
+    (-1500, 400, 6000, 90, "Домой"),
+    (0, 200, 1500, 90, "Финиш · полоса A"),
+]
+
+
+def rings():
+    out = []
+    n = len(RING_PATH)
+    for i, ring in enumerate(RING_PATH):
+        x, y, z, r, name = ring[:5]
+        a = RING_PATH[max(0, i - 1)]
+        b = RING_PATH[min(n - 1, i + 1)]
+        dx, dz = b[0] - a[0], b[2] - a[2]
+        yaw = ring[5] if len(ring) > 5 else math.atan2(-dx, -dz)  # кольцо смотрит вдоль маршрута
+        out.append([x, y, z, r, round(yaw, 4), name])
+    return out
+
+
 def main():
     dubai()
     london()
     tashkent()
-    data = {"props": props, "obstacles": obstacles, "pads": pads, "labels": labels}
+    data = {"props": props, "obstacles": obstacles, "pads": pads, "labels": labels, "rings": rings()}
     with open(os.path.join(ROOT, "tools", "cities.json"), "w") as f:
         json.dump(data, f, separators=(",", ":"))
 
@@ -489,7 +520,11 @@ def main():
     for l in labels:
         out.append('{name="%s", x=%s, y=%s, z=%s},' % (l["name"], lua(float(l["x"])), lua(float(l["y"])), lua(float(l["z"]))))
     out.append("}")
-    out.append("return { props = P, obstacles = O, pads = PADS, labels = LABELS }")
+    out.append("local RINGS = {")
+    for r in data["rings"]:
+        out.append('{%s, %s, %s, %s, %s, "%s"},' % (lua(float(r[0])), lua(float(r[1])), lua(float(r[2])), lua(float(r[3])), lua(float(r[4])), r[5]))
+    out.append("}")
+    out.append("return { props = P, obstacles = O, pads = PADS, labels = LABELS, rings = RINGS }")
     with open(os.path.join(ROOT, "src", "shared", "CityData.luau"), "w") as f:
         f.write("\n".join(out) + "\n")
     print(f"props={len(props)} obstacles={len(obstacles)} pads={len(pads)}")

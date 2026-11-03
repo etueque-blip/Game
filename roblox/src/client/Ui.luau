@@ -155,6 +155,11 @@ function Ui.new(cb: Callbacks)
 	end
 	new("Frame", { Size = UDim2.fromOffset(8, 8), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.amber, BorderSizePixel = 0, ZIndex = 3 }, adi)
 
+	-- гонка через кольца: таймер
+	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 246), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = C.dark, Text = "", Visible = false }, root)
+	corner(raceTag, 6)
+	self.root = root
+
 	-- автопилот-индикатор
 	local apTag = new("TextLabel", { Size = UDim2.fromOffset(96, 22), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 218), BackgroundColor3 = C.green, Font = FONT, TextSize = 13, TextColor3 = C.dark, Text = "АВТОПИЛОТ", Visible = false }, root)
 	corner(apTag, 6)
@@ -170,7 +175,7 @@ function Ui.new(cb: Callbacks)
 	stroke(toastF)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }, toastF)
 
-	local debug = glass(root, { Size = UDim2.fromOffset(330, 250), Position = UDim2.fromOffset(0, 116), Visible = false })
+	local debug = glass(root, { Size = UDim2.fromOffset(330, 250), Position = UDim2.fromOffset(0, 276), Visible = false })
 	local debugText = new("TextLabel", { Size = UDim2.new(1, -16, 1, -12), Position = UDim2.fromOffset(8, 6), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Text = "", RichText = true }, debug)
 
 	-- ================= сенсорное управление
@@ -370,6 +375,7 @@ function Ui.new(cb: Callbacks)
 		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)",
 		"V — камера (сзади / кабина / орбита)      M — ангар      C — мышь-штурвал",
 		"N — навигация: стрелка на аэропорт или город; с выбранной целью автопилот (P) летит к ней сам",
+		"Гонка: пролети сквозь розовое кольцо у Skyport — маршрут Дубай → Ташкент → Лондон → домой, 13 колец, +1500 очков",
 		"",
 		"Геймпад: левый стик — штурвал, R2/L2 — тяга, R1/L1 — руль, Y — шасси,",
 		"крестовина ↑/↓ — закрылки, → — навигация, X — реверс, B — тормоз, A — автопилот, Select — камера.",
@@ -455,6 +461,7 @@ function Ui.new(cb: Callbacks)
 			warn.Text = ""
 			apTag.Visible = false
 			nav.Visible = false
+			raceTag.Visible = false
 		end
 	end
 	function self.showHangar(on: boolean?)
@@ -485,6 +492,12 @@ function Ui.new(cb: Callbacks)
 	end
 	function self.setCamLabel(name: string)
 		bCam.Text = "Камера: " .. name
+	end
+	function self.setRace(text: string?)
+		raceTag.Visible = text ~= nil and hud.Visible
+		if text then
+			raceTag.Text = text
+		end
 	end
 	function self.setNav(text: string?, relDeg: number?)
 		nav.Visible = text ~= nil and hud.Visible

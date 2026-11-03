@@ -17,6 +17,8 @@ local Ui = require(script:WaitForChild("Ui"))
 local Controls = require(script:WaitForChild("Controls"))
 local CameraRig = require(script:WaitForChild("CameraRig"))
 local Animator = require(script:WaitForChild("Animator"))
+local Race = require(script:WaitForChild("Race"))
+local Radar = require(script:WaitForChild("Radar"))
 
 local remotes = ReplicatedStorage:WaitForChild("SkyPilotRemotes")
 local function R(name: string): RemoteEvent
@@ -24,6 +26,7 @@ local function R(name: string): RemoteEvent
 end
 local RequestFlight, FlightStarted, ClientReady = R("RequestFlight"), R("FlightStarted"), R("ClientReady")
 local PlaneState, Landing, CrashEvent, EndFlight, Notify = R("PlaneState"), R("Landing"), R("Crash"), R("EndFlight"), R("Notify")
+local RaceFinished = R("RaceFinished")
 
 local FT = FlightPhysics.FT
 local clamp = FlightPhysics.clamp
@@ -166,6 +169,14 @@ ui = Ui.new({
 	end,
 })
 controls = Controls.new(ui, onAction)
+local radar = Radar.new(ui.root, Ui.Colors)
+local race = Race.new(function(name, i, n)
+	ui.toast(string.format("Кольцо %d/%d · %s", i, n, name), "magenta")
+end, function(t)
+	ui.toast(string.format("ФИНИШ гонки: %d:%04.1f", math.floor(t / 60), t % 60), "green")
+	addLog(string.format("Гонка: %.1f с", t))
+	RaceFinished:FireServer(t)
+end)
 cameraRig = CameraRig.new(ui)
 
 local function stopFlight()
@@ -175,6 +186,8 @@ local function stopFlight()
 		engineSound = nil
 	end
 	Animator.setLocal(nil)
+	race.reset()
+	radar.setVisible(false)
 	ui.setFlying(false)
 	ui.setAutopilot(false)
 	setCharacterControls(true)
@@ -196,6 +209,8 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 	cameraRig.reset(spawnCF.Rotation, cfg)
 	Animator.setLocal(m, f.gear, f.flaps, f.throttle)
 	ui.setFlying(true, cfg.name)
+	radar.setVisible(true)
+	race.reset()
 	ui.showHangar(false)
 	ui.hideCrash()
 	ui.setThrottleFill(f.throttle)
@@ -280,6 +295,8 @@ local function handleEvents(f: FlightPhysics.Flight)
 			crashTimer = 1.8
 			apTarget = nil
 			ui.setFlying(false)
+			radar.setVisible(false)
+			race.reset()
 			CrashEvent:FireServer(ev.text)
 			if engineSound then
 				engineSound:Destroy()
@@ -336,7 +353,11 @@ RunService.PreSimulation:Connect(function(dt)
 			input = ap
 		end
 	end
+	local prevPos = f.pos
 	FlightPhysics.step(f, input, dt)
+	if not f.crashed then
+		race.step(prevPos, f.pos, os.clock())
+	end
 	handleEvents(f)
 	if f.crashed then
 		return
@@ -375,9 +396,16 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local bankDeg = math.deg(math.atan2(-right.Y, up.Y))
 	ui.setAdi(pitchDeg, bankDeg)
 
-	-- навигация
+	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
+	local ringPos, ringName = race.target()
+	radar.update(f.pos, hdg, model, ringPos or race.firstRing())
+	ui.setRace(race.status(now))
 	local n = World.NAV[navIdx]
-	if n then
+	if ringPos then
+		local brg = Autopilot.bearingDeg(f.pos, ringPos)
+		local dist = Vector3.new(f.pos.X - ringPos.X, 0, f.pos.Z - ringPos.Z).Magnitude * World.METERS_PER_STUD / 1000
+		ui.setNav(string.format("КОЛЬЦО · %s · %.1f км · высота %d ft", ringName or "", dist, math.round(ringPos.Y * FT)), Autopilot.wrap180(brg - hdg))
+	elseif n then
 		local brg = Autopilot.bearingDeg(f.pos, Vector3.new(n.x, 0, n.z))
 		local dist = Vector3.new(f.pos.X - n.x, 0, f.pos.Z - n.z).Magnitude * World.METERS_PER_STUD / 1000
 		ui.setNav(string.format("%s · %.1f км · курс %03d°", n.name, dist, math.round(brg) % 360), Autopilot.wrap180(brg - hdg))
