@@ -617,6 +617,57 @@ def add_atc(s):
     return s
 
 
+AI_JS = r"""
+// ===== ИИ-трафик: те же маршруты и автопилот, что в Roblox (AITraffic.luau / Autopilot.luau)
+const AI_WP = [[0, -9000], [9000, -14000], [20000, -18000], [16000, -6000], [5500, -7500], [-6000, 2000], [-2000, 14000], [8000, 9000], [-18000, -2000]];
+const AI_TYPES = ["B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "G650", "C172"];
+const BOTS = [];
+function apCompute(f, t) {
+  const look = new V3(0, 0, -1).applyQuaternion(f.att), right = new V3(1, 0, 0).applyQuaternion(f.att), up = new V3(0, 1, 0).applyQuaternion(f.att);
+  const D = THREE.MathUtils.radToDeg;
+  const hdg = (D(Math.atan2(look.x, -look.z)) + 360) % 360, bank = D(Math.atan2(-right.y, up.y)), pitch = D(Math.asin(clamp(look.y, -1, 1)));
+  const err = ((t.heading - hdg + 540) % 360) - 180, wantBank = clamp(err * 1.2, -22, 22);
+  const r = clamp((wantBank - bank) / 18, -1, 1);
+  const wantVy = clamp((t.alt - f.pos.y * FT) * 2.5, -1800, 1800) / 60 / FT;
+  const gamma = D(Math.asin(clamp(wantVy / Math.max(f.speed, 40), -0.35, 0.35)));
+  const path = D(Math.asin(clamp(f.vel.y / Math.max(f.vel.length(), 1), -1, 1)));
+  const p = clamp((gamma - path) / 4 + (gamma - pitch) / 10, -1, 1);
+  const avail = f.cfg.thrust * Math.max(f.dbg.thrustMul || 1, 0.05);
+  return { p, r, y: 0, thrUp: false, thrDn: false, brakes: false, set: clamp(((f.dbg.drag || 0) + G * look.y) / avail + (t.speed - f.speed) * 0.03, 0, 1) };
+}
+function spawnBot() {
+  const cfg = PLANES[AI_TYPES[Math.floor(Math.random() * AI_TYPES.length)]];
+  const f = newFlight(cfg, "air"); const wi = Math.floor(Math.random() * AI_WP.length);
+  f.pos.set(AI_WP[wi][0] + R(-3000, 3000), Math.min(cfg.ceilingFt * 0.7, R(4500, 11000)) / FT, AI_WP[wi][1] + R(-3000, 3000));
+  f.att.setFromAxisAngle(AY, Math.random() * Math.PI * 2); f.speed = Math.min(cfg.maxKts * 0.72, cfg.stallKts * 2.2); f.gear = !!cfg.fixedGear;
+  const obj = buildPlane(cfg, false); scene.add(obj);
+  if (obj.userData.gear && !cfg.fixedGear) obj.userData.gear.visible = false;
+  return { f, obj, wp: (wi + 1) % AI_WP.length, alt: f.pos.y * FT, speed: f.speed };
+}
+for (let i = 0; i < 4; i++) BOTS.push(spawnBot());
+function stepBots(dt) {
+  for (let i = 0; i < BOTS.length; i++) {
+    const b = BOTS[i], f = b.f, w = AI_WP[b.wp];
+    if (Math.hypot(f.pos.x - w[0], f.pos.z - w[1]) < 1500) { b.wp = (b.wp + 1) % AI_WP.length; b.alt = Math.min(f.cfg.ceilingFt * 0.7, R(4500, 11000)); }
+    const brg = (THREE.MathUtils.radToDeg(Math.atan2(w[0] - f.pos.x, -(w[1] - f.pos.z))) + 360) % 360;
+    const inp = apCompute(f, { heading: brg, alt: b.alt, speed: b.speed });
+    f.throttle = inp.set; physicsStep(f, inp, dt); f.events.length = 0;
+    if (f.crashed) { scene.remove(b.obj); BOTS[i] = spawnBot(); continue; }
+    b.obj.position.copy(f.pos); b.obj.quaternion.copy(f.att);
+  }
+}
+"""
+
+
+def add_ai(s):
+    """ИИ-трафик в веб-версии (4 самолёта) + точки на радаре."""
+    s = patch(s, "// ============================================================ HUD\n", "// ============================================================ HUD\n" + AI_JS)
+    s = patch(s, "  updateParticles(dt);\n", "  updateParticles(dt);\n  stepBots(dt);\n")
+    s = patch(s, 'const rt = raceTarget() || RINGS[0]; label("◎", rt.pos.x, rt.pos.z, "#ff4fd8", 26);',
+              'const rt = raceTarget() || RINGS[0]; label("◎", rt.pos.x, rt.pos.z, "#ff4fd8", 26);\n  for (const b of BOTS) { const q = put(b.f.pos.x, b.f.pos.z, false); if (q) { rctx.fillStyle = "#ffe678"; rctx.beginPath(); rctx.arc(q[0], q[1], 5, 0, Math.PI * 2); rctx.fill(); } }')
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -648,6 +699,7 @@ def main():
     s = add_weather(s)
     s = add_gates(s)
     s = add_atc(s)
+    s = add_ai(s)
     s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс
     s = patch(s, "lastCfg = cfg; lastMode = mode; raceReset();", "lastCfg = cfg; lastMode = mode; lastDest = flightDest; raceReset();")
