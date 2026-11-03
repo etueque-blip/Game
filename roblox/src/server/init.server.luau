@@ -15,6 +15,7 @@ local Scores = require(script:WaitForChild("Scores"))
 local AITraffic = require(script:WaitForChild("AITraffic"))
 
 local AI_TRAFFIC_COUNT = 5 -- 0 = без ботов
+local DAY_LENGTH_MIN = 40 -- полные сутки за 40 минут реального времени; 0 = всегда день
 
 -- ===== группы столкновений: самолёт и пилот не цепляются за землю (столкновения считает физика игры)
 local FLYING = "SkyPilotFlying"
@@ -394,6 +395,21 @@ Players.PlayerRemoving:Connect(function(p)
 	lastRace[p] = nil
 	Scores.unload(p)
 end)
+
+-- смена дня и ночи (видна всем игрокам, огни полос и самолётов ночью светятся)
+if DAY_LENGTH_MIN > 0 then
+	local Lighting = game:GetService("Lighting")
+	Lighting.ClockTime = 10
+	task.spawn(function()
+		local last = os.clock()
+		while true do
+			task.wait(1)
+			local now = os.clock()
+			Lighting.ClockTime = (Lighting.ClockTime + (now - last) * 24 / (DAY_LENGTH_MIN * 60)) % 24
+			last = now
+		end
+	end)
+end
 
 if AI_TRAFFIC_COUNT > 0 then
 	AITraffic.start(AI_TRAFFIC_COUNT)

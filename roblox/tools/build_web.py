@@ -532,6 +532,15 @@ def add_sound(s):
     return s
 
 
+def add_weather(s):
+    """Панель погоды: ясно, температура за бортом по стандартной атмосфере (15 °C − 1.98 °C/1000 ft)."""
+    s = patch(s, "#warn {", "#wx { position: absolute; right: calc(10px + env(safe-area-inset-right, 0px)); top: calc(256px + env(safe-area-inset-top, 0px)); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; line-height: 1.35; }\n#wx small { display: block; color: var(--dim); font-family: var(--f-num); font-size: 11px; }\n#warn {")
+    s = patch(s, '<div id="nav" hidden></div>', '<div id="nav" hidden></div>\n  <div id="wx" hidden></div>')
+    s = patch(s, "  updateSound(f);\n", "  updateSound(f);\n  { const el = $(\"wx\"); el.hidden = f.crashed; const tC = Math.max(-56.5, 15 - 1.98 * f.pos.y * FT / 1000); el.innerHTML = `☀ Ясно · день<small>за бортом ${tC >= 0 ? \"+\" : \"\"}${Math.round(tC)} °C</small>`; }\n")
+    s = patch(s, '$("radar").hidden = true; $("htape").hidden = true;', '$("radar").hidden = true; $("htape").hidden = true; $("wx").hidden = true;')
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -560,6 +569,7 @@ def main():
     s = add_menu(s)
     s = add_tape(s)
     s = add_sound(s)
+    s = add_weather(s)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

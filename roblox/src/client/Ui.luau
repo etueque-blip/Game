@@ -157,6 +157,30 @@ function Ui.new(cb: Callbacks)
 	new("Frame", { Size = UDim2.fromOffset(8, 8), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.amber, BorderSizePixel = 0, ZIndex = 3 }, adi)
 
 	-- гонка через кольца: таймер
+	-- погода и время: время суток по Lighting, температура за бортом по стандартной атмосфере
+	local wx = glass(root, { Size = UDim2.fromOffset(176, 50), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 278), Visible = false })
+	local wxTop = new("TextLabel", { Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(10, 4), BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, wx)
+	local wxBot = new("TextLabel", { Size = UDim2.new(1, -16, 0, 18), Position = UDim2.fromOffset(10, 26), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, wx)
+	function self.setWeather(altFt: number)
+		wx.Visible = hud.Visible
+		local t = game:GetService("Lighting").ClockTime
+		local phase, icon
+		if t >= 5 and t < 10 then
+			phase, icon = "Утро", "◐"
+		elseif t >= 10 and t < 14 then
+			phase, icon = "Полдень", "☀"
+		elseif t >= 14 and t < 18 then
+			phase, icon = "День", "☀"
+		elseif t >= 18 and t < 21 then
+			phase, icon = "Вечер", "◑"
+		else
+			phase, icon = "Ночь", "☾"
+		end
+		wxTop.Text = string.format("%s  %s · %02d:%02d", icon, phase, math.floor(t), math.floor((t % 1) * 60))
+		local temp = math.max(-56.5, 15 - 1.98 * altFt / 1000)
+		wxBot.Text = string.format("за бортом %+d °C · ясно", math.round(temp))
+	end
+
 	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 246), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = C.dark, Text = "", Visible = false }, root)
 	corner(raceTag, 6)
 	self.root = root
@@ -686,6 +710,7 @@ function Ui.new(cb: Callbacks)
 			apTag.Visible = false
 			nav.Visible = false
 			tape.Visible = false
+			wx.Visible = false
 			raceTag.Visible = false
 			banner.Visible = false
 		end
