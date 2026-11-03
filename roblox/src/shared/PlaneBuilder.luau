@@ -168,7 +168,8 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 			for _, s in { -1, 1 } do
 				local ang = math.rad(18 + (i - 1) * 24)
 				local x, y = s * r * math.sin(ang), r * math.cos(ang) * 0.92
-				local pane = block(ctx, "CockpitWindow", Vector3.new(r * 0.42, 0.08 * D, Ln * 0.11), CFrame.new(x, y, zc) * CFrame.Angles(math.rad(-38 + i * 8), 0, -s * ang), DARK, Enum.Material.Glass)
+				local mk = if cfg.mask then 1.45 else 1
+				local pane = block(ctx, "CockpitWindow", Vector3.new(r * 0.42 * mk, 0.08 * D * mk, Ln * 0.11 * mk), CFrame.new(x, y, zc) * CFrame.Angles(math.rad(-38 + i * 8), 0, -s * ang), DARK, Enum.Material.Glass)
 				pane.CastShadow = false
 			end
 		end
@@ -181,13 +182,18 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 			local z1 = L / 2 - Lt * 0.95
 			local n = math.min(math.floor((z1 - z0) / pitch), 70)
 			local step = (z1 - z0) / math.max(n, 1)
-			local wy = D * 0.13
+			-- двухпалубный (тип A380): два ряда иллюминаторов по всей длине
+			local rows = if cfg.doubleDeck then { -0.02, 0.3 } else { 0.13 }
 			local wx = s * math.sqrt(0.25 - 0.0169) * D
-			for i = 0, n do
-				local z = z0 + i * step
-				if i ~= 1 and i ~= n - 1 then
-					local w = block(ctx, "Window", Vector3.new(D * 0.025, D * 0.06, D * 0.045), CFrame.new(wx, wy, z), DARK, Enum.Material.Glass)
-					w.CastShadow = false
+			for _, ry in rows do
+				local wy = D * ry
+				local rx = s * math.sqrt(0.25 - ry * ry) * D
+				for i = 0, n do
+					local z = z0 + i * step
+					if i ~= 1 and i ~= n - 1 then
+						local w = block(ctx, "Window", Vector3.new(D * 0.025, D * 0.055, D * 0.04), CFrame.new(rx, wy, z), DARK, Enum.Material.Glass)
+						w.CastShadow = false
+					end
 				end
 			end
 			for _, z in { z0 + step * 1, z1 - step * 1 } do

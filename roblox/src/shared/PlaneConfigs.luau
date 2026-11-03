@@ -10,7 +10,7 @@ export type Config = {
 	engines: string, engineD: number?, engineLen: number?,
 	tail: string, hstabSpan: number, finHeight: number, finSweep: number,
 	gearLen: number, gearHeight: number,
-	fixedGear: boolean?, windows: boolean?, winglets: boolean?, hump: boolean?, canopy: boolean?, noFlaps: boolean?,
+	fixedGear: boolean?, windows: boolean?, winglets: boolean?, hump: boolean?, canopy: boolean?, noFlaps: boolean?, doubleDeck: boolean?, mask: boolean?,
 	thrust: number, maxKts: number, stallKts: number, vrKts: number, flapMaxKts: number,
 	pitchRate: number, rollRate: number, yawRate: number, turnBoost: number,
 	groundSteer: number, brakeDecel: number, stallSink: number, maxRotate: number,
@@ -33,11 +33,19 @@ local PLANES: { [string]: any } = {
 		colors = { body = WHITE, accent = Color3.fromHex("008c96"), tail = Color3.fromHex("0a285a"), engine = GREY } },
 	B747 = { name = "Titan 4", cls = "Четырёхмоторный гигант", length = 272, diameter = 23, span = 244, chord = 36, wing = "low", wingPos = 0.46, sweep = 37, dihedral = 7, engines = "wing4", engineD = 10, engineLen = 19, tail = "conventional", hstabSpan = 82, finHeight = 50, finSweep = 42, gearLen = 8, windows = true, hump = true, thrust = 5.1, maxKts = 495, stallKts = 135, vrKts = 160, flapMaxKts = 230, pitchRate = 0.3, rollRate = 0.65, yawRate = 0.18, turnBoost = 2, groundSteer = 0.4, brakeDecel = 8, stallSink = 65, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
 		colors = { body = WHITE, accent = Color3.fromHex("d22828"), tail = Color3.fromHex("b4141e"), engine = GREY } },
+	A320 = { name = "Strato 320", cls = "Узкофюзеляжный (тип Airbus A320)", length = 139, diameter = 13.5, span = 132, chord = 20, wing = "low", wingPos = 0.47, sweep = 25, dihedral = 5, engines = "wing2", engineD = 7.5, engineLen = 13, tail = "conventional", hstabSpan = 46, finHeight = 26, finSweep = 36, gearLen = 5, windows = true, winglets = true, thrust = 6.0, maxKts = 470, stallKts = 122, vrKts = 142, flapMaxKts = 230, pitchRate = 0.42, rollRate = 0.95, yawRate = 0.25, turnBoost = 2, groundSteer = 0.5, brakeDecel = 8, stallSink = 55, maxRotate = 12, ceilingFt = 39000, maxTouchdownFpm = 1200,
+		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("0b2a6f"), tail = Color3.fromHex("0b2a6f"), engine = Color3.fromHex("c4c8ce") } },
+	A330 = { name = "Strato 330", cls = "Широкофюзеляжный (тип Airbus A330)", length = 236, diameter = 20.5, span = 223, chord = 32, wing = "low", wingPos = 0.47, sweep = 30, dihedral = 6, engines = "wing2", engineD = 11.5, engineLen = 21, tail = "conventional", hstabSpan = 72, finHeight = 44, finSweep = 40, gearLen = 7.2, windows = true, winglets = true, thrust = 5.6, maxKts = 480, stallKts = 130, vrKts = 152, flapMaxKts = 230, pitchRate = 0.34, rollRate = 0.72, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 41000, maxTouchdownFpm = 1200,
+		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1a7f4b"), tail = Color3.fromHex("0f5a34"), engine = Color3.fromHex("c4c8ce") } },
+	A350 = { name = "Strato 350", cls = "Широкофюзеляжный (тип Airbus A350)", length = 247, diameter = 21.5, span = 240, chord = 33, wing = "low", wingPos = 0.47, sweep = 32, dihedral = 6, engines = "wing2", engineD = 12, engineLen = 21, tail = "conventional", hstabSpan = 76, finHeight = 46, finSweep = 40, gearLen = 7.5, windows = true, winglets = true, mask = true, thrust = 5.8, maxKts = 490, stallKts = 128, vrKts = 150, flapMaxKts = 230, pitchRate = 0.34, rollRate = 0.74, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 43000, maxTouchdownFpm = 1200,
+		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("5a2d82"), tail = Color3.fromHex("3d1d5c"), engine = Color3.fromHex("c4c8ce") } },
+	A380 = { name = "Strato 380", cls = "Двухпалубный гигант (тип Airbus A380)", length = 269, diameter = 26, span = 295, chord = 42, wing = "low", wingPos = 0.47, sweep = 33, dihedral = 5.6, engines = "wing4", engineD = 11, engineLen = 20, tail = "conventional", hstabSpan = 100, finHeight = 54, finSweep = 42, gearLen = 8.5, windows = true, winglets = true, doubleDeck = true, thrust = 5.0, maxKts = 490, stallKts = 135, vrKts = 158, flapMaxKts = 230, pitchRate = 0.28, rollRate = 0.6, yawRate = 0.17, turnBoost = 2, groundSteer = 0.4, brakeDecel = 8, stallSink = 68, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
+		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("c8a032"), tail = Color3.fromHex("8c1d2a"), engine = Color3.fromHex("c4c8ce") } },
 	F16 = { name = "Striker X", cls = "Истребитель", length = 54, diameter = 5.5, span = 35, chord = 14, wing = "mid", wingPos = 0.6, sweep = 40, dihedral = 0, engines = "jet1", engineD = 4, tail = "conventional", hstabSpan = 20, finHeight = 12, finSweep = 45, gearLen = 2.5, canopy = true, noFlaps = true, thrust = 22, maxKts = 800, stallKts = 115, vrKts = 140, flapMaxKts = 9999, pitchRate = 1.5, rollRate = 4, yawRate = 0.5, turnBoost = 6, groundSteer = 0.6, brakeDecel = 10, stallSink = 40, maxRotate = 15, ceilingFt = 50000, maxTouchdownFpm = 1500,
 		colors = { body = Color3.fromHex("8e98a3"), accent = Color3.fromHex("6b737d"), tail = Color3.fromHex("78808a"), engine = Color3.fromHex("3c3c41") } },
 }
 
-local ORDER = { "C172", "LEAR75", "G650", "GL7500", "B737", "B787", "B747", "F16" }
+local ORDER = { "C172", "LEAR75", "G650", "GL7500", "B737", "A320", "B787", "A330", "A350", "B747", "A380", "F16" }
 
 for id, c in PLANES do
 	c.id = id
