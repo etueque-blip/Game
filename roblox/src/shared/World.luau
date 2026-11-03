@@ -143,6 +143,32 @@ for _, ap in World.AIRPORTS do
 	end
 end
 
+-- Стоянки (гейты) на перроне: свободные места между стоящими самолётами, номер «A01», «D02»…
+World.STANDS = {} :: { [string]: { { id: string, x: number, z: number, lx: number, lz: number } } }
+for _, ap in World.AIRPORTS do
+	local busy = {}
+	for _, p in ap.parked do
+		local c = PlaneConfigs.PLANES[p[1]]
+		table.insert(busy, { p[2] - c.span / 2, p[2] + c.span / 2 })
+	end
+	local list, lastZ = {}, -math.huge
+	for z = -760, 900, 20 do
+		local free = z - lastZ >= 320
+		for _, b in busy do
+			if z > b[1] - 170 and z < b[2] + 170 then
+				free = false
+			end
+		end
+		if free and #list < 3 then
+			local lx = ap.W / 2 + 700
+			local x, wz = World.apToWorld(ap, lx, z)
+			table.insert(list, { id = string.format("%s%02d", ap.id, #list + 1), x = x, z = wz, lx = lx, lz = z })
+			lastZ = z
+		end
+	end
+	World.STANDS[ap.id] = list
+end
+
 World.LAKES = { { -6000, 5000, 1800 }, { 8000, 6000, 1500 }, { -9000, -3000, 1200 }, { 3000, -14000, 1600 }, { 18000, -6000, 2000 } }
 
 function World.groundAt(x: number, z: number): number

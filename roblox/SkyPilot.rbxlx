@@ -4460,6 +4460,32 @@ for _, ap in World.AIRPORTS do
 	end
 end
 
+-- Стоянки (гейты) на перроне: свободные места между стоящими самолётами, номер «A01», «D02»…
+World.STANDS = {} :: { [string]: { { id: string, x: number, z: number, lx: number, lz: number } } }
+for _, ap in World.AIRPORTS do
+	local busy = {}
+	for _, p in ap.parked do
+		local c = PlaneConfigs.PLANES[p[1]]
+		table.insert(busy, { p[2] - c.span / 2, p[2] + c.span / 2 })
+	end
+	local list, lastZ = {}, -math.huge
+	for z = -760, 900, 20 do
+		local free = z - lastZ >= 320
+		for _, b in busy do
+			if z > b[1] - 170 and z < b[2] + 170 then
+				free = false
+			end
+		end
+		if free and #list < 3 then
+			local lx = ap.W / 2 + 700
+			local x, wz = World.apToWorld(ap, lx, z)
+			table.insert(list, { id = string.format("%s%02d", ap.id, #list + 1), x = x, z = wz, lx = lx, lz = z })
+			lastZ = z
+		end
+	end
+	World.STANDS[ap.id] = list
+end
+
 World.LAKES = { { -6000, 5000, 1800 }, { 8000, 6000, 1500 }, { -9000, -3000, 1200 }, { 3000, -14000, 1600 }, { 18000, -6000, 2000 } }
 
 function World.groundAt(x: number, z: number): number
@@ -4629,6 +4655,7 @@ local CrashEvent = remote("Crash")
 local EndFlight = remote("EndFlight")
 local Notify = remote("Notify")
 local RaceFinished = remote("RaceFinished")
+local GateParked = remote("GateParked")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -4933,6 +4960,30 @@ CrashEvent.OnServerEvent:Connect(function(p, reason)
 			p:LoadCharacter()
 		end
 	end)
+end)
+
+-- рейс завершён у гейта: самолёт стоит на стоянке вскоре после посадки
+local gateDone: { [Player]: number } = {}
+GateParked.OnServerEvent:Connect(function(p, standId)
+	local a = active[p]
+	if not a or a.crashed or type(standId) ~= "string" then
+		return
+	end
+	local now = os.clock()
+	if a.lastLanding == 0 or now - a.lastLanding > 600 or (gateDone[p] and gateDone[p] >= a.lastLanding) then
+		return
+	end
+	local pos = a.root.Position
+	for _, list in World.STANDS do
+		for _, st in list do
+			if st.id == standId and (Vector3.new(pos.X - st.x, 0, pos.Z - st.z)).Magnitude < 70 and a.root.AssemblyLinearVelocity.Magnitude < 8 then
+				gateDone[p] = a.lastLanding
+				Scores.add(p, 500, false)
+				Notify:FireClient(p, string.format("Рейс завершён у гейта %s · +500", standId), "green")
+				return
+			end
+		end
+	end
 end)
 
 -- гонка через кольца: минимальное правдоподобное время ~60 с даже для истребителя
@@ -5470,6 +5521,13 @@ local function buildAirport(folder: Folder, ap: any)
 		m:PivotTo(cf(lx, 0.5 + c.gearHeight, p[2], -math.pi / 2))
 		m.Parent = f
 	end
+	-- стоянки: жёлтая осевая, стоп-линия и номер
+	for _, st in World.STANDS[ap.id] or {} do
+		part(f, Vector3.new(260, 0.05, 1.4), cf(st.lx - 60, 0.51, st.lz), YELLOW)
+		part(f, Vector3.new(1.4, 0.05, 40), cf(st.lx + 60, 0.51, st.lz), YELLOW)
+		local pad = part(f, Vector3.new(60, 0.05, 30), cf(st.lx - 150, 0.52, st.lz, -math.pi / 2), Color3.fromRGB(40, 42, 48))
+		textDecal(pad, Enum.NormalId.Top, st.id, YELLOW, Color3.fromRGB(40, 42, 48))
+	end
 	-- точка появления персонажа у терминала
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "Spawn_" .. ap.id
@@ -5706,6 +5764,7 @@ end
 local RequestFlight, FlightStarted, ClientReady = R("RequestFlight"), R("FlightStarted"), R("ClientReady")
 local PlaneState, Landing, CrashEvent, EndFlight, Notify = R("PlaneState"), R("Landing"), R("Crash"), R("EndFlight"), R("Notify")
 local RaceFinished = R("RaceFinished")
+local GateParked = R("GateParked")
 
 local FT = FlightPhysics.FT
 local clamp = FlightPhysics.clamp
@@ -5722,6 +5781,7 @@ local lastMode = "runway:A"
 local apTarget: Autopilot.Target? = nil
 local navIdx = 0 -- 0 = навигация выключена
 local parkBrake = false
+local gateTarget: any = nil -- стоянка, к которой надо зарулить после посадки
 local lastDest: string? = nil
 local apFollowNav = false
 local vsSmooth = 0
@@ -5877,6 +5937,7 @@ local function stopFlight()
 	end
 	Animator.setLocal(nil)
 	race.reset()
+	gateTarget = nil
 	radar.setVisible(false)
 	ui.setFlying(false)
 	ui.setAutopilot(false)
@@ -5984,6 +6045,18 @@ local function handleEvents(f: FlightPhysics.Flight)
 			ui.toast(ev.text, if ev.good then "green" else "amber")
 			addLog(ev.text)
 			Landing:FireServer(ev.fpm)
+			-- после посадки в аэропорту назначения — рулим к свободной стоянке
+			if lastDest and ev.airport == lastDest and not gateTarget then
+				local list = World.STANDS[lastDest]
+				if list and #list > 0 then
+					gateTarget = list[math.random(1, #list)]
+					task.delay(3, function()
+						if gateTarget then
+							ui.toast("Зарули на стоянку " .. gateTarget.id .. " и остановись", "magenta")
+						end
+					end)
+				end
+			end
 			if model then
 				tireSmoke(model, f.cfg)
 			end
@@ -6108,6 +6181,16 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 
 	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
 	local ringPos, ringName = race.target()
+	if gateTarget then
+		local gp = Vector3.new(gateTarget.x, 0, gateTarget.z)
+		local d = Vector3.new(f.pos.X, 0, f.pos.Z) - gp
+		if f.onGround and f.speed < 3 and d.Magnitude < 45 then
+			GateParked:FireServer(gateTarget.id)
+			gateTarget = nil
+		else
+			ringPos, ringName = Vector3.new(gp.X, 0, gp.Z), "стоянка " .. gateTarget.id
+		end
+	end
 	if not ringPos and lastMode == "race" then
 		ringPos, ringName = race.firstRing(), "Старт гонки"
 	end
@@ -6118,7 +6201,11 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	if ringPos then
 		local brg = Autopilot.bearingDeg(f.pos, ringPos)
 		local dist = Vector3.new(f.pos.X - ringPos.X, 0, f.pos.Z - ringPos.Z).Magnitude * World.METERS_PER_STUD / 1000
-		ui.setNav(string.format("КОЛЬЦО · %s · %.1f км · высота %d ft", ringName or "", dist, math.round(ringPos.Y * FT)), Autopilot.wrap180(brg - hdg))
+		if gateTarget then
+			ui.setNav(string.format("%s · %.2f км · курс %03d°", string.upper(ringName or ""), dist, math.round(brg) % 360), Autopilot.wrap180(brg - hdg))
+		else
+			ui.setNav(string.format("КОЛЬЦО · %s · %.1f км · высота %d ft", ringName or "", dist, math.round(ringPos.Y * FT)), Autopilot.wrap180(brg - hdg))
+		end
 	elseif n then
 		local brg = Autopilot.bearingDeg(f.pos, Vector3.new(n.x, 0, n.z))
 		local dist = Vector3.new(f.pos.X - n.x, 0, f.pos.Z - n.z).Magnitude * World.METERS_PER_STUD / 1000

@@ -265,6 +265,13 @@ local function buildAirport(folder: Folder, ap: any)
 		m:PivotTo(cf(lx, 0.5 + c.gearHeight, p[2], -math.pi / 2))
 		m.Parent = f
 	end
+	-- стоянки: жёлтая осевая, стоп-линия и номер
+	for _, st in World.STANDS[ap.id] or {} do
+		part(f, Vector3.new(260, 0.05, 1.4), cf(st.lx - 60, 0.51, st.lz), YELLOW)
+		part(f, Vector3.new(1.4, 0.05, 40), cf(st.lx + 60, 0.51, st.lz), YELLOW)
+		local pad = part(f, Vector3.new(60, 0.05, 30), cf(st.lx - 150, 0.52, st.lz, -math.pi / 2), Color3.fromRGB(40, 42, 48))
+		textDecal(pad, Enum.NormalId.Top, st.id, YELLOW, Color3.fromRGB(40, 42, 48))
+	end
 	-- точка появления персонажа у терминала
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "Spawn_" .. ap.id

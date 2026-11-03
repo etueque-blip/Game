@@ -541,6 +541,47 @@ def add_weather(s):
     return s
 
 
+GATES_JS = r"""
+// ===== стоянки (гейты) на перронах — тот же алгоритм, что в World.luau
+const STANDS = {};
+for (const ap of AIRPORTS) {
+  const busy = ap.parked.map(([id, z]) => [z - PLANES[id].span / 2, z + PLANES[id].span / 2]);
+  const list = []; let lastZ = -Infinity;
+  for (let z = -760; z <= 900; z += 20) {
+    let free = z - lastZ >= 320;
+    for (const b of busy) if (z > b[0] - 170 && z < b[1] + 170) free = false;
+    if (free && list.length < 3) { const lx = ap.W / 2 + 700, w = apToWorld(ap, lx, z); list.push({ id: ap.id + String(list.length + 1).padStart(2, "0"), x: w.x, z: w.z, lx, lz: z, ap }); lastZ = z; }
+  }
+  STANDS[ap.id] = list;
+}
+let gateTarget = null;
+function gateNav() { return gateTarget ? { label: "СТОЯНКА " + gateTarget.id, name: gateTarget.id, pos: new V3(gateTarget.x, 0, gateTarget.z) } : null; }
+{
+  const yellow = new THREE.MeshBasicMaterial({ color: 0xf0c020 }), dark = new THREE.MeshStandardMaterial({ color: 0x282a30, roughness: 0.9 });
+  for (const id in STANDS) for (const st of STANDS[id]) {
+    const g = new THREE.Group(); const c = apToWorld(st.ap, 0, 0);
+    g.position.set(st.x, 0, st.z); g.rotation.y = st.ap.rot ? Math.PI / 2 : 0; scene.add(g);
+    const line = new THREE.Mesh(new THREE.BoxGeometry(260, 0.06, 1.4), yellow); line.position.set(-60, 0.52, 0); g.add(line);
+    const stop = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.06, 40), yellow); stop.position.set(60, 0.52, 0); g.add(stop);
+    const t = canvasTex(256, 128, (x) => { x.fillStyle = "#282a30"; x.fillRect(0, 0, 256, 128); x.fillStyle = "#f0c020"; x.font = "900 86px Arial Black, Arial"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(st.id, 128, 68); });
+    const lab = new THREE.Mesh(new THREE.PlaneGeometry(60, 30), new THREE.MeshBasicMaterial({ map: t })); lab.rotation.x = -Math.PI / 2; lab.rotation.z = Math.PI / 2; lab.position.set(-150, 0.56, 0); g.add(lab);
+  }
+}
+"""
+
+
+def add_gates(s):
+    """Стоянки с номерами: после посадки в аэропорту назначения — зарулить на стоянку."""
+    s = patch(s, "// ============================================================ HUD\n", "// ============================================================ HUD\n" + GATES_JS)
+    s = patch(s, 'flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500);',
+              'flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); }')
+    s = patch(s, 'const rt = raceTarget() || (lastMode === "race"', 'const rt = gateNav() || raceTarget() || (lastMode === "race"')
+    s = patch(s, 'const n = rt ? ["КОЛЬЦО · " + rt.name + " · " + Math.round(rt.pos.y * FT) + " ft", rt.pos.x, rt.pos.z]', 'const n = rt ? [rt.label || ("КОЛЬЦО · " + rt.name + " · " + Math.round(rt.pos.y * FT) + " ft"), rt.pos.x, rt.pos.z]')
+    s = patch(s, "  updateSound(f);\n", "  updateSound(f);\n  if (gateTarget && f.onGround && f.speed < 3 && Math.hypot(f.pos.x - gateTarget.x, f.pos.z - gateTarget.z) < 45) { toast(\"Рейс завершён у гейта \" + gateTarget.id + \" · +500\", \"var(--green)\"); addLog(\"Гейт \" + gateTarget.id); gateTarget = null; }\n")
+    s = patch(s, "lastCfg = cfg; lastMode = mode; raceReset();", "lastCfg = cfg; lastMode = mode; raceReset(); gateTarget = null;")
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -570,6 +611,7 @@ def main():
     s = add_tape(s)
     s = add_sound(s)
     s = add_weather(s)
+    s = add_gates(s)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

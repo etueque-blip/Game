@@ -48,6 +48,7 @@ local CrashEvent = remote("Crash")
 local EndFlight = remote("EndFlight")
 local Notify = remote("Notify")
 local RaceFinished = remote("RaceFinished")
+local GateParked = remote("GateParked")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -352,6 +353,30 @@ CrashEvent.OnServerEvent:Connect(function(p, reason)
 			p:LoadCharacter()
 		end
 	end)
+end)
+
+-- рейс завершён у гейта: самолёт стоит на стоянке вскоре после посадки
+local gateDone: { [Player]: number } = {}
+GateParked.OnServerEvent:Connect(function(p, standId)
+	local a = active[p]
+	if not a or a.crashed or type(standId) ~= "string" then
+		return
+	end
+	local now = os.clock()
+	if a.lastLanding == 0 or now - a.lastLanding > 600 or (gateDone[p] and gateDone[p] >= a.lastLanding) then
+		return
+	end
+	local pos = a.root.Position
+	for _, list in World.STANDS do
+		for _, st in list do
+			if st.id == standId and (Vector3.new(pos.X - st.x, 0, pos.Z - st.z)).Magnitude < 70 and a.root.AssemblyLinearVelocity.Magnitude < 8 then
+				gateDone[p] = a.lastLanding
+				Scores.add(p, 500, false)
+				Notify:FireClient(p, string.format("Рейс завершён у гейта %s · +500", standId), "green")
+				return
+			end
+		end
+	end
 end)
 
 -- гонка через кольца: минимальное правдоподобное время ~60 с даже для истребителя

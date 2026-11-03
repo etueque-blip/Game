@@ -27,6 +27,7 @@ end
 local RequestFlight, FlightStarted, ClientReady = R("RequestFlight"), R("FlightStarted"), R("ClientReady")
 local PlaneState, Landing, CrashEvent, EndFlight, Notify = R("PlaneState"), R("Landing"), R("Crash"), R("EndFlight"), R("Notify")
 local RaceFinished = R("RaceFinished")
+local GateParked = R("GateParked")
 
 local FT = FlightPhysics.FT
 local clamp = FlightPhysics.clamp
@@ -43,6 +44,7 @@ local lastMode = "runway:A"
 local apTarget: Autopilot.Target? = nil
 local navIdx = 0 -- 0 = навигация выключена
 local parkBrake = false
+local gateTarget: any = nil -- стоянка, к которой надо зарулить после посадки
 local lastDest: string? = nil
 local apFollowNav = false
 local vsSmooth = 0
@@ -198,6 +200,7 @@ local function stopFlight()
 	end
 	Animator.setLocal(nil)
 	race.reset()
+	gateTarget = nil
 	radar.setVisible(false)
 	ui.setFlying(false)
 	ui.setAutopilot(false)
@@ -305,6 +308,18 @@ local function handleEvents(f: FlightPhysics.Flight)
 			ui.toast(ev.text, if ev.good then "green" else "amber")
 			addLog(ev.text)
 			Landing:FireServer(ev.fpm)
+			-- после посадки в аэропорту назначения — рулим к свободной стоянке
+			if lastDest and ev.airport == lastDest and not gateTarget then
+				local list = World.STANDS[lastDest]
+				if list and #list > 0 then
+					gateTarget = list[math.random(1, #list)]
+					task.delay(3, function()
+						if gateTarget then
+							ui.toast("Зарули на стоянку " .. gateTarget.id .. " и остановись", "magenta")
+						end
+					end)
+				end
+			end
 			if model then
 				tireSmoke(model, f.cfg)
 			end
@@ -429,6 +444,16 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 
 	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
 	local ringPos, ringName = race.target()
+	if gateTarget then
+		local gp = Vector3.new(gateTarget.x, 0, gateTarget.z)
+		local d = Vector3.new(f.pos.X, 0, f.pos.Z) - gp
+		if f.onGround and f.speed < 3 and d.Magnitude < 45 then
+			GateParked:FireServer(gateTarget.id)
+			gateTarget = nil
+		else
+			ringPos, ringName = Vector3.new(gp.X, 0, gp.Z), "стоянка " .. gateTarget.id
+		end
+	end
 	if not ringPos and lastMode == "race" then
 		ringPos, ringName = race.firstRing(), "Старт гонки"
 	end
@@ -439,7 +464,11 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	if ringPos then
 		local brg = Autopilot.bearingDeg(f.pos, ringPos)
 		local dist = Vector3.new(f.pos.X - ringPos.X, 0, f.pos.Z - ringPos.Z).Magnitude * World.METERS_PER_STUD / 1000
-		ui.setNav(string.format("КОЛЬЦО · %s · %.1f км · высота %d ft", ringName or "", dist, math.round(ringPos.Y * FT)), Autopilot.wrap180(brg - hdg))
+		if gateTarget then
+			ui.setNav(string.format("%s · %.2f км · курс %03d°", string.upper(ringName or ""), dist, math.round(brg) % 360), Autopilot.wrap180(brg - hdg))
+		else
+			ui.setNav(string.format("КОЛЬЦО · %s · %.1f км · высота %d ft", ringName or "", dist, math.round(ringPos.Y * FT)), Autopilot.wrap180(brg - hdg))
+		end
 	elseif n then
 		local brg = Autopilot.bearingDeg(f.pos, Vector3.new(n.x, 0, n.z))
 		local dist = Vector3.new(f.pos.X - n.x, 0, f.pos.Z - n.z).Magnitude * World.METERS_PER_STUD / 1000
