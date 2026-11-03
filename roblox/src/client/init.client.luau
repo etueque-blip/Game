@@ -38,6 +38,8 @@ local crashTimer = 0
 local lastPlaneId: string? = nil
 local lastMode = "runwayA"
 local apTarget: Autopilot.Target? = nil
+local navIdx = 0 -- 0 = навигация выключена
+local apFollowNav = false
 local vsSmooth = 0
 local engineSound: Sound? = nil
 local sent = { gear = true, flaps = 0, throttle = -1, reverse = false, t = 0 }
@@ -97,6 +99,16 @@ local function onAction(a: string)
 	if not f or f.crashed then
 		return
 	end
+	if a == "nav" then
+		navIdx = (navIdx + 1) % (#World.NAV + 1)
+		local n = World.NAV[navIdx]
+		ui.toast(if n then "Навигация: " .. n.name .. " (P — автопилот поведёт к цели)" else "Навигация выключена")
+		if not n then
+			ui.setNav(nil)
+			apFollowNav = false
+		end
+		return
+	end
 	if a == "autopilot" then
 		if apTarget then
 			apTarget = nil
@@ -104,8 +116,19 @@ local function onAction(a: string)
 		elseif f.onGround then
 			ui.toast("Автопилот включается только в воздухе", "amber")
 		else
-			apTarget = { heading = World.headingDeg(f.att.LookVector), altFt = f.pos.Y * FT, speed = math.max(f.speed, f.cfg.stallKts * 1.4) }
-			ui.toast(string.format("Автопилот: курс %03d°, %d ft, %d kt", math.round((apTarget :: any).heading) % 360, math.round((apTarget :: any).altFt), math.round((apTarget :: any).speed)), "green")
+			-- безопасная высота: не ниже 3500 ft, чтобы пройти над горами и небоскрёбами
+			local n = World.NAV[navIdx]
+			apFollowNav = n ~= nil
+			local alt = f.pos.Y * FT
+			if n then
+				alt = math.clamp(alt, 3500, f.cfg.ceilingFt * 0.8)
+			end
+			apTarget = { heading = World.headingDeg(f.att.LookVector), altFt = alt, speed = math.max(f.speed, f.cfg.stallKts * 1.4) }
+			if n then
+				ui.toast(string.format("Автопилот ведёт к цели: %s, %d ft", n.name, math.round(alt)), "green")
+			else
+				ui.toast(string.format("Автопилот: курс %03d°, %d ft, %d kt", math.round((apTarget :: any).heading) % 360, math.round((apTarget :: any).altFt), math.round((apTarget :: any).speed)), "green")
+			end
 		end
 		ui.setAutopilot(apTarget ~= nil)
 		return
@@ -298,6 +321,16 @@ RunService.PreSimulation:Connect(function(dt)
 			ui.setAutopilot(false)
 			ui.toast("Автопилот отключён штурвалом", "amber")
 		else
+			local n = World.NAV[navIdx]
+			if apFollowNav and n then
+				local t = apTarget :: Autopilot.Target
+				t.heading = Autopilot.bearingDeg(f.pos, Vector3.new(n.x, 0, n.z))
+				-- над целью: переходим в удержание курса, чтобы не кружить
+				if (Vector3.new(f.pos.X - n.x, 0, f.pos.Z - n.z)).Magnitude < 1200 then
+					apFollowNav = false
+					ui.toast("Цель достигнута: " .. n.name, "green")
+				end
+			end
 			local ap = Autopilot.compute(f, apTarget)
 			ap.brakes = input.brakes
 			input = ap
@@ -341,6 +374,16 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local pitchDeg = math.deg(math.asin(clamp(look.Y, -1, 1)))
 	local bankDeg = math.deg(math.atan2(-right.Y, up.Y))
 	ui.setAdi(pitchDeg, bankDeg)
+
+	-- навигация
+	local n = World.NAV[navIdx]
+	if n then
+		local brg = Autopilot.bearingDeg(f.pos, Vector3.new(n.x, 0, n.z))
+		local dist = Vector3.new(f.pos.X - n.x, 0, f.pos.Z - n.z).Magnitude * World.METERS_PER_STUD / 1000
+		ui.setNav(string.format("%s · %.1f км · курс %03d°", n.name, dist, math.round(brg) % 360), Autopilot.wrap180(brg - hdg))
+	else
+		ui.setNav(nil)
+	end
 
 	-- предупреждения
 	local w, col = "", Ui.Colors.red

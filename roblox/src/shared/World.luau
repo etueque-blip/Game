@@ -225,6 +225,16 @@ function World.runwaySpawns(ap: Airport, cfg: any): { CFrame }
 	return out
 end
 
+-- Цели навигации (клавиша N): аэропорты и города
+World.NAV = {
+	{ name = "АЭРОПОРТ A · SKYPORT", x = 0, z = 0 },
+	{ name = "АЭРОПОРТ B · MOUNTAIN VIEW", x = 14000, z = -16000 },
+	{ name = "ДУБАЙ", x = 5500, z = -7500 },
+	{ name = "ЛОНДОН", x = -4000, z = 12500 },
+	{ name = "ТАШКЕНТ", x = 10500, z = 3000 },
+}
+World.METERS_PER_STUD = 0.515
+
 -- Компасный курс (0..360, по часовой) из направления взгляда
 function World.headingDeg(look: Vector3): number
 	return (math.deg(math.atan2(look.X, -look.Z)) + 360) % 360

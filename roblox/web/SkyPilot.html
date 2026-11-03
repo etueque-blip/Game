@@ -40,8 +40,10 @@ button:focus-visible { outline: 2px solid var(--magenta); outline-offset: 2px; }
 .cell .u { font-family: var(--f-num); font-size: 9px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
 #thrFill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--magenta); opacity: .28; }
 #adi { position: absolute; top: calc(122px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 92px; height: 92px; border-radius: 50%; border: 1px solid var(--line); pointer-events: none; }
+#nav { position: absolute; top: calc(122px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px 5px 8px; font-family: var(--f-num); font-size: 13px; white-space: nowrap; max-width: calc(100% - 140px); overflow: hidden; text-overflow: ellipsis; backdrop-filter: blur(6px); }
+#nav .arrow { display: inline-block; color: var(--magenta); margin-right: 8px; font-weight: 700; font-size: 16px; }
 #warn { position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%); font-family: var(--f-display); font-size: clamp(20px, 5vw, 34px); letter-spacing: .06em; text-shadow: 0 2px 12px rgba(0,0,0,.6); pointer-events: none; text-align: center; white-space: nowrap; }
-#toast { position: absolute; top: calc(126px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 140px); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 14px; text-align: center; pointer-events: none; }
+#toast { position: absolute; top: calc(162px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 140px); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 14px; text-align: center; pointer-events: none; }
 #touch { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px)); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
 #touch > * { pointer-events: auto; }
 #stickWrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -91,6 +93,7 @@ kbd { font-family: var(--f-num); font-size: 11px; border: 1px solid var(--line);
   <div id="top">
     <button class="tb primary" id="bHangar">✈ Ангар</button>
     <button class="tb" id="bCam">Камера: сзади</button>
+    <button class="tb" id="bNav">Навигация</button>
     <button class="tb" id="bGfx">Графика: высокая</button>
     <button class="tb" id="bDebug" aria-pressed="false">Отладка</button>
     <button class="tb" id="bHelp">Клавиши</button>
@@ -106,6 +109,7 @@ kbd { font-family: var(--f-num); font-size: 11px; border: 1px solid var(--line);
     <div class="cell"><div class="k">Закрылки</div><div class="v" id="vFlaps">0</div><div class="u" id="uGear">шасси ▼</div></div>
   </div>
   <canvas id="adi" width="184" height="184" hidden></canvas>
+  <div id="nav" hidden></div>
   <div id="warn"></div>
   <div id="toast" hidden></div>
   <div id="debug" hidden></div>
@@ -149,6 +153,7 @@ kbd { font-family: var(--f-num); font-size: 11px; border: 1px solid var(--line);
         <div><kbd>G</kbd> шасси, <kbd>B</kbd> тормоз (держать)</div>
         <div><kbd>T</kbd> реверс на земле</div>
         <div><kbd>V</kbd> камера, <kbd>M</kbd> ангар</div>
+        <div><kbd>N</kbd> навигация: стрелка на аэропорт или город</div>
       </div>
       <p>На телефоне: левый круг — штурвал (тяни вниз = нос вверх), справа — рычаг тяги. Камера «орбита»: крути вид пальцем. Если тормозит — переключи «Графика: средняя».</p>
       <div class="row"><button class="tb primary" id="helpClose">Понятно</button></div>
@@ -1009,6 +1014,7 @@ $("bHangar").onclick = () => { $("hangar").hidden = !$("hangar").hidden; };
 $("bHelp").onclick = () => { $("help").hidden = false; };
 $("helpClose").onclick = () => { $("help").hidden = true; };
 $("bCam").onclick = () => cycleCam();
+$("bNav").onclick = () => cycleNav();
 $("bGfx").onclick = () => { HIGH = !HIGH; $("bGfx").textContent = "Графика: " + (HIGH ? "высокая" : "средняя"); applyQuality(); };
 $("bDebug").onclick = () => { const d = $("debug"); d.hidden = !d.hidden; $("bDebug").setAttribute("aria-pressed", !d.hidden); };
 $("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);
@@ -1046,7 +1052,7 @@ function doCrash(reason) {
 
 // ============================================================ INPUT
 const keys = new Set();
-const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar" };
+const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar", KeyN: "nav" };
 addEventListener("keydown", (e) => {
   if (e.repeat) { keys.add(e.code); return; }
   keys.add(e.code);
@@ -1059,6 +1065,7 @@ const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };
 function action(a) {
   if (a === "hangar") { $("hangar").hidden = !$("hangar").hidden; return; }
   if (a === "cam") { cycleCam(); return; }
+  if (a === "nav") { cycleNav(); return; }
   const f = flight; if (!f || f.crashed) return;
   const c = f.cfg;
   if (a === "gear") {
@@ -1108,6 +1115,20 @@ function setThrottleUI(v) { $("thrLevel").style.height = v * 100 + "%"; $("thrHa
 }
 
 // ============================================================ HUD
+
+const NAV = [["АЭРОПОРТ A · SKYPORT", 0, 0], ["АЭРОПОРТ B · MOUNTAIN VIEW", 14000, -16000], ["ДУБАЙ", 5500, -7500], ["ЛОНДОН", -4000, 12500], ["ТАШКЕНТ", 10500, 3000]];
+let navIdx = 0;
+function cycleNav() { navIdx = (navIdx + 1) % (NAV.length + 1); const n = NAV[navIdx - 1]; toast(n ? "Навигация: " + n[0] : "Навигация выключена", "var(--magenta)"); if (!n) $("nav").hidden = true; }
+function updateNav(f, hdg) {
+  const n = NAV[navIdx - 1], el = $("nav");
+  if (!n || !f || f.crashed) { el.hidden = true; return; }
+  const dx = n[1] - f.pos.x, dz = n[2] - f.pos.z;
+  const brg = (THREE.MathUtils.radToDeg(Math.atan2(dx, -dz)) + 360) % 360;
+  const rel = ((brg - hdg + 540) % 360) - 180;
+  const km = Math.hypot(dx, dz) * 0.515 / 1000;
+  el.hidden = false;
+  el.innerHTML = `<span class="arrow" style="transform:rotate(${rel.toFixed(0)}deg)">↑</span>${n[0]} · ${km.toFixed(1)} км · курс ${String(Math.round(brg) % 360).padStart(3, "0")}°`;
+}
 const adi = $("adi"), actx = adi.getContext("2d");
 function drawADI(pitchDeg, bankDeg) {
   const w = adi.width, h = adi.height, ppd = w / 60;
@@ -1142,6 +1163,7 @@ function updateHUD(f) {
   const pitchDeg = THREE.MathUtils.radToDeg(Math.asin(clamp(look.y, -1, 1)));
   const bankDeg = THREE.MathUtils.radToDeg(Math.atan2(-right.y, up.y));
   drawADI(pitchDeg, bankDeg);
+  updateNav(f, hdg);
   let w = "", col = "var(--red)";
   if (!f.onGround && f.speed < f.dbg.stall * 1.05) w = "STALL · СВАЛИВАНИЕ";
   else if (!f.onGround && f.dbg.agl < 400 && f.vel.y < -25) w = "PULL UP · ТЯНИ ВВЕРХ";

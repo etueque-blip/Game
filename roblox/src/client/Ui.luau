@@ -112,6 +112,7 @@ function Ui.new(cb: Callbacks)
 	local bCam = button(top, "Камера: сзади")
 	local bMouse = button(top, "Мышь-штурвал: выкл")
 	local bAP = button(top, "Автопилот")
+	local bNav = button(top, "Навигация")
 	local bDebug = button(top, "Отладка")
 	local bHelp = button(top, "Клавиши")
 	local planeName = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.fromOffset(200, 32), Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "", TextStrokeTransparency = 0.6 }, top)
@@ -158,8 +159,13 @@ function Ui.new(cb: Callbacks)
 	local apTag = new("TextLabel", { Size = UDim2.fromOffset(96, 22), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 218), BackgroundColor3 = C.green, Font = FONT, TextSize = 13, TextColor3 = C.dark, Text = "АВТОПИЛОТ", Visible = false }, root)
 	corner(apTag, 6)
 
+	-- навигация: стрелка на цель + расстояние и курс
+	local nav = glass(root, { Size = UDim2.fromOffset(300, 30), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 112), Visible = false })
+	local navArrow = new("TextLabel", { Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, Font = FONT, TextSize = 22, TextColor3 = C.magenta, Text = "↑" }, nav)
+	local navText = new("TextLabel", { Size = UDim2.new(1, -36, 1, 0), Position = UDim2.fromOffset(32, 0), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, nav)
+
 	local warn = new("TextLabel", { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromScale(0, 0.32), BackgroundTransparency = 1, Font = FONT, TextSize = 32, TextColor3 = C.red, Text = "", TextStrokeTransparency = 0.4 }, root)
-	local toastF = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.05, Font = FONT, TextSize = 15, TextColor3 = C.fg, Text = "", Visible = false }, root)
+	local toastF = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 150), Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.05, Font = FONT, TextSize = 15, TextColor3 = C.fg, Text = "", Visible = false }, root)
 	corner(toastF, 8)
 	stroke(toastF)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }, toastF)
@@ -363,9 +369,10 @@ function Ui.new(cb: Callbacks)
 		"F / R — закрылки выпустить / убрать      G — шасси      B — тормоз (держать)",
 		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)",
 		"V — камера (сзади / кабина / орбита)      M — ангар      C — мышь-штурвал",
+		"N — навигация: стрелка на аэропорт или город; с выбранной целью автопилот (P) летит к ней сам",
 		"",
 		"Геймпад: левый стик — штурвал, R2/L2 — тяга, R1/L1 — руль, Y — шасси,",
-		"крестовина ↑/↓ — закрылки, X — реверс, B — тормоз, A — автопилот, Select — камера.",
+		"крестовина ↑/↓ — закрылки, → — навигация, X — реверс, B — тормоз, A — автопилот, Select — камера.",
 		"",
 		"Телефон: левый круг — штурвал (тяни вниз = нос вверх), справа — рычаг тяги.",
 		"Орбита: крути вид пальцем или правой кнопкой мыши, колесо — зум.",
@@ -411,6 +418,9 @@ function Ui.new(cb: Callbacks)
 	bAP.Activated:Connect(function()
 		cb.onAction("autopilot")
 	end)
+	bNav.Activated:Connect(function()
+		cb.onAction("nav")
+	end)
 	bHelp.Activated:Connect(function()
 		help.Visible = true
 	end)
@@ -444,6 +454,7 @@ function Ui.new(cb: Callbacks)
 		if not on then
 			warn.Text = ""
 			apTag.Visible = false
+			nav.Visible = false
 		end
 	end
 	function self.showHangar(on: boolean?)
@@ -474,6 +485,13 @@ function Ui.new(cb: Callbacks)
 	end
 	function self.setCamLabel(name: string)
 		bCam.Text = "Камера: " .. name
+	end
+	function self.setNav(text: string?, relDeg: number?)
+		nav.Visible = text ~= nil and hud.Visible
+		if text then
+			navText.Text = text
+			navArrow.Rotation = relDeg or 0
+		end
 	end
 	function self.setAutopilot(on: boolean)
 		apTag.Visible = on
