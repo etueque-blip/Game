@@ -5819,6 +5819,7 @@ local parkBrake = false
 local gateTarget: any = nil
 local callsign = "SKY000"
 local atcApproach = false -- разрешение на заход уже выдано
+local flightSeq = 0 -- номер текущего полёта: отложенные сообщения старого полёта отбрасываются
 
 local function runwayFor(ap: any, pos: Vector3): string
 	-- с какого торца заходим: локальная Z > 0 — с юга (полоса ap.south)
@@ -5982,6 +5983,7 @@ local function stopFlight()
 	Animator.setLocal(nil)
 	race.reset()
 	gateTarget = nil
+	flightSeq += 1
 	radar.setVisible(false)
 	ui.setFlying(false)
 	ui.setAutopilot(false)
@@ -6023,11 +6025,13 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 	addLog(string.format("Старт: %s, %s", cfg.name, mode))
 	callsign = string.format("SKY%03d", math.random(100, 999))
 	atcApproach = false
+	flightSeq += 1
+	local seq = flightSeq
 	do
 		local apId = World.runwayAt(spawnCF.Position.X, spawnCF.Position.Z, 20)
 		local ap = apId and World.airportById(apId)
 		task.delay(4.5, function()
-			if not flight or flight.crashed then
+			if seq ~= flightSeq or not flight or flight.crashed then
 				return
 			end
 			if ap then
@@ -6044,6 +6048,9 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 		local dst = World.airportById(lastDest)
 		if dst then
 			task.delay(3.2, function()
+				if seq ~= flightSeq then
+					return
+				end
 				ui.toast(string.format("Рейс в %s · %s — навигация включена (N)", dst.code, dst.title), "magenta")
 			end)
 		end

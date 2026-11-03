@@ -652,6 +652,11 @@ def main():
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс
     s = patch(s, "lastCfg = cfg; lastMode = mode; raceReset();", "lastCfg = cfg; lastMode = mode; lastDest = flightDest; raceReset();")
     s = patch(s, "let gameMode = \"free\", flightDest = null, parkBrake = false;", "let gameMode = \"free\", flightDest = null, lastDest = null, parkBrake = false;")
+    # номер полёта: отложенные сообщения старого полёта не попадают в новый
+    s = patch(s, "raceReset(); gateTarget = null; atcStart(mode);", "raceReset(); gateTarget = null; const __seq = ++window.__flightSeq; atcStart(mode);")
+    s = patch(s, "setTimeout(() => { const d = AIRPORTS[navIdx - 1];", "setTimeout(() => { if (__seq !== window.__flightSeq) return; const d = AIRPORTS[navIdx - 1];")
+    s = patch(s, "setTimeout(() => { if (!flight || flight.crashed) return", "const __aseq = window.__flightSeq; setTimeout(() => { if (__aseq !== window.__flightSeq || !flight || flight.crashed) return")
+    s = patch(s, "<script>const PHOTOS = ", "<script>window.__flightSeq = 0;</script>\n<script>const PHOTOS = ")
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)
