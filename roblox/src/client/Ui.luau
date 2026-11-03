@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("SkyPilot")
 local PlaneConfigs = require(Shared:WaitForChild("PlaneConfigs"))
+local World = require(Shared:WaitForChild("World"))
 
 local C = {
 	bg = Color3.fromRGB(7, 13, 24),
@@ -81,7 +82,7 @@ local function primary(b: TextButton)
 end
 
 export type Callbacks = {
-	onPick: (planeId: string, mode: string) -> (),
+	onPick: (planeId: string, mode: string, destination: string?) -> (),
 	onAction: (name: string) -> (),
 	onAgain: () -> (),
 	onToHangar: () -> (),
@@ -168,6 +169,20 @@ function Ui.new(cb: Callbacks)
 	local nav = glass(root, { Size = UDim2.fromOffset(300, 30), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 112), Visible = false })
 	local navArrow = new("TextLabel", { Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, Font = FONT, TextSize = 22, TextColor3 = C.magenta, Text = "↑" }, nav)
 	local navText = new("TextLabel", { Size = UDim2.new(1, -36, 1, 0), Position = UDim2.fromOffset(32, 0), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, nav)
+
+	local banner = new("TextButton", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -200), Size = UDim2.fromOffset(0, 46), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = Color3.fromRGB(120, 20, 30), BackgroundTransparency = 0.15, Font = FONT, TextSize = 16, TextColor3 = C.fg, Text = "", Visible = false, AutoButtonColor = true, RichText = true }, root)
+	corner(banner, 23)
+	stroke(banner, C.red, 0.2)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }, banner)
+	banner.Activated:Connect(function()
+		cb.onAction("park")
+	end)
+	function self.setBanner(text: string?)
+		banner.Visible = text ~= nil and hud.Visible
+		if text then
+			banner.Text = text
+		end
+	end
 
 	local warn = new("TextLabel", { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromScale(0, 0.32), BackgroundTransparency = 1, Font = FONT, TextSize = 32, TextColor3 = C.red, Text = "", TextStrokeTransparency = 0.4 }, root)
 	local toastF = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 150), Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.05, Font = FONT, TextSize = 15, TextColor3 = C.fg, Text = "", Visible = false }, root)
@@ -312,58 +327,221 @@ function Ui.new(cb: Callbacks)
 		return new("TextLabel", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.dim, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = text, LayoutOrder = order, ZIndex = 22 }, parent)
 	end
 
-	-- ангар
-	local hangar, hs = overlay("Hangar", 780)
-	h2(hs, "Ангар · выберите самолёт", nil, 1)
+	-- ангар: главное меню → самолёт → аэропорт вылета → (рейс) аэропорт назначения
+	local hangar, hs = overlay("Hangar", 800)
+	local title = h2(hs, "Sky Pilot", nil, 1)
 	local scoreLine = para(hs, "", 2)
-	local modeRow = new("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, hs)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center }, modeRow)
-	new("TextLabel", { Size = UDim2.fromOffset(50, 30), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.dim, Text = "Старт:", ZIndex = 22 }, modeRow)
-	local spawnMode = "runwayA"
-	local modeBtns: { [string]: TextButton } = {}
-	local function setMode(m: string)
-		spawnMode = m
-		for k, b in modeBtns do
-			b.BackgroundColor3 = if k == m then C.magenta else C.panel
-			b.BackgroundTransparency = if k == m then 0 else 0.28
-			b.TextColor3 = if k == m then C.dark else C.fg
-		end
-	end
-	for _, m in { { "runwayA", "Полоса A · Skyport" }, { "runwayB", "Полоса B · Mountain View" }, { "air", "В воздухе (заход)" } } do
-		local b = button(modeRow, m[2], { ZIndex = 23 })
-		modeBtns[m[1]] = b
-		b.Activated:Connect(function()
-			setMode(m[1])
-		end)
-	end
-	setMode("runwayA")
-	local gridHolder = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 330), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 4, ZIndex = 22 }, hs)
-	new("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 76), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, gridHolder)
-	for i, id in PlaneConfigs.ORDER do
-		local c = PlaneConfigs.PLANES[id]
-		local card = new("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromRGB(22, 34, 58), BorderSizePixel = 0, LayoutOrder = i, ZIndex = 23 }, gridHolder)
-		corner(card, 10)
-		stroke(card)
-		new("Frame", { Size = UDim2.fromOffset(10, 10), Position = UDim2.fromOffset(12, 15), BackgroundColor3 = c.colors.tail, BorderSizePixel = 0, ZIndex = 24 }, card)
-		new("TextLabel", { Size = UDim2.new(1, -40, 0, 20), Position = UDim2.fromOffset(30, 10), BackgroundTransparency = 1, Font = FONT, TextSize = 16, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = c.name, ZIndex = 24 }, card)
-		new("TextLabel", { Size = UDim2.new(1, -24, 0, 16), Position = UDim2.fromOffset(12, 32), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 13, TextColor3 = C.magenta, TextXAlignment = Enum.TextXAlignment.Left, Text = c.cls, ZIndex = 24 }, card)
-		new("TextLabel", { Size = UDim2.new(1, -24, 0, 16), Position = UDim2.fromOffset(12, 51), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = string.format("Макс %d kt · Vr %d kt · Свал %d kt", c.maxKts, c.vrKts, c.stallKts), ZIndex = 24 }, card)
-		card.Activated:Connect(function()
-			cb.onPick(id, spawnMode)
-		end)
-	end
-	local closeRow = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, LayoutOrder = 5, ZIndex = 22 }, hs)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, closeRow)
-	local bClose = button(closeRow, "Закрыть", { ZIndex = 23 })
+	local pages = new("Frame", { Size = UDim2.new(1, 0, 0, 380), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22, ClipsDescendants = true }, hs)
+	local navRow = new("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, hs)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, navRow)
+	local bClose = button(navRow, "Закрыть", { ZIndex = 23, LayoutOrder = 0 })
 	bClose.Activated:Connect(function()
 		hangar.Visible = false
 	end)
-	local bExit = button(closeRow, "Выйти из самолёта", { ZIndex = 23, Visible = false })
+	local bExit = button(navRow, "Выйти из самолёта", { ZIndex = 23, Visible = false, LayoutOrder = 1 })
+	local bBack = button(navRow, "Назад", { ZIndex = 23, LayoutOrder = 2 })
+	local bNext = button(navRow, "Далее →", { ZIndex = 23, LayoutOrder = 3 })
+	bNext.BackgroundColor3 = Color3.fromRGB(46, 160, 80)
+	bNext.BackgroundTransparency = 0
+	self.bExit = bExit
+
+	local function page(name: string): ScrollingFrame
+		local pg = new("ScrollingFrame", { Name = name, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Visible = false, ZIndex = 22 }, pages)
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, pg)
+		new("UIPadding", { PaddingRight = UDim.new(0, 8) }, pg)
+		return pg
+	end
+	local function section(parent: Instance, text: string, order: number)
+		new("TextLabel", { Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 20, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = text, LayoutOrder = order, ZIndex = 23 }, parent)
+	end
+	local function grid(parent: Instance, order: number, cell: UDim2): Frame
+		local g = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 22 }, parent)
+		new("UIGridLayout", { CellSize = cell, CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, g)
+		return g
+	end
+	local selectables: { [string]: { TextButton } } = {}
+	local function selectCard(group: string, card: TextButton)
+		for _, c in selectables[group] or {} do
+			local on = c == card
+			c.BackgroundColor3 = if on then Color3.fromRGB(235, 240, 250) else Color3.fromRGB(22, 34, 58)
+			for _, t in c:GetDescendants() do
+				if t:IsA("TextLabel") and t:GetAttribute("Role") then
+					t.TextColor3 = if on then C.dark elseif t:GetAttribute("Role") == "title" then C.fg else C.dim
+				end
+			end
+		end
+	end
+	local function card(parent: Instance, group: string, order: number): TextButton
+		local c = new("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromRGB(22, 34, 58), BorderSizePixel = 0, LayoutOrder = order, ZIndex = 23, ClipsDescendants = true }, parent)
+		corner(c, 14)
+		stroke(c)
+		selectables[group] = selectables[group] or {}
+		table.insert(selectables[group], c)
+		return c
+	end
+
+	-- состояние мастера
+	local flow = { mode = "free", plane = nil :: string?, from = "A", to = nil :: string? }
+	local step = "menu"
+	local pg: { [string]: ScrollingFrame } = {}
+
+	-- 1. меню режимов
+	pg.menu = page("Menu")
+	local modes = grid(pg.menu, 1, UDim2.new(1 / 3, -7, 0, 200))
+	for i, m in {
+		{ "free", "Свободный полёт", "Любой самолёт, любой аэропорт. Посадки дают очки.", "✈" },
+		{ "career", "Рейс", "Вылет из одного аэропорта, посадка в другом: +1000 за выполненный рейс.", "⇄" },
+		{ "race", "Гонка колец", "13 колец: Дубай → Ташкент → Лондон и под Тауэрским мостом. +1500.", "◎" },
+	} do
+		local c = card(modes, "mode", i)
+		new("TextLabel", { Size = UDim2.new(1, -24, 0, 60), Position = UDim2.fromOffset(12, 12), BackgroundTransparency = 1, Font = FONT, TextSize = 44, TextColor3 = C.magenta, TextXAlignment = Enum.TextXAlignment.Right, Text = m[4], ZIndex = 24 }, c)
+		new("TextLabel", { Size = UDim2.new(1, -24, 0, 30), Position = UDim2.new(0, 12, 1, -100), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 22, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = m[2], ZIndex = 24 }, c):SetAttribute("Role", "title")
+		new("TextLabel", { Size = UDim2.new(1, -24, 0, 54), Position = UDim2.new(0, 12, 1, -64), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 13, TextColor3 = C.dim, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Text = m[3], ZIndex = 24 }, c):SetAttribute("Role", "text")
+		c.Activated:Connect(function()
+			flow.mode = m[1]
+			selectCard("mode", c)
+		end)
+		if i == 1 then
+			selectCard("mode", c)
+		end
+	end
+
+	-- 2. ангар: категории и 3D-превью
+	pg.planes = page("Planes")
+	local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
+	local cats = {
+		{ "ЛЁГКИЕ И БИЗНЕС-ДЖЕТЫ", { "C172", "LEAR75", "G650", "GL7500" } },
+		{ "УЗКОФЮЗЕЛЯЖНЫЕ", { "B737", "A320" } },
+		{ "ШИРОКОФЮЗЕЛЯЖНЫЕ", { "B787", "A330", "A350", "B747", "A380" } },
+		{ "ВОЕННЫЕ", { "F16" } },
+	}
+	local order = 0
+	for _, cat in cats do
+		order += 1
+		section(pg.planes, cat[1], order)
+		order += 1
+		local g = grid(pg.planes, order, UDim2.new(1 / 3, -7, 0, 150))
+		for i, id in cat[2] do
+			local c = PlaneConfigs.PLANES[id]
+			if c then
+				local cd = card(g, "plane", i)
+				local vp = new("ViewportFrame", { Size = UDim2.new(1, 0, 1, -40), BackgroundTransparency = 1, Ambient = Color3.fromRGB(170, 175, 190), LightColor = Color3.fromRGB(255, 250, 240), LightDirection = Vector3.new(-0.4, -1, -0.3), ZIndex = 24 }, cd)
+				local m = PlaneBuilder.build(c, { static = true })
+				m.Parent = vp
+				local camV = Instance.new("Camera")
+				camV.FieldOfView = 32
+				local dist = math.max(c.span, c.length) * 1.55
+				camV.CFrame = CFrame.lookAt(Vector3.new(-0.78, 0.36, -0.62).Unit * dist, Vector3.new(0, -c.diameter * 0.2, 0))
+				camV.Parent = vp
+				vp.CurrentCamera = camV
+				new("TextLabel", { Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 10, 1, -40), BackgroundTransparency = 1, Font = FONT, TextSize = 16, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = c.name, ZIndex = 25 }, cd):SetAttribute("Role", "title")
+				new("TextLabel", { Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 10, 1, -20), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 11, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = string.format("%s · %d kt", c.cls, c.maxKts), ZIndex = 25 }, cd):SetAttribute("Role", "text")
+				cd.Activated:Connect(function()
+					flow.plane = id
+					selectCard("plane", cd)
+				end)
+			end
+		end
+	end
+
+	-- 3–4. аэропорты (вылет / назначение)
+	local function airportPage(name: string, group: string, onSelect: (string) -> ()): ScrollingFrame
+		local p = page(name)
+		local regions: { [string]: Frame } = {}
+		local n = 0
+		for _, ap in World.AIRPORTS do
+			local g = regions[ap.region]
+			if not g then
+				n += 1
+				section(p, ap.region, n)
+				n += 1
+				g = grid(p, n, UDim2.new(1, -4, 0, 84))
+				regions[ap.region] = g
+			end
+			local cd = card(g, group, 1)
+			cd:SetAttribute("Airport", ap.id)
+			new("TextLabel", { Size = UDim2.new(1, -24, 0, 36), Position = UDim2.fromOffset(16, 8), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 30, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = ap.code .. " · " .. ap.id, ZIndex = 24 }, cd):SetAttribute("Role", "title")
+			new("TextLabel", { Size = UDim2.new(1, -24, 0, 18), Position = UDim2.fromOffset(16, 44), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = ap.title .. string.format(" · полоса %s/%s · %d м", ap.south, ap.north, math.round(ap.L * World.METERS_PER_STUD)), ZIndex = 24 }, cd):SetAttribute("Role", "text")
+			cd.Activated:Connect(function()
+				onSelect(ap.id)
+				selectCard(group, cd)
+			end)
+		end
+		return p
+	end
+	pg.from = airportPage("From", "from", function(id)
+		flow.from = id
+	end)
+	pg.to = airportPage("To", "to", function(id)
+		flow.to = id
+	end)
+
+	local titles = { menu = "Sky Pilot · режим", planes = "Ангар · выберите самолёт", from = "Аэропорт вылета", to = "Аэропорт назначения" }
+	local function show(st: string)
+		step = st
+		for k, v in pg do
+			v.Visible = k == st
+		end
+		title.Text = titles[st]
+		bBack.Visible = st ~= "menu"
+		bNext.Text = if (st == "to") or (st == "from" and flow.mode ~= "career") or (st == "planes" and flow.mode == "race") then "Полёт ✈" else "Далее →"
+		-- в рейсе нельзя выбрать аэропорт назначения, совпадающий с аэропортом вылета
+		if st == "to" then
+			for _, c in selectables.to or {} do
+				c.Visible = c:GetAttribute("Airport") ~= flow.from
+			end
+		end
+	end
+	local function selectAirportCard(group: string, id: string)
+		for _, c in selectables[group] or {} do
+			if c:GetAttribute("Airport") == id then
+				selectCard(group, c)
+			end
+		end
+	end
+	selectAirportCard("from", "A")
+	local function launch()
+		hangar.Visible = false
+		local mode = if flow.mode == "race" then "race" else "runway:" .. flow.from
+		cb.onPick(flow.plane :: string, mode, if flow.mode == "career" then flow.to else nil)
+	end
+	bNext.Activated:Connect(function()
+		if step == "menu" then
+			show("planes")
+		elseif step == "planes" then
+			if not flow.plane then
+				self.toast("Выберите самолёт", "amber")
+			elseif flow.mode == "race" then
+				launch()
+			else
+				show("from")
+			end
+		elseif step == "from" then
+			if flow.mode == "career" then
+				if flow.to == flow.from then
+					flow.to = nil
+				end
+				show("to")
+			else
+				launch()
+			end
+		elseif step == "to" then
+			if not flow.to then
+				self.toast("Выберите аэропорт назначения", "amber")
+			else
+				launch()
+			end
+		end
+	end)
+	bBack.Activated:Connect(function()
+		show(if step == "to" then "from" elseif step == "from" then "planes" else "menu")
+	end)
 	bExit.Activated:Connect(function()
 		hangar.Visible = false
 		cb.onExit()
 	end)
-	self.bExit = bExit
+	show("menu")
+	self.showStep = show
 
 	-- справка
 	local help, hp = overlay("Help", 640)
@@ -372,7 +550,7 @@ function Ui.new(cb: Callbacks)
 		"W / S — нос вниз / вверх      A / D — крен (на земле руление)",
 		"Q / E — руль направления      Shift / Ctrl — тяга + / −,  Z — малый газ",
 		"F / R — закрылки выпустить / убрать      G — шасси      B — тормоз (держать)",
-		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)",
+		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)      Пробел — стояночный тормоз",
 		"V — камера (сзади / кабина / орбита)      M — ангар      C — мышь-штурвал",
 		"N — навигация: стрелка на аэропорт или город; с выбранной целью автопилот (P) летит к ней сам",
 		"Гонка: пролети сквозь розовое кольцо у Skyport — маршрут Дубай → Ташкент → Лондон → домой, 13 колец, +1500 очков",
@@ -462,6 +640,7 @@ function Ui.new(cb: Callbacks)
 			apTag.Visible = false
 			nav.Visible = false
 			raceTag.Visible = false
+			banner.Visible = false
 		end
 	end
 	function self.showHangar(on: boolean?)
@@ -474,6 +653,9 @@ function Ui.new(cb: Callbacks)
 		local best = player:GetAttribute("BestFpm")
 		scoreLine.Text = string.format("Ваши очки: %d · посадок: %d · лучшее касание: %s. Та же физика, что в тестовом полигоне: посадки, сваливание, крушения.",
 			sc and sc.Value or 0, ld and ld.Value or 0, if type(best) == "number" and best > 0 then tostring(best) .. " fpm" else "—")
+		if on then
+			show("menu")
+		end
 		hangar.Visible = on :: boolean
 	end
 	function self.hangarVisible(): boolean

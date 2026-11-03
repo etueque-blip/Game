@@ -4281,15 +4281,21 @@ local function R(a: number, b: number): number
 end
 
 export type Airport = {
-	id: string, cx: number, cz: number, rot: number, L: number, W: number,
+	id: string, code: string, region: string, cx: number, cz: number, rot: number, L: number, W: number,
 	south: string, north: string, title: string, parked: { { any } },
 }
 
 World.AIRPORTS = {
-	{ id = "A", cx = 0, cz = 0, rot = 0, L = 5000, W = 200, south = "36", north = "18", title = "SKYPORT INTERNATIONAL",
+	{ id = "A", code = "SKP", region = "ЦЕНТР", cx = 0, cz = 0, rot = 0, L = 5000, W = 200, south = "36", north = "18", title = "SKYPORT INTERNATIONAL",
 		parked = { { "B787", 380 }, { "B747", 700 }, { "B737", -400 }, { "G650", -620 }, { "C172", -760 }, { "LEAR75", -880 } } },
-	{ id = "B", cx = 14000, cz = -16000, rot = 1, L = 4500, W = 200, south = "27", north = "09", title = "MOUNTAIN VIEW AIRPORT",
+	{ id = "B", code = "MTV", region = "ГОРЫ", cx = 14000, cz = -16000, rot = 1, L = 4500, W = 200, south = "27", north = "09", title = "MOUNTAIN VIEW AIRPORT",
 		parked = { { "B737", -400 }, { "GL7500", -620 }, { "B787", 420 } } },
+	{ id = "C", code = "LNW", region = "ЛОНДОН", cx = -9000, cz = 15500, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "LONDON WEST",
+		parked = { { "A320", -400 }, { "A350", 420 }, { "LEAR75", -650 } } },
+	{ id = "D", code = "DXC", region = "ДУБАЙ", cx = 11500, cz = -9000, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "DUBAI COAST",
+		parked = { { "A380", 450 }, { "B787", -420 }, { "G650", -700 } } },
+	{ id = "E", code = "TSE", region = "ТАШКЕНТ", cx = 14500, cz = 6500, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "TASHKENT EAST",
+		parked = { { "A320", -400 }, { "B787", 420 }, { "C172", -700 } } },
 } :: { Airport }
 
 -- Локальные координаты аэропорта (полоса вдоль локальной Z) -> мир
@@ -4493,13 +4499,25 @@ function World.runwaySpawns(ap: Airport, cfg: any): { CFrame }
 end
 
 -- Цели навигации (клавиша N): аэропорты и города
-World.NAV = {
-	{ name = "АЭРОПОРТ A · SKYPORT", x = 0, z = 0 },
-	{ name = "АЭРОПОРТ B · MOUNTAIN VIEW", x = 14000, z = -16000 },
+World.NAV = {}
+for _, ap in World.AIRPORTS do
+	table.insert(World.NAV, { name = ap.code .. " · " .. ap.title, x = ap.cx, z = ap.cz, airport = ap.id })
+end
+for _, c in {
 	{ name = "ДУБАЙ", x = 5500, z = -7500 },
 	{ name = "ЛОНДОН", x = -4000, z = 12500 },
 	{ name = "ТАШКЕНТ", x = 10500, z = 3000 },
-}
+} do
+	table.insert(World.NAV, c)
+end
+function World.navIndexForAirport(id: string): number
+	for i, n in World.NAV do
+		if n.airport == id then
+			return i
+		end
+	end
+	return 0
+end
 World.METERS_PER_STUD = 0.515
 
 -- Компасный курс (0..360, по часовой) из направления взгляда
@@ -4567,7 +4585,7 @@ local planesFolder = workspace:WaitForChild("Planes")
 
 type Active = {
 	model: Model, root: BasePart, cfgId: string, mode: string,
-	started: number, lastLanding: number, fromAirport: string?, ready: boolean, crashed: boolean,
+	started: number, lastLanding: number, fromAirport: string?, destination: string?, ready: boolean, crashed: boolean,
 	conns: { RBXScriptConnection },
 }
 local active: { [Player]: Active } = {}
@@ -4608,9 +4626,21 @@ local function slotFree(cf: CFrame): boolean
 	return true
 end
 
+-- режимы: "runway:<id аэропорта>", "air" (заход на полосу A), "race" (перед первым кольцом)
+local function runwayId(mode: string): string?
+	return mode:match("^runway:(%u)$")
+end
+
 local function pickSpawn(cfg: any, mode: string): (CFrame, boolean, string?)
-	if mode == "runwayA" or mode == "runwayB" then
-		local ap = World.airportById(if mode == "runwayA" then "A" else "B")
+	if mode == "race" then
+		local r = World.CityData.rings[1]
+		local look = Vector3.new(-math.sin(r[5]), 0, -math.cos(r[5]))
+		local pos = Vector3.new(r[1], r[2], r[3]) - look * 1500 + Vector3.new(rng:NextNumber(-40, 40), 0, rng:NextNumber(-40, 40))
+		return CFrame.lookAt(pos, pos + look), true, nil
+	end
+	local id = runwayId(mode)
+	if id then
+		local ap = World.airportById(id)
 		if ap then
 			for _, cf in World.runwaySpawns(ap, cfg) do
 				if slotFree(cf) then
@@ -4689,13 +4719,17 @@ local function explode(a: Active)
 end
 PhysicsService:CollisionGroupSetCollidable(DEBRIS, "Default", true)
 
-local function startFlight(p: Player, planeId: any, mode: any)
+local function startFlight(p: Player, planeId: any, mode: any, destination: any)
 	if type(planeId) ~= "string" or type(mode) ~= "string" then
 		return
 	end
 	local cfg = PlaneConfigs.PLANES[planeId]
-	if not cfg or (mode ~= "runwayA" and mode ~= "runwayB" and mode ~= "air") then
+	local rid = runwayId(mode)
+	if not cfg or not (mode == "air" or mode == "race" or (rid and World.airportById(rid))) then
 		return
+	end
+	if destination ~= nil and (type(destination) ~= "string" or not World.airportById(destination) or destination == rid) then
+		destination = nil
 	end
 	local now = os.clock()
 	if lastRequest[p] and now - lastRequest[p] < 1.5 then
@@ -4714,7 +4748,7 @@ local function startFlight(p: Player, planeId: any, mode: any)
 	local character = p.Character :: Model
 
 	local spawnCF, air, ap = pickSpawn(cfg, mode)
-	if (mode == "runwayA" or mode == "runwayB") and air then
+	if rid and air then
 		Notify:FireClient(p, "Полоса занята — старт в воздухе", "amber")
 	end
 	local model = PlaneBuilder.build(cfg, { seat = true, label = p.DisplayName })
@@ -4735,7 +4769,7 @@ local function startFlight(p: Player, planeId: any, mode: any)
 
 	local a: Active = {
 		model = model, root = root, cfgId = planeId, mode = if air then "air" else mode,
-		started = now, lastLanding = 0, fromAirport = ap, ready = false, crashed = false, conns = {},
+		started = now, lastLanding = 0, fromAirport = ap, destination = destination, ready = false, crashed = false, conns = {},
 	}
 	active[p] = a
 	Scores.flight(p)
@@ -4760,8 +4794,8 @@ local function startFlight(p: Player, planeId: any, mode: any)
 	FlightStarted:FireClient(p, model, planeId, a.mode, spawnCF)
 end
 
-RequestFlight.OnServerEvent:Connect(function(p, planeId, mode)
-	startFlight(p, planeId, mode)
+RequestFlight.OnServerEvent:Connect(function(p, planeId, mode, destination)
+	startFlight(p, planeId, mode, destination)
 end)
 
 ClientReady.OnServerEvent:Connect(function(p, model)
@@ -4817,6 +4851,13 @@ Landing.OnServerEvent:Connect(function(p, fpm)
 	if a.fromAirport and a.fromAirport ~= apId then
 		pts += 500
 		msg ..= string.format("  ·  +500 за перелёт %s → %s", a.fromAirport, apId)
+	end
+	-- рейс (карьера): посадка в аэропорту назначения
+	if a.destination and a.destination == apId then
+		pts += 1000
+		local dst = World.airportById(apId)
+		msg ..= string.format("  ·  РЕЙС ВЫПОЛНЕН +1000 (%s)", if dst then dst.code else apId)
+		a.destination = nil
 	end
 	a.fromAirport = apId
 	Scores.add(p, pts, true, fpm)
@@ -5461,7 +5502,10 @@ local function buildNature(folder: Folder)
 	local f = Instance.new("Folder")
 	f.Name = "Nature"
 	f.Parent = folder
-	local avoid = { { 400, 0, 3800 }, { 14000, -16000, 3600 } }
+	local avoid = {}
+	for _, ap in World.AIRPORTS do
+		table.insert(avoid, { ap.cx + (if ap.rot == 1 then 0 else 500), ap.cz - (if ap.rot == 1 then 500 else 0), 3700 })
+	end
 	for _, c in World.CITIES do
 		table.insert(avoid, { c.x, c.z, c.r })
 	end
@@ -5608,9 +5652,11 @@ local simulating = false
 local crashPose: CFrame? = nil
 local crashTimer = 0
 local lastPlaneId: string? = nil
-local lastMode = "runwayA"
+local lastMode = "runway:A"
 local apTarget: Autopilot.Target? = nil
 local navIdx = 0 -- 0 = навигация выключена
+local parkBrake = false
+local lastDest: string? = nil
 local apFollowNav = false
 local vsSmooth = 0
 local engineSound: Sound? = nil
@@ -5671,6 +5717,15 @@ local function onAction(a: string)
 	if not f or f.crashed then
 		return
 	end
+	if a == "park" then
+		if f.onGround then
+			parkBrake = not parkBrake
+			ui.toast(if parkBrake then "Стояночный тормоз включён" else "Стояночный тормоз отключён", if parkBrake then "amber" else "green")
+		else
+			parkBrake = false
+		end
+		return
+	end
 	if a == "nav" then
 		navIdx = (navIdx + 1) % (#World.NAV + 1)
 		local n = World.NAV[navIdx]
@@ -5712,11 +5767,11 @@ local function onAction(a: string)
 	end
 end
 
-local function requestFlight(planeId: string, mode: string)
-	lastPlaneId, lastMode = planeId, mode
+local function requestFlight(planeId: string, mode: string, destination: string?)
+	lastPlaneId, lastMode, lastDest = planeId, mode, destination
 	ui.showHangar(false)
 	ui.hideCrash()
-	RequestFlight:FireServer(planeId, mode)
+	RequestFlight:FireServer(planeId, mode, destination)
 end
 
 ui = Ui.new({
@@ -5724,7 +5779,7 @@ ui = Ui.new({
 	onAction = onAction,
 	onAgain = function()
 		if lastPlaneId then
-			requestFlight(lastPlaneId, lastMode)
+			requestFlight(lastPlaneId, lastMode, lastDest)
 		end
 	end,
 	onToHangar = function()
@@ -5795,7 +5850,18 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 		engineSound = s
 	end
 	addLog(string.format("Старт: %s, %s", cfg.name, mode))
-	ui.toast(if mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
+	parkBrake = mode ~= "air"
+	-- рейс: навигация сразу на аэропорт назначения
+	if lastDest then
+		navIdx = World.navIndexForAirport(lastDest)
+		local dst = World.airportById(lastDest)
+		if dst then
+			task.delay(3.2, function()
+				ui.toast(string.format("Рейс в %s · %s — навигация включена (N)", dst.code, dst.title), "magenta")
+			end)
+		end
+	end
+	ui.toast(if lastMode == "race" then "Гонка: впереди розовое кольцо — пролети сквозь него" elseif mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: отпусти тормоз (пробел), тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
 	ClientReady:FireServer(m)
 end)
 
@@ -5901,6 +5967,13 @@ RunService.PreSimulation:Connect(function(dt)
 		simulating = true
 	end
 	local input, manual = controls.read()
+	if parkBrake then
+		if f.onGround then
+			input.brakes = true
+		else
+			parkBrake = false
+		end
+	end
 	if apTarget then
 		if manual then
 			apTarget = nil
@@ -5967,6 +6040,10 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 
 	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
 	local ringPos, ringName = race.target()
+	if not ringPos and lastMode == "race" then
+		ringPos, ringName = race.firstRing(), "Старт гонки"
+	end
+	ui.setBanner(if parkBrake then "Ⓟ  Стояночный тормоз · пробел или нажми, чтобы отключить" else nil)
 	radar.update(f.pos, hdg, model, ringPos or race.firstRing())
 	ui.setRace(race.status(now))
 	local n = World.NAV[navIdx]
@@ -6305,7 +6382,7 @@ local Controls = {}
 local ONCE: { [Enum.KeyCode]: string } = {
 	[Enum.KeyCode.G] = "gear", [Enum.KeyCode.F] = "flapDn", [Enum.KeyCode.R] = "flapUp",
 	[Enum.KeyCode.T] = "rev", [Enum.KeyCode.Z] = "idle", [Enum.KeyCode.V] = "cam",
-	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.DPadRight] = "nav",
+	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.Space] = "park", [Enum.KeyCode.DPadRight] = "nav",
 	-- геймпад
 	[Enum.KeyCode.ButtonY] = "gear", [Enum.KeyCode.DPadUp] = "flapUp", [Enum.KeyCode.DPadDown] = "flapDn",
 	[Enum.KeyCode.ButtonX] = "rev", [Enum.KeyCode.ButtonA] = "autopilot", [Enum.KeyCode.ButtonSelect] = "cam",
@@ -6603,8 +6680,9 @@ function Radar.new(parent: Instance, colors: any)
 	end
 
 	local fixed: { { label: TextLabel, x: number, z: number, edge: boolean } } = {}
-	table.insert(fixed, { label = blip("A", colors.fg, 13), x = 0, z = 0, edge = true })
-	table.insert(fixed, { label = blip("B", colors.fg, 13), x = 14000, z = -16000, edge = true })
+	for _, ap in World.AIRPORTS do
+		table.insert(fixed, { label = blip(ap.id, colors.fg, 13), x = ap.cx, z = ap.cz, edge = true })
+	end
 	for _, city in World.CITIES do
 		local name = if city.name == "DUBAI" then "Дубай" elseif city.name == "LONDON" then "Лондон" else "Ташкент"
 		table.insert(fixed, { label = blip(name, colors.dim, 11), x = city.x, z = city.z, edge = true })
@@ -6684,6 +6762,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("SkyPilot")
 local PlaneConfigs = require(Shared:WaitForChild("PlaneConfigs"))
+local World = require(Shared:WaitForChild("World"))
 
 local C = {
 	bg = Color3.fromRGB(7, 13, 24),
@@ -6758,7 +6837,7 @@ local function primary(b: TextButton)
 end
 
 export type Callbacks = {
-	onPick: (planeId: string, mode: string) -> (),
+	onPick: (planeId: string, mode: string, destination: string?) -> (),
 	onAction: (name: string) -> (),
 	onAgain: () -> (),
 	onToHangar: () -> (),
@@ -6845,6 +6924,20 @@ function Ui.new(cb: Callbacks)
 	local nav = glass(root, { Size = UDim2.fromOffset(300, 30), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 112), Visible = false })
 	local navArrow = new("TextLabel", { Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, Font = FONT, TextSize = 22, TextColor3 = C.magenta, Text = "↑" }, nav)
 	local navText = new("TextLabel", { Size = UDim2.new(1, -36, 1, 0), Position = UDim2.fromOffset(32, 0), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, nav)
+
+	local banner = new("TextButton", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -200), Size = UDim2.fromOffset(0, 46), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = Color3.fromRGB(120, 20, 30), BackgroundTransparency = 0.15, Font = FONT, TextSize = 16, TextColor3 = C.fg, Text = "", Visible = false, AutoButtonColor = true, RichText = true }, root)
+	corner(banner, 23)
+	stroke(banner, C.red, 0.2)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }, banner)
+	banner.Activated:Connect(function()
+		cb.onAction("park")
+	end)
+	function self.setBanner(text: string?)
+		banner.Visible = text ~= nil and hud.Visible
+		if text then
+			banner.Text = text
+		end
+	end
 
 	local warn = new("TextLabel", { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromScale(0, 0.32), BackgroundTransparency = 1, Font = FONT, TextSize = 32, TextColor3 = C.red, Text = "", TextStrokeTransparency = 0.4 }, root)
 	local toastF = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 150), Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.05, Font = FONT, TextSize = 15, TextColor3 = C.fg, Text = "", Visible = false }, root)
@@ -6989,58 +7082,221 @@ function Ui.new(cb: Callbacks)
 		return new("TextLabel", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.dim, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = text, LayoutOrder = order, ZIndex = 22 }, parent)
 	end
 
-	-- ангар
-	local hangar, hs = overlay("Hangar", 780)
-	h2(hs, "Ангар · выберите самолёт", nil, 1)
+	-- ангар: главное меню → самолёт → аэропорт вылета → (рейс) аэропорт назначения
+	local hangar, hs = overlay("Hangar", 800)
+	local title = h2(hs, "Sky Pilot", nil, 1)
 	local scoreLine = para(hs, "", 2)
-	local modeRow = new("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, hs)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center }, modeRow)
-	new("TextLabel", { Size = UDim2.fromOffset(50, 30), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.dim, Text = "Старт:", ZIndex = 22 }, modeRow)
-	local spawnMode = "runwayA"
-	local modeBtns: { [string]: TextButton } = {}
-	local function setMode(m: string)
-		spawnMode = m
-		for k, b in modeBtns do
-			b.BackgroundColor3 = if k == m then C.magenta else C.panel
-			b.BackgroundTransparency = if k == m then 0 else 0.28
-			b.TextColor3 = if k == m then C.dark else C.fg
-		end
-	end
-	for _, m in { { "runwayA", "Полоса A · Skyport" }, { "runwayB", "Полоса B · Mountain View" }, { "air", "В воздухе (заход)" } } do
-		local b = button(modeRow, m[2], { ZIndex = 23 })
-		modeBtns[m[1]] = b
-		b.Activated:Connect(function()
-			setMode(m[1])
-		end)
-	end
-	setMode("runwayA")
-	local gridHolder = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 330), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 4, ZIndex = 22 }, hs)
-	new("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 76), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, gridHolder)
-	for i, id in PlaneConfigs.ORDER do
-		local c = PlaneConfigs.PLANES[id]
-		local card = new("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromRGB(22, 34, 58), BorderSizePixel = 0, LayoutOrder = i, ZIndex = 23 }, gridHolder)
-		corner(card, 10)
-		stroke(card)
-		new("Frame", { Size = UDim2.fromOffset(10, 10), Position = UDim2.fromOffset(12, 15), BackgroundColor3 = c.colors.tail, BorderSizePixel = 0, ZIndex = 24 }, card)
-		new("TextLabel", { Size = UDim2.new(1, -40, 0, 20), Position = UDim2.fromOffset(30, 10), BackgroundTransparency = 1, Font = FONT, TextSize = 16, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = c.name, ZIndex = 24 }, card)
-		new("TextLabel", { Size = UDim2.new(1, -24, 0, 16), Position = UDim2.fromOffset(12, 32), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 13, TextColor3 = C.magenta, TextXAlignment = Enum.TextXAlignment.Left, Text = c.cls, ZIndex = 24 }, card)
-		new("TextLabel", { Size = UDim2.new(1, -24, 0, 16), Position = UDim2.fromOffset(12, 51), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = string.format("Макс %d kt · Vr %d kt · Свал %d kt", c.maxKts, c.vrKts, c.stallKts), ZIndex = 24 }, card)
-		card.Activated:Connect(function()
-			cb.onPick(id, spawnMode)
-		end)
-	end
-	local closeRow = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, LayoutOrder = 5, ZIndex = 22 }, hs)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, closeRow)
-	local bClose = button(closeRow, "Закрыть", { ZIndex = 23 })
+	local pages = new("Frame", { Size = UDim2.new(1, 0, 0, 380), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22, ClipsDescendants = true }, hs)
+	local navRow = new("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, hs)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, navRow)
+	local bClose = button(navRow, "Закрыть", { ZIndex = 23, LayoutOrder = 0 })
 	bClose.Activated:Connect(function()
 		hangar.Visible = false
 	end)
-	local bExit = button(closeRow, "Выйти из самолёта", { ZIndex = 23, Visible = false })
+	local bExit = button(navRow, "Выйти из самолёта", { ZIndex = 23, Visible = false, LayoutOrder = 1 })
+	local bBack = button(navRow, "Назад", { ZIndex = 23, LayoutOrder = 2 })
+	local bNext = button(navRow, "Далее →", { ZIndex = 23, LayoutOrder = 3 })
+	bNext.BackgroundColor3 = Color3.fromRGB(46, 160, 80)
+	bNext.BackgroundTransparency = 0
+	self.bExit = bExit
+
+	local function page(name: string): ScrollingFrame
+		local pg = new("ScrollingFrame", { Name = name, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Visible = false, ZIndex = 22 }, pages)
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, pg)
+		new("UIPadding", { PaddingRight = UDim.new(0, 8) }, pg)
+		return pg
+	end
+	local function section(parent: Instance, text: string, order: number)
+		new("TextLabel", { Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 20, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = text, LayoutOrder = order, ZIndex = 23 }, parent)
+	end
+	local function grid(parent: Instance, order: number, cell: UDim2): Frame
+		local g = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 22 }, parent)
+		new("UIGridLayout", { CellSize = cell, CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, g)
+		return g
+	end
+	local selectables: { [string]: { TextButton } } = {}
+	local function selectCard(group: string, card: TextButton)
+		for _, c in selectables[group] or {} do
+			local on = c == card
+			c.BackgroundColor3 = if on then Color3.fromRGB(235, 240, 250) else Color3.fromRGB(22, 34, 58)
+			for _, t in c:GetDescendants() do
+				if t:IsA("TextLabel") and t:GetAttribute("Role") then
+					t.TextColor3 = if on then C.dark elseif t:GetAttribute("Role") == "title" then C.fg else C.dim
+				end
+			end
+		end
+	end
+	local function card(parent: Instance, group: string, order: number): TextButton
+		local c = new("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromRGB(22, 34, 58), BorderSizePixel = 0, LayoutOrder = order, ZIndex = 23, ClipsDescendants = true }, parent)
+		corner(c, 14)
+		stroke(c)
+		selectables[group] = selectables[group] or {}
+		table.insert(selectables[group], c)
+		return c
+	end
+
+	-- состояние мастера
+	local flow = { mode = "free", plane = nil :: string?, from = "A", to = nil :: string? }
+	local step = "menu"
+	local pg: { [string]: ScrollingFrame } = {}
+
+	-- 1. меню режимов
+	pg.menu = page("Menu")
+	local modes = grid(pg.menu, 1, UDim2.new(1 / 3, -7, 0, 200))
+	for i, m in {
+		{ "free", "Свободный полёт", "Любой самолёт, любой аэропорт. Посадки дают очки.", "✈" },
+		{ "career", "Рейс", "Вылет из одного аэропорта, посадка в другом: +1000 за выполненный рейс.", "⇄" },
+		{ "race", "Гонка колец", "13 колец: Дубай → Ташкент → Лондон и под Тауэрским мостом. +1500.", "◎" },
+	} do
+		local c = card(modes, "mode", i)
+		new("TextLabel", { Size = UDim2.new(1, -24, 0, 60), Position = UDim2.fromOffset(12, 12), BackgroundTransparency = 1, Font = FONT, TextSize = 44, TextColor3 = C.magenta, TextXAlignment = Enum.TextXAlignment.Right, Text = m[4], ZIndex = 24 }, c)
+		new("TextLabel", { Size = UDim2.new(1, -24, 0, 30), Position = UDim2.new(0, 12, 1, -100), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 22, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = m[2], ZIndex = 24 }, c):SetAttribute("Role", "title")
+		new("TextLabel", { Size = UDim2.new(1, -24, 0, 54), Position = UDim2.new(0, 12, 1, -64), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 13, TextColor3 = C.dim, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Text = m[3], ZIndex = 24 }, c):SetAttribute("Role", "text")
+		c.Activated:Connect(function()
+			flow.mode = m[1]
+			selectCard("mode", c)
+		end)
+		if i == 1 then
+			selectCard("mode", c)
+		end
+	end
+
+	-- 2. ангар: категории и 3D-превью
+	pg.planes = page("Planes")
+	local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
+	local cats = {
+		{ "ЛЁГКИЕ И БИЗНЕС-ДЖЕТЫ", { "C172", "LEAR75", "G650", "GL7500" } },
+		{ "УЗКОФЮЗЕЛЯЖНЫЕ", { "B737", "A320" } },
+		{ "ШИРОКОФЮЗЕЛЯЖНЫЕ", { "B787", "A330", "A350", "B747", "A380" } },
+		{ "ВОЕННЫЕ", { "F16" } },
+	}
+	local order = 0
+	for _, cat in cats do
+		order += 1
+		section(pg.planes, cat[1], order)
+		order += 1
+		local g = grid(pg.planes, order, UDim2.new(1 / 3, -7, 0, 150))
+		for i, id in cat[2] do
+			local c = PlaneConfigs.PLANES[id]
+			if c then
+				local cd = card(g, "plane", i)
+				local vp = new("ViewportFrame", { Size = UDim2.new(1, 0, 1, -40), BackgroundTransparency = 1, Ambient = Color3.fromRGB(170, 175, 190), LightColor = Color3.fromRGB(255, 250, 240), LightDirection = Vector3.new(-0.4, -1, -0.3), ZIndex = 24 }, cd)
+				local m = PlaneBuilder.build(c, { static = true })
+				m.Parent = vp
+				local camV = Instance.new("Camera")
+				camV.FieldOfView = 32
+				local dist = math.max(c.span, c.length) * 1.55
+				camV.CFrame = CFrame.lookAt(Vector3.new(-0.78, 0.36, -0.62).Unit * dist, Vector3.new(0, -c.diameter * 0.2, 0))
+				camV.Parent = vp
+				vp.CurrentCamera = camV
+				new("TextLabel", { Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 10, 1, -40), BackgroundTransparency = 1, Font = FONT, TextSize = 16, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = c.name, ZIndex = 25 }, cd):SetAttribute("Role", "title")
+				new("TextLabel", { Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 10, 1, -20), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 11, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = string.format("%s · %d kt", c.cls, c.maxKts), ZIndex = 25 }, cd):SetAttribute("Role", "text")
+				cd.Activated:Connect(function()
+					flow.plane = id
+					selectCard("plane", cd)
+				end)
+			end
+		end
+	end
+
+	-- 3–4. аэропорты (вылет / назначение)
+	local function airportPage(name: string, group: string, onSelect: (string) -> ()): ScrollingFrame
+		local p = page(name)
+		local regions: { [string]: Frame } = {}
+		local n = 0
+		for _, ap in World.AIRPORTS do
+			local g = regions[ap.region]
+			if not g then
+				n += 1
+				section(p, ap.region, n)
+				n += 1
+				g = grid(p, n, UDim2.new(1, -4, 0, 84))
+				regions[ap.region] = g
+			end
+			local cd = card(g, group, 1)
+			cd:SetAttribute("Airport", ap.id)
+			new("TextLabel", { Size = UDim2.new(1, -24, 0, 36), Position = UDim2.fromOffset(16, 8), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 30, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = ap.code .. " · " .. ap.id, ZIndex = 24 }, cd):SetAttribute("Role", "title")
+			new("TextLabel", { Size = UDim2.new(1, -24, 0, 18), Position = UDim2.fromOffset(16, 44), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = ap.title .. string.format(" · полоса %s/%s · %d м", ap.south, ap.north, math.round(ap.L * World.METERS_PER_STUD)), ZIndex = 24 }, cd):SetAttribute("Role", "text")
+			cd.Activated:Connect(function()
+				onSelect(ap.id)
+				selectCard(group, cd)
+			end)
+		end
+		return p
+	end
+	pg.from = airportPage("From", "from", function(id)
+		flow.from = id
+	end)
+	pg.to = airportPage("To", "to", function(id)
+		flow.to = id
+	end)
+
+	local titles = { menu = "Sky Pilot · режим", planes = "Ангар · выберите самолёт", from = "Аэропорт вылета", to = "Аэропорт назначения" }
+	local function show(st: string)
+		step = st
+		for k, v in pg do
+			v.Visible = k == st
+		end
+		title.Text = titles[st]
+		bBack.Visible = st ~= "menu"
+		bNext.Text = if (st == "to") or (st == "from" and flow.mode ~= "career") or (st == "planes" and flow.mode == "race") then "Полёт ✈" else "Далее →"
+		-- в рейсе нельзя выбрать аэропорт назначения, совпадающий с аэропортом вылета
+		if st == "to" then
+			for _, c in selectables.to or {} do
+				c.Visible = c:GetAttribute("Airport") ~= flow.from
+			end
+		end
+	end
+	local function selectAirportCard(group: string, id: string)
+		for _, c in selectables[group] or {} do
+			if c:GetAttribute("Airport") == id then
+				selectCard(group, c)
+			end
+		end
+	end
+	selectAirportCard("from", "A")
+	local function launch()
+		hangar.Visible = false
+		local mode = if flow.mode == "race" then "race" else "runway:" .. flow.from
+		cb.onPick(flow.plane :: string, mode, if flow.mode == "career" then flow.to else nil)
+	end
+	bNext.Activated:Connect(function()
+		if step == "menu" then
+			show("planes")
+		elseif step == "planes" then
+			if not flow.plane then
+				self.toast("Выберите самолёт", "amber")
+			elseif flow.mode == "race" then
+				launch()
+			else
+				show("from")
+			end
+		elseif step == "from" then
+			if flow.mode == "career" then
+				if flow.to == flow.from then
+					flow.to = nil
+				end
+				show("to")
+			else
+				launch()
+			end
+		elseif step == "to" then
+			if not flow.to then
+				self.toast("Выберите аэропорт назначения", "amber")
+			else
+				launch()
+			end
+		end
+	end)
+	bBack.Activated:Connect(function()
+		show(if step == "to" then "from" elseif step == "from" then "planes" else "menu")
+	end)
 	bExit.Activated:Connect(function()
 		hangar.Visible = false
 		cb.onExit()
 	end)
-	self.bExit = bExit
+	show("menu")
+	self.showStep = show
 
 	-- справка
 	local help, hp = overlay("Help", 640)
@@ -7049,7 +7305,7 @@ function Ui.new(cb: Callbacks)
 		"W / S — нос вниз / вверх      A / D — крен (на земле руление)",
 		"Q / E — руль направления      Shift / Ctrl — тяга + / −,  Z — малый газ",
 		"F / R — закрылки выпустить / убрать      G — шасси      B — тормоз (держать)",
-		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)",
+		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)      Пробел — стояночный тормоз",
 		"V — камера (сзади / кабина / орбита)      M — ангар      C — мышь-штурвал",
 		"N — навигация: стрелка на аэропорт или город; с выбранной целью автопилот (P) летит к ней сам",
 		"Гонка: пролети сквозь розовое кольцо у Skyport — маршрут Дубай → Ташкент → Лондон → домой, 13 колец, +1500 очков",
@@ -7139,6 +7395,7 @@ function Ui.new(cb: Callbacks)
 			apTag.Visible = false
 			nav.Visible = false
 			raceTag.Visible = false
+			banner.Visible = false
 		end
 	end
 	function self.showHangar(on: boolean?)
@@ -7151,6 +7408,9 @@ function Ui.new(cb: Callbacks)
 		local best = player:GetAttribute("BestFpm")
 		scoreLine.Text = string.format("Ваши очки: %d · посадок: %d · лучшее касание: %s. Та же физика, что в тестовом полигоне: посадки, сваливание, крушения.",
 			sc and sc.Value or 0, ld and ld.Value or 0, if type(best) == "number" and best > 0 then tostring(best) .. " fpm" else "—")
+		if on then
+			show("menu")
+		end
 		hangar.Visible = on :: boolean
 	end
 	function self.hangarVisible(): boolean

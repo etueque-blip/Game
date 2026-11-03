@@ -363,7 +363,10 @@ local function buildNature(folder: Folder)
 	local f = Instance.new("Folder")
 	f.Name = "Nature"
 	f.Parent = folder
-	local avoid = { { 400, 0, 3800 }, { 14000, -16000, 3600 } }
+	local avoid = {}
+	for _, ap in World.AIRPORTS do
+		table.insert(avoid, { ap.cx + (if ap.rot == 1 then 0 else 500), ap.cz - (if ap.rot == 1 then 500 else 0), 3700 })
+	end
 	for _, c in World.CITIES do
 		table.insert(avoid, { c.x, c.z, c.r })
 	end

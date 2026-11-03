@@ -39,9 +39,11 @@ local simulating = false
 local crashPose: CFrame? = nil
 local crashTimer = 0
 local lastPlaneId: string? = nil
-local lastMode = "runwayA"
+local lastMode = "runway:A"
 local apTarget: Autopilot.Target? = nil
 local navIdx = 0 -- 0 = навигация выключена
+local parkBrake = false
+local lastDest: string? = nil
 local apFollowNav = false
 local vsSmooth = 0
 local engineSound: Sound? = nil
@@ -102,6 +104,15 @@ local function onAction(a: string)
 	if not f or f.crashed then
 		return
 	end
+	if a == "park" then
+		if f.onGround then
+			parkBrake = not parkBrake
+			ui.toast(if parkBrake then "Стояночный тормоз включён" else "Стояночный тормоз отключён", if parkBrake then "amber" else "green")
+		else
+			parkBrake = false
+		end
+		return
+	end
 	if a == "nav" then
 		navIdx = (navIdx + 1) % (#World.NAV + 1)
 		local n = World.NAV[navIdx]
@@ -143,11 +154,11 @@ local function onAction(a: string)
 	end
 end
 
-local function requestFlight(planeId: string, mode: string)
-	lastPlaneId, lastMode = planeId, mode
+local function requestFlight(planeId: string, mode: string, destination: string?)
+	lastPlaneId, lastMode, lastDest = planeId, mode, destination
 	ui.showHangar(false)
 	ui.hideCrash()
-	RequestFlight:FireServer(planeId, mode)
+	RequestFlight:FireServer(planeId, mode, destination)
 end
 
 ui = Ui.new({
@@ -155,7 +166,7 @@ ui = Ui.new({
 	onAction = onAction,
 	onAgain = function()
 		if lastPlaneId then
-			requestFlight(lastPlaneId, lastMode)
+			requestFlight(lastPlaneId, lastMode, lastDest)
 		end
 	end,
 	onToHangar = function()
@@ -226,7 +237,18 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 		engineSound = s
 	end
 	addLog(string.format("Старт: %s, %s", cfg.name, mode))
-	ui.toast(if mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
+	parkBrake = mode ~= "air"
+	-- рейс: навигация сразу на аэропорт назначения
+	if lastDest then
+		navIdx = World.navIndexForAirport(lastDest)
+		local dst = World.airportById(lastDest)
+		if dst then
+			task.delay(3.2, function()
+				ui.toast(string.format("Рейс в %s · %s — навигация включена (N)", dst.code, dst.title), "magenta")
+			end)
+		end
+	end
+	ui.toast(if lastMode == "race" then "Гонка: впереди розовое кольцо — пролети сквозь него" elseif mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: отпусти тормоз (пробел), тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
 	ClientReady:FireServer(m)
 end)
 
@@ -332,6 +354,13 @@ RunService.PreSimulation:Connect(function(dt)
 		simulating = true
 	end
 	local input, manual = controls.read()
+	if parkBrake then
+		if f.onGround then
+			input.brakes = true
+		else
+			parkBrake = false
+		end
+	end
 	if apTarget then
 		if manual then
 			apTarget = nil
@@ -398,6 +427,10 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 
 	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
 	local ringPos, ringName = race.target()
+	if not ringPos and lastMode == "race" then
+		ringPos, ringName = race.firstRing(), "Старт гонки"
+	end
+	ui.setBanner(if parkBrake then "Ⓟ  Стояночный тормоз · пробел или нажми, чтобы отключить" else nil)
 	radar.update(f.pos, hdg, model, ringPos or race.firstRing())
 	ui.setRace(race.status(now))
 	local n = World.NAV[navIdx]

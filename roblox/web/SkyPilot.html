@@ -75,6 +75,9 @@ button:focus-visible { outline: 2px solid var(--magenta); outline-offset: 2px; }
 .seg button[aria-pressed="true"] { background: var(--magenta); color: #1a0216; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .card { text-align: left; background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 3px; min-width: 0; }
+.sel { background: var(--panel-solid); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font: inherit; font-size: 13px; max-width: 100%; }
+.cat { grid-column: 1 / -1; font-family: var(--f-display); font-size: 15px; letter-spacing: .08em; color: var(--fg); margin-top: 6px; }
+#park { position: absolute; left: 50%; bottom: calc(210px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: rgba(120,20,30,.88); border: 1px solid var(--red); border-radius: 24px; padding: 10px 18px; font-weight: 600; font-size: 14px; white-space: nowrap; }
 .card:hover { border-color: var(--magenta); }
 .card b { font-family: var(--f-display); font-weight: 400; font-size: 15px; letter-spacing: .02em; }
 .card i { font-style: normal; font-size: 12px; color: var(--magenta); }
@@ -113,6 +116,7 @@ kbd { font-family: var(--f-num); font-size: 11px; border: 1px solid var(--line);
   </div>
   <canvas id="adi" width="184" height="184" hidden></canvas>
   <div id="nav" hidden></div>
+  <button id="park" hidden>Ⓟ Стояночный тормоз · пробел или нажми, чтобы отключить</button>
   <canvas id="radar" width="280" height="280" hidden></canvas>
   <div id="race" hidden></div>
   <div id="warn"></div>
@@ -138,10 +142,11 @@ kbd { font-family: var(--f-num); font-size: 11px; border: 1px solid var(--line);
   <div class="overlay" id="hangar">
     <div class="sheet">
       <h2>Ангар · выберите самолёт</h2>
-      <p>Веб-версия Roblox-игры: та же физика, посадки и крушения. Города: Дубай (к северо-востоку от полосы), Лондон (к югу), Ташкент (к востоку). Нашли странное поведение — включите «Отладку» и скопируйте отчёт в чат.</p>
-      <div class="row"><span style="color:var(--dim);font-size:13px">Старт:</span>
-        <div class="seg"><button id="mRunway" aria-pressed="true">На полосе</button><button id="mAir" aria-pressed="false">В воздухе</button></div>
+      <p>Выберите режим, аэропорт и самолёт. Рейс: посадка в аэропорту назначения. Гонка: 13 колец через Дубай, Ташкент и Лондон. Пробел — стояночный тормоз, N — навигация.</p>
+      <div class="row"><span style="color:var(--dim);font-size:13px">Режим:</span>
+        <div class="seg"><button id="mFree" aria-pressed="true">Свободный полёт</button><button id="mCareer" aria-pressed="false">Рейс</button><button id="mRace" aria-pressed="false">Гонка колец</button></div>
       </div>
+      <div class="row" id="apRow"><span style="color:var(--dim);font-size:13px">Вылет:</span><select id="selFrom" class="sel"></select><span id="toWrap" hidden><span style="color:var(--dim);font-size:13px">Назначение:</span> <select id="selTo" class="sel"></select></span><label style="font-size:13px;color:var(--dim)"><input type="checkbox" id="chkAir"> старт в воздухе</label></div>
       <div class="grid" id="planeGrid"></div>
     </div>
   </div>
@@ -227,6 +232,12 @@ const AIRPORTS = [
     parked: [["B787", 380], ["B747", 700], ["B737", -400], ["G650", -620], ["C172", -760], ["LEAR75", -880]] },
   { id: "B", cx: 14000, cz: -16000, rot: 1, L: 4500, W: 200, south: "27", north: "09", title: "MOUNTAIN VIEW AIRPORT",
     parked: [["B737", -400], ["GL7500", -620], ["B787", 420]] },
+  { id: "C", code: "LNW", cx: -9000, cz: 15500, rot: 0, L: 4500, W: 200, south: "36", north: "18", title: "LONDON WEST",
+    parked: [["A320", -400], ["A350", 420], ["LEAR75", -650]] },
+  { id: "D", code: "DXC", cx: 11500, cz: -9000, rot: 0, L: 4500, W: 200, south: "36", north: "18", title: "DUBAI COAST",
+    parked: [["A380", 450], ["B787", -420], ["G650", -700]] },
+  { id: "E", code: "TSE", cx: 14500, cz: 6500, rot: 0, L: 4500, W: 200, south: "36", north: "18", title: "TASHKENT EAST",
+    parked: [["A320", -400], ["B787", 420], ["C172", -700]] },
 ];
 function apToWorld(ap, lx, lz) { return ap.rot ? { x: ap.cx + lz, z: ap.cz - lx } : { x: ap.cx + lx, z: ap.cz + lz }; }
 const flatRects = [];
@@ -278,12 +289,31 @@ const AX = new V3(1, 0, 0), AY = new V3(0, 1, 0);
 const qAxis = (axis, a) => new Q().setFromAxisAngle(axis, a);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
+
+// ===== режимы: свободный полёт, рейс (карьера), гонка колец; выбор аэропорта; стояночный тормоз
+const AP_CODES = { A: "SKP", B: "MTV" };
+for (const ap of AIRPORTS) ap.code = ap.code || AP_CODES[ap.id];
+let gameMode = "free", flightDest = null, parkBrake = false;
+function spawnFor(cfg, mode) {
+  if (mode === "race") { const r = CITYDATA.rings[0], d = new V3(-Math.sin(r[4]), 0, -Math.cos(r[4])); return { pos: new V3(r[0], r[1], r[2]).addScaledVector(d, -1500), yaw: r[4], air: true }; }
+  if (mode === "air") return { pos: new V3(0, 3000 / FT, 9000), yaw: 0, air: true };
+  const ap = AIRPORTS.find((a) => "runway:" + a.id === mode) || AIRPORTS[0];
+  const w = apToWorld(ap, 0, ap.L / 2 - 140);
+  return { pos: new V3(w.x, 0.5 + cfg.gearHeight, w.z), yaw: ap.rot ? Math.PI / 2 : 0, air: false };
+}
+function airportAt(x, z) {
+  for (const ap of AIRPORTS) {
+    const dx = x - ap.cx, dz = z - ap.cz, lx = ap.rot ? -dz : dx, lz = ap.rot ? dx : dz;
+    if (Math.abs(lx) < ap.W / 2 + 25 && Math.abs(lz) < ap.L / 2 + 25) return ap;
+  }
+  return null;
+}
 function newFlight(cfg, mode) {
-  const air = mode === "air";
-  const pos = air ? new V3(0, 3000 / FT, 9000) : new V3(0, 0.5 + cfg.gearHeight, 2500 - 140);
+  const sp = spawnFor(cfg, mode), air = sp.air;
+  const pos = sp.pos;
   const speed = air ? Math.floor(cfg.maxKts * 0.6) : 0;
-  return { cfg, mode, pos, att: new Q(), speed, throttle: air ? 0.7 : 0, flaps: 0, gear: !!cfg.fixedGear || !air,
-    brakes: false, reverse: false, inP: 0, inR: 0, inY: 0, vyExtra: 0, lastVelY: 0, vel: new V3(0, 0, -speed),
+  return { cfg, mode, pos, att: new Q().setFromAxisAngle(AY, sp.yaw), speed, throttle: air ? 0.7 : 0, flaps: 0, gear: !!cfg.fixedGear || !air,
+    brakes: false, reverse: false, inP: 0, inR: 0, inY: 0, vyExtra: 0, lastVelY: 0, vel: new V3(-Math.sin(sp.yaw), 0, -Math.cos(sp.yaw)).multiplyScalar(speed),
     onGround: !air, airTime: 0, crashed: false, events: [], dbg: {} };
 }
 
@@ -940,7 +970,7 @@ AIRPORTS.forEach(buildAirport);
     const lake = new THREE.Mesh(new THREE.CircleGeometry(d / 2, 64), water); lake.rotation.x = -Math.PI / 2; lake.position.set(x, 0.6, z); scene.add(lake);
     const shore = new THREE.Mesh(new THREE.RingGeometry(d / 2, d / 2 + 40, 64), std(0xc9b98f, { rough: 1 })); shore.rotation.x = -Math.PI / 2; shore.position.set(x, 0.55, z); scene.add(shore);
   }
-  const avoid = [[400, 0, 3800], [14000, -16000, 3600], [5500, -7500, 1700], [-4000, 12500, 1300], [10500, 3000, 1200], [5500, -9800, 3300], ...lakes.map(([x, z, d]) => [x, z, d / 2 + 50])];
+  const avoid = [[400, 0, 3800], [14000, -16000, 3600], [5500, -7500, 1700], [-4000, 12500, 1300], [10500, 3000, 1200], [5500, -9800, 3300], [-8500, 15500, 3700], [12000, -9000, 3700], [15000, 6500, 3700], ...lakes.map(([x, z, d]) => [x, z, d / 2 + 50])];
   const free = (x, z, pad) => avoid.every(([ax, az, r]) => Math.hypot(x - ax, z - az) > r + pad) && terrainH(x, z) < 1;
   const fields = [], fc = [0x7aa64a, 0xc9b65e, 0x8b6b4b, 0x5a8a3c, 0xa8bd62, 0xb59a52];
   let placed = 0;
@@ -1007,20 +1037,38 @@ function updateParticles(dt) {
 }
 
 const grid = $("planeGrid");
-for (const id of ORDER) {
+const CATS = [["ЛЁГКИЕ И БИЗНЕС-ДЖЕТЫ", ["C172", "LEAR75", "G650", "GL7500"]], ["УЗКОФЮЗЕЛЯЖНЫЕ", ["B737", "A320"]], ["ШИРОКОФЮЗЕЛЯЖНЫЕ", ["B787", "A330", "A350", "B747", "A380"]], ["ВОЕННЫЕ", ["F16"]]];
+for (const [catName, ids] of CATS) { const h = document.createElement("div"); h.className = "cat"; h.textContent = catName; grid.appendChild(h);
+for (const id of ids) {
   const c = PLANES[id];
   const b = document.createElement("button"); b.className = "card";
   b.innerHTML = `<b><span class="swatch" style="background:#${c.colors.tail.toString(16).padStart(6, "0")}"></span>${c.name}</b><i>${c.cls}</i><small>Макс ${c.maxKts} kt · Vr ${c.vrKts} kt · Свал ${c.stallKts} kt</small>`;
-  b.onclick = () => startFlight(c, spawnMode);
+  b.onclick = () => startFlight(c, currentMode());
   grid.appendChild(b);
+}}
+
+{
+  for (const sel of [$("selFrom"), $("selTo")]) for (const ap of AIRPORTS) { const o = document.createElement("option"); o.value = ap.id; o.textContent = ap.code + " · " + ap.title; sel.appendChild(o); }
+  $("selTo").value = "C";
+  const setGM = (m) => { gameMode = m; for (const [id, v] of [["mFree", "free"], ["mCareer", "career"], ["mRace", "race"]]) $(id).setAttribute("aria-pressed", m === v);
+    $("toWrap").hidden = m !== "career"; $("apRow").hidden = m === "race"; };
+  $("mFree").onclick = () => setGM("free"); $("mCareer").onclick = () => setGM("career"); $("mRace").onclick = () => setGM("race");
+  setGM("free");
 }
-const setMode = (m) => { spawnMode = m; $("mRunway").setAttribute("aria-pressed", m === "runway"); $("mAir").setAttribute("aria-pressed", m === "air"); };
-$("mRunway").onclick = () => setMode("runway"); $("mAir").onclick = () => setMode("air");
+function currentMode() {
+  flightDest = null;
+  if (gameMode === "race") return "race";
+  if ($("chkAir").checked) return "air";
+  if (gameMode === "career") { flightDest = $("selTo").value; if (flightDest === $("selFrom").value) flightDest = AIRPORTS.find((a) => a.id !== flightDest).id; }
+  return "runway:" + $("selFrom").value;
+}
+
 $("bHangar").onclick = () => { $("hangar").hidden = !$("hangar").hidden; };
 $("bHelp").onclick = () => { $("help").hidden = false; };
 $("helpClose").onclick = () => { $("help").hidden = true; };
 $("bCam").onclick = () => cycleCam();
 $("bNav").onclick = () => cycleNav();
+$("park").onclick = () => action("park");
 $("bGfx").onclick = () => { HIGH = !HIGH; $("bGfx").textContent = "Графика: " + (HIGH ? "высокая" : "средняя"); applyQuality(); };
 $("bDebug").onclick = () => { const d = $("debug"); d.hidden = !d.hidden; $("bDebug").setAttribute("aria-pressed", !d.hidden); };
 $("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);
@@ -1032,6 +1080,8 @@ function startFlight(cfg, mode) {
   if (planeObj) scene.remove(planeObj);
   debris.forEach((d) => scene.remove(d.m)); debris.length = 0;
   lastCfg = cfg; lastMode = mode; raceReset();
+  parkBrake = mode.startsWith("runway"); if (mode === "race") navIdx = 0;
+  if (flightDest) { navIdx = AIRPORTS.findIndex((a) => a.id === flightDest) + 1; setTimeout(() => { const d = AIRPORTS[navIdx - 1]; toast("Рейс в " + d.code + " · " + d.title + " — навигация включена", "var(--magenta)"); }, 3200); }
   flight = newFlight(cfg, mode);
   planeObj = buildPlane(cfg, false); scene.add(planeObj);
   gearAnim = flight.gear ? 1 : 0;
@@ -1058,7 +1108,7 @@ function doCrash(reason) {
 
 // ============================================================ INPUT
 const keys = new Set();
-const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar", KeyN: "nav" };
+const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar", KeyN: "nav", Space: "park" };
 addEventListener("keydown", (e) => {
   if (e.repeat) { keys.add(e.code); return; }
   keys.add(e.code);
@@ -1072,6 +1122,7 @@ function action(a) {
   if (a === "hangar") { $("hangar").hidden = !$("hangar").hidden; return; }
   if (a === "cam") { cycleCam(); return; }
   if (a === "nav") { cycleNav(); return; }
+  if (a === "park") { if (flight && flight.onGround) { parkBrake = !parkBrake; toast(parkBrake ? "Стояночный тормоз включён" : "Стояночный тормоз отключён", parkBrake ? "var(--amber)" : "var(--green)"); } return; }
   const f = flight; if (!f || f.crashed) return;
   const c = f.cfg;
   if (a === "gear") {
@@ -1171,18 +1222,18 @@ function drawRadar(f, hdg) {
   };
   rctx.textAlign = "center"; rctx.textBaseline = "middle";
   const label = (txt, x, z, col, size) => { const p = put(x, z, true); if (!p) return; rctx.font = `600 ${size}px IBM Plex Sans, sans-serif`; rctx.fillStyle = col; rctx.fillText(txt, p[0], p[1]); };
-  label("A", 0, 0, "#e4eeff", 24); label("B", 14000, -16000, "#e4eeff", 24);
+  for (const ap of AIRPORTS) label(ap.id, ap.cx, ap.cz, "#e4eeff", 24);
   label("Дубай", 5500, -7500, "#8ea3c4", 20); label("Лондон", -4000, 12500, "#8ea3c4", 20); label("Ташкент", 10500, 3000, "#8ea3c4", 20);
   const rt = raceTarget() || RINGS[0]; label("◎", rt.pos.x, rt.pos.z, "#ff4fd8", 26);
   rctx.restore();
   rctx.fillStyle = "#ffbf3c"; rctx.beginPath(); rctx.moveTo(R, R - 10); rctx.lineTo(R + 7, R + 8); rctx.lineTo(R, R + 4); rctx.lineTo(R - 7, R + 8); rctx.closePath(); rctx.fill();
 }
 
-const NAV = [["АЭРОПОРТ A · SKYPORT", 0, 0], ["АЭРОПОРТ B · MOUNTAIN VIEW", 14000, -16000], ["ДУБАЙ", 5500, -7500], ["ЛОНДОН", -4000, 12500], ["ТАШКЕНТ", 10500, 3000]];
+const NAV = [["SKP · SKYPORT INTERNATIONAL", 0, 0], ["MTV · MOUNTAIN VIEW AIRPORT", 14000, -16000], ["LNW · LONDON WEST", -9000, 15500], ["DXC · DUBAI COAST", 11500, -9000], ["TSE · TASHKENT EAST", 14500, 6500], ["ДУБАЙ", 5500, -7500], ["ЛОНДОН", -4000, 12500], ["ТАШКЕНТ", 10500, 3000]];
 let navIdx = 0;
 function cycleNav() { navIdx = (navIdx + 1) % (NAV.length + 1); const n = NAV[navIdx - 1]; toast(n ? "Навигация: " + n[0] : "Навигация выключена", "var(--magenta)"); if (!n) $("nav").hidden = true; }
 function updateNav(f, hdg) {
-  const rt = raceTarget();
+  const rt = raceTarget() || (lastMode === "race" ? Object.assign({}, RINGS[0], { name: "Старт гонки" }) : null);
   const n = rt ? ["КОЛЬЦО · " + rt.name + " · " + Math.round(rt.pos.y * FT) + " ft", rt.pos.x, rt.pos.z] : NAV[navIdx - 1], el = $("nav");
   if (!n || !f || f.crashed) { el.hidden = true; return; }
   const dx = n[1] - f.pos.x, dz = n[2] - f.pos.z;
@@ -1228,6 +1279,8 @@ function updateHUD(f) {
   drawADI(pitchDeg, bankDeg);
   updateNav(f, hdg);
   drawRadar(f, hdg);
+  if (!f.onGround) parkBrake = false;
+  $("park").hidden = !parkBrake || f.crashed;
   { const el = $("race"); if (raceStart !== null) { el.hidden = false; el.textContent = `КОЛЬЦА ${raceIdx}/${RINGS.length} · ${fmtT(performance.now() / 1000 - raceStart)}`; } else el.hidden = true; }
   let w = "", col = "var(--red)";
   if (!f.onGround && f.speed < f.dbg.stall * 1.05) w = "STALL · СВАЛИВАНИЕ";
@@ -1277,7 +1330,7 @@ function frame(t) {
       r: ((k("KeyD") || k("ArrowRight")) ? 1 : 0) - ((k("KeyA") || k("ArrowLeft")) ? 1 : 0) + touch.x,
       y: (k("KeyE") ? 1 : 0) - (k("KeyQ") ? 1 : 0) + touch.rr - touch.rl,
       thrUp: k("ShiftLeft") || k("ShiftRight"), thrDn: k("ControlLeft") || k("ControlRight"),
-      brakes: k("KeyB") || touch.brake,
+      brakes: k("KeyB") || touch.brake || (parkBrake && f.onGround),
     };
     const __prev = f.pos.clone();
     physicsStep(f, input, dt);
@@ -1285,6 +1338,7 @@ function frame(t) {
     for (const ev of f.events) {
       if (ev.type === "landing") {
         toast(ev.text, ev.good ? "var(--green)" : "var(--amber)"); addLog(ev.text);
+        { const ap = airportAt(f.pos.x, f.pos.z); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); addLog("Рейс выполнен: " + d.code); } }
         for (const g of planeObj.userData.mainGear) for (let i = 0; i < 5; i++) spawnPuff(g.clone().applyQuaternion(f.att).add(f.pos), 0xdcdcdc, f.cfg.diameter * 0.5, 1.8, f.cfg.diameter * 1.2, new V3(R(-3, 3), R(1, 4), R(-3, 3)).add(f.vel.clone().multiplyScalar(0.3)), 0.7);
       }
       else if (ev.type === "log") addLog(ev.text);

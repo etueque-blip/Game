@@ -70,8 +70,9 @@ function Radar.new(parent: Instance, colors: any)
 	end
 
 	local fixed: { { label: TextLabel, x: number, z: number, edge: boolean } } = {}
-	table.insert(fixed, { label = blip("A", colors.fg, 13), x = 0, z = 0, edge = true })
-	table.insert(fixed, { label = blip("B", colors.fg, 13), x = 14000, z = -16000, edge = true })
+	for _, ap in World.AIRPORTS do
+		table.insert(fixed, { label = blip(ap.id, colors.fg, 13), x = ap.cx, z = ap.cz, edge = true })
+	end
 	for _, city in World.CITIES do
 		local name = if city.name == "DUBAI" then "Дубай" elseif city.name == "LONDON" then "Лондон" else "Ташкент"
 		table.insert(fixed, { label = blip(name, colors.dim, 11), x = city.x, z = city.z, edge = true })

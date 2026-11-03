@@ -54,7 +54,7 @@ local planesFolder = workspace:WaitForChild("Planes")
 
 type Active = {
 	model: Model, root: BasePart, cfgId: string, mode: string,
-	started: number, lastLanding: number, fromAirport: string?, ready: boolean, crashed: boolean,
+	started: number, lastLanding: number, fromAirport: string?, destination: string?, ready: boolean, crashed: boolean,
 	conns: { RBXScriptConnection },
 }
 local active: { [Player]: Active } = {}
@@ -95,9 +95,21 @@ local function slotFree(cf: CFrame): boolean
 	return true
 end
 
+-- режимы: "runway:<id аэропорта>", "air" (заход на полосу A), "race" (перед первым кольцом)
+local function runwayId(mode: string): string?
+	return mode:match("^runway:(%u)$")
+end
+
 local function pickSpawn(cfg: any, mode: string): (CFrame, boolean, string?)
-	if mode == "runwayA" or mode == "runwayB" then
-		local ap = World.airportById(if mode == "runwayA" then "A" else "B")
+	if mode == "race" then
+		local r = World.CityData.rings[1]
+		local look = Vector3.new(-math.sin(r[5]), 0, -math.cos(r[5]))
+		local pos = Vector3.new(r[1], r[2], r[3]) - look * 1500 + Vector3.new(rng:NextNumber(-40, 40), 0, rng:NextNumber(-40, 40))
+		return CFrame.lookAt(pos, pos + look), true, nil
+	end
+	local id = runwayId(mode)
+	if id then
+		local ap = World.airportById(id)
 		if ap then
 			for _, cf in World.runwaySpawns(ap, cfg) do
 				if slotFree(cf) then
@@ -176,13 +188,17 @@ local function explode(a: Active)
 end
 PhysicsService:CollisionGroupSetCollidable(DEBRIS, "Default", true)
 
-local function startFlight(p: Player, planeId: any, mode: any)
+local function startFlight(p: Player, planeId: any, mode: any, destination: any)
 	if type(planeId) ~= "string" or type(mode) ~= "string" then
 		return
 	end
 	local cfg = PlaneConfigs.PLANES[planeId]
-	if not cfg or (mode ~= "runwayA" and mode ~= "runwayB" and mode ~= "air") then
+	local rid = runwayId(mode)
+	if not cfg or not (mode == "air" or mode == "race" or (rid and World.airportById(rid))) then
 		return
+	end
+	if destination ~= nil and (type(destination) ~= "string" or not World.airportById(destination) or destination == rid) then
+		destination = nil
 	end
 	local now = os.clock()
 	if lastRequest[p] and now - lastRequest[p] < 1.5 then
@@ -201,7 +217,7 @@ local function startFlight(p: Player, planeId: any, mode: any)
 	local character = p.Character :: Model
 
 	local spawnCF, air, ap = pickSpawn(cfg, mode)
-	if (mode == "runwayA" or mode == "runwayB") and air then
+	if rid and air then
 		Notify:FireClient(p, "Полоса занята — старт в воздухе", "amber")
 	end
 	local model = PlaneBuilder.build(cfg, { seat = true, label = p.DisplayName })
@@ -222,7 +238,7 @@ local function startFlight(p: Player, planeId: any, mode: any)
 
 	local a: Active = {
 		model = model, root = root, cfgId = planeId, mode = if air then "air" else mode,
-		started = now, lastLanding = 0, fromAirport = ap, ready = false, crashed = false, conns = {},
+		started = now, lastLanding = 0, fromAirport = ap, destination = destination, ready = false, crashed = false, conns = {},
 	}
 	active[p] = a
 	Scores.flight(p)
@@ -247,8 +263,8 @@ local function startFlight(p: Player, planeId: any, mode: any)
 	FlightStarted:FireClient(p, model, planeId, a.mode, spawnCF)
 end
 
-RequestFlight.OnServerEvent:Connect(function(p, planeId, mode)
-	startFlight(p, planeId, mode)
+RequestFlight.OnServerEvent:Connect(function(p, planeId, mode, destination)
+	startFlight(p, planeId, mode, destination)
 end)
 
 ClientReady.OnServerEvent:Connect(function(p, model)
@@ -304,6 +320,13 @@ Landing.OnServerEvent:Connect(function(p, fpm)
 	if a.fromAirport and a.fromAirport ~= apId then
 		pts += 500
 		msg ..= string.format("  ·  +500 за перелёт %s → %s", a.fromAirport, apId)
+	end
+	-- рейс (карьера): посадка в аэропорту назначения
+	if a.destination and a.destination == apId then
+		pts += 1000
+		local dst = World.airportById(apId)
+		msg ..= string.format("  ·  РЕЙС ВЫПОЛНЕН +1000 (%s)", if dst then dst.code else apId)
+		a.destination = nil
 	end
 	a.fromAirport = apId
 	Scores.add(p, pts, true, fpm)

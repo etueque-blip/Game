@@ -14,15 +14,21 @@ local function R(a: number, b: number): number
 end
 
 export type Airport = {
-	id: string, cx: number, cz: number, rot: number, L: number, W: number,
+	id: string, code: string, region: string, cx: number, cz: number, rot: number, L: number, W: number,
 	south: string, north: string, title: string, parked: { { any } },
 }
 
 World.AIRPORTS = {
-	{ id = "A", cx = 0, cz = 0, rot = 0, L = 5000, W = 200, south = "36", north = "18", title = "SKYPORT INTERNATIONAL",
+	{ id = "A", code = "SKP", region = "ЦЕНТР", cx = 0, cz = 0, rot = 0, L = 5000, W = 200, south = "36", north = "18", title = "SKYPORT INTERNATIONAL",
 		parked = { { "B787", 380 }, { "B747", 700 }, { "B737", -400 }, { "G650", -620 }, { "C172", -760 }, { "LEAR75", -880 } } },
-	{ id = "B", cx = 14000, cz = -16000, rot = 1, L = 4500, W = 200, south = "27", north = "09", title = "MOUNTAIN VIEW AIRPORT",
+	{ id = "B", code = "MTV", region = "ГОРЫ", cx = 14000, cz = -16000, rot = 1, L = 4500, W = 200, south = "27", north = "09", title = "MOUNTAIN VIEW AIRPORT",
 		parked = { { "B737", -400 }, { "GL7500", -620 }, { "B787", 420 } } },
+	{ id = "C", code = "LNW", region = "ЛОНДОН", cx = -9000, cz = 15500, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "LONDON WEST",
+		parked = { { "A320", -400 }, { "A350", 420 }, { "LEAR75", -650 } } },
+	{ id = "D", code = "DXC", region = "ДУБАЙ", cx = 11500, cz = -9000, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "DUBAI COAST",
+		parked = { { "A380", 450 }, { "B787", -420 }, { "G650", -700 } } },
+	{ id = "E", code = "TSE", region = "ТАШКЕНТ", cx = 14500, cz = 6500, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "TASHKENT EAST",
+		parked = { { "A320", -400 }, { "B787", 420 }, { "C172", -700 } } },
 } :: { Airport }
 
 -- Локальные координаты аэропорта (полоса вдоль локальной Z) -> мир
@@ -226,13 +232,25 @@ function World.runwaySpawns(ap: Airport, cfg: any): { CFrame }
 end
 
 -- Цели навигации (клавиша N): аэропорты и города
-World.NAV = {
-	{ name = "АЭРОПОРТ A · SKYPORT", x = 0, z = 0 },
-	{ name = "АЭРОПОРТ B · MOUNTAIN VIEW", x = 14000, z = -16000 },
+World.NAV = {}
+for _, ap in World.AIRPORTS do
+	table.insert(World.NAV, { name = ap.code .. " · " .. ap.title, x = ap.cx, z = ap.cz, airport = ap.id })
+end
+for _, c in {
 	{ name = "ДУБАЙ", x = 5500, z = -7500 },
 	{ name = "ЛОНДОН", x = -4000, z = 12500 },
 	{ name = "ТАШКЕНТ", x = 10500, z = 3000 },
-}
+} do
+	table.insert(World.NAV, c)
+end
+function World.navIndexForAirport(id: string): number
+	for i, n in World.NAV do
+		if n.airport == id then
+			return i
+		end
+	end
+	return 0
+end
 World.METERS_PER_STUD = 0.515
 
 -- Компасный курс (0..360, по часовой) из направления взгляда
