@@ -28,6 +28,13 @@ for p in sorted(glob.glob(os.path.join(RAW, "*.png"))):
     buf = io.BytesIO()
     small.save(buf, "JPEG", quality=72, optimize=True)
     data[name] = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+# уже сохранённые фото (снятые раньше) тоже попадают в веб-версию
+for p in sorted(glob.glob(os.path.join(OUT, "*.jpg"))):
+    name = os.path.splitext(os.path.basename(p))[0]
+    if name not in data:
+        buf = io.BytesIO()
+        Image.open(p).convert("RGB").resize((720, 405), Image.LANCZOS).save(buf, "JPEG", quality=72, optimize=True)
+        data[name] = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 with open(os.path.join(ROOT, "tools", "photos.json"), "w") as f:
     json.dump(data, f)
 print(len(data), "photos,", sum(len(v) for v in data.values()) // 1024, "KB inline")

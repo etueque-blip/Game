@@ -239,7 +239,7 @@ def add_flow(s):
     s = patch(s, "function newFlight(cfg, mode) {", FLOW_JS + "function newFlight(cfg, mode) {")
     # ангар по категориям
     s = patch(s, "for (const id of ORDER) {\n  const c = PLANES[id];\n  const b = document.createElement(\"button\"); b.className = \"card\";",
-              "const CATS = [[\"ЛЁГКИЕ И БИЗНЕС-ДЖЕТЫ\", [\"C172\", \"LEAR75\", \"G650\", \"GL7500\"]], [\"УЗКОФЮЗЕЛЯЖНЫЕ\", [\"B737\", \"A320\"]], [\"ШИРОКОФЮЗЕЛЯЖНЫЕ\", [\"B787\", \"A330\", \"A350\", \"B747\", \"A380\"]], [\"ВОЕННЫЕ\", [\"F16\"]]];\n"
+              "const CATS = [[\"ЛЁГКИЕ И БИЗНЕС-ДЖЕТЫ\", [\"C172\", \"LEAR75\", \"G650\", \"GL7500\"]], [\"УЗКОФЮЗЕЛЯЖНЫЕ\", [\"B737\", \"A220\", \"A320\"]], [\"ШИРОКОФЮЗЕЛЯЖНЫЕ\", [\"B787\", \"A330\", \"A350\", \"B777\", \"B747\", \"A380\"]], [\"ВОЕННЫЕ\", [\"F16\"]]];\n"
               "for (const [catName, ids] of CATS) { const h = document.createElement(\"div\"); h.className = \"cat\"; h.textContent = catName; grid.appendChild(h);\nfor (const id of ids) {\n  const c = PLANES[id];\n  const b = document.createElement(\"button\"); b.className = \"card\";")
     s = patch(s, "  b.onclick = () => startFlight(c, spawnMode);\n  grid.appendChild(b);\n}", "  b.onclick = () => startFlight(c, currentMode());\n  grid.appendChild(b);\n}}")
     s = patch(s, 'const setMode = (m) => { spawnMode = m; $("mRunway").setAttribute("aria-pressed", m === "runway"); $("mAir").setAttribute("aria-pressed", m === "air"); };\n$("mRunway").onclick = () => setMode("runway"); $("mAir").onclick = () => setMode("air");', FLOW_UI_JS)
@@ -315,7 +315,7 @@ MENU_HTML = """
         <button class="tile big" data-m="career" data-ph="mode_career"><span class="ic">⇄</span><b>Режим<br>рейсов</b><small>Вылет из одного аэропорта и посадка в другом</small></button>
         <button class="tile" data-m="race" data-ph="mode_race"><span class="ic">◎</span><b>Гонка колец</b><small>13 колец: Дубай → Ташкент → Лондон</small></button>
         <button class="tile" data-m="help" data-ph="news_airports"><span class="ic">⌨</span><b>Управление</b><small>Клавиши, телефон, геймпад</small></button>
-        <button class="tile" data-m="spot" data-ph="news_tashkent"><span class="ic">⌖</span><b>Обзор<br>самолётов</b><small>Все 12 самолётов в ангаре</small></button>
+        <button class="tile" data-m="spot" data-ph="news_tashkent"><span class="ic">⌖</span><b>Обзор<br>самолётов</b><small>Все 14 самолётов в ангаре</small></button>
       </div>
       <div class="mh">Что нового</div>
       <div class="news">
@@ -551,7 +551,7 @@ def main():
     airbus = open(os.path.join(ROOT, "tools", "airbus_planes.js"), encoding="utf-8").read()
     s = patch(s, "  F16: { name: \"Striker X\"", airbus + "  F16: { name: \"Striker X\"")
     s = patch(s, 'const ORDER = ["C172", "LEAR75", "G650", "GL7500", "B737", "B787", "B747", "F16"];',
-              'const ORDER = ["C172", "LEAR75", "G650", "GL7500", "B737", "A320", "B787", "A330", "A350", "B747", "A380", "F16"];')
+              'const ORDER = ["C172", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "F16"];')
     s = patch(s, "<script>\n\"use strict\";\n// ============================================================ CONFIG",
               "<script>const CITYDATA = " + json.dumps(data, separators=(",", ":")) + ";</script>\n<script>\n\"use strict\";\n// ============================================================ CONFIG")
     s = patch(s, "flatRects.push({ x0: CITY.x - 950, x1: CITY.x + 950, z0: CITY.z - 950, z1: CITY.z + 950, h: 0.45 });\n", "")

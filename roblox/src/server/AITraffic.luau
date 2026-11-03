@@ -14,7 +14,7 @@ local Autopilot = require(Shared:WaitForChild("Autopilot"))
 local AITraffic = {}
 
 local COUNT = 5
-local TYPES = { "B737", "A320", "B787", "A330", "A350", "B747", "A380", "G650", "GL7500", "LEAR75", "C172" }
+local TYPES = { "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "G650", "GL7500", "LEAR75", "C172" }
 local WAYPOINTS = {
 	Vector3.new(0, 0, -9000), Vector3.new(9000, 0, -14000), Vector3.new(20000, 0, -18000),
 	Vector3.new(16000, 0, -6000), Vector3.new(5500, 0, -7500), Vector3.new(-6000, 0, 2000),

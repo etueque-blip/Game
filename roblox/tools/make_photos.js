@@ -8,7 +8,7 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'web', 'SkyPilot.html');
 // [имя, самолёт, позиция, курс самолёта (рад, 0 = на север), смещение камеры (мир), множитель дистанции, на земле]
 const DUBAI = [7000, 420, -7500];
 const SHOTS = [];
-for (const id of ["C172", "LEAR75", "G650", "GL7500", "B737", "A320", "B787", "A330", "A350", "B747", "A380", "F16"])
+for (const id of ["C172", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "F16"])
   SHOTS.push(["plane_" + id, id, [7600, 700, -9600], 0, [0.78, 0.07, -0.62], 0.62, "air"]);
 SHOTS.push(["mode_free", "A380", [7300, 520, -7300], 0, [0.85, 0.2, -0.45], 1.15, "air"]);
 SHOTS.push(["mode_career", "B737", null, 0, [-0.8, 0.12, -0.55], 1.1, "runway:A"]);
@@ -21,7 +21,7 @@ SHOTS.push(["news_airports", "A350", null, 0, [-0.75, 0.25, -0.6], 1.0, "runway:
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
   await p.goto(PAGE);
   await p.waitForTimeout(7000);
-  await p.addStyleTag({ content: '#top,#hud,#adi,#toast,#nav,#radar,#race,#warn,#touch,#park,#hangar,#help,#debug,#menu,#flow{display:none!important}' });
+  await p.addStyleTag({ content: '#top,#hud,#adi,#toast,#nav,#radar,#race,#warn,#touch,#park,#hangar,#help,#debug,#menu,#flow,#htape,#wx{display:none!important}' });
   const only = process.argv[2] ? new RegExp(process.argv[2]) : null;
   for (const [name, id, pos, hdg, off, dm, mode] of SHOTS) {
     if (only && !only.test(name)) continue;
