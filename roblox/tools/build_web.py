@@ -459,6 +459,79 @@ def add_tape(s):
     return s
 
 
+SOUND_JS = r"""
+// ===== звук двигателей: синтез в браузере (шум турбины + гул + свист), без файлов
+let AC = null, SND = null, soundOn = true;
+try { soundOn = localStorage.getItem("skypilot.sound") !== "off"; } catch (e) {}
+function soundInit() {
+  if (AC || !soundOn) return;
+  const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+  try {
+    AC = new Ctx();
+    const buf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate), d = buf.getChannelData(0);
+    let last = 0; for (let i = 0; i < d.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+    const noise = AC.createBufferSource(); noise.buffer = buf; noise.loop = true;
+    const band = AC.createBiquadFilter(); band.type = "bandpass"; band.Q.value = 0.7;
+    const nGain = AC.createGain(); nGain.gain.value = 0;
+    noise.connect(band).connect(nGain);
+    const hum = AC.createOscillator(); hum.type = "sawtooth";
+    const humLp = AC.createBiquadFilter(); humLp.type = "lowpass"; humLp.frequency.value = 420;
+    const hGain = AC.createGain(); hGain.gain.value = 0;
+    hum.connect(humLp).connect(hGain);
+    const whine = AC.createOscillator(); whine.type = "sine";
+    const wGain = AC.createGain(); wGain.gain.value = 0;
+    whine.connect(wGain);
+    const master = AC.createGain(); master.gain.value = 0.9;
+    for (const g of [nGain, hGain, wGain]) g.connect(master);
+    master.connect(AC.destination);
+    noise.start(); hum.start(); whine.start();
+    SND = { band, nGain, hum, hGain, whine, wGain, master };
+  } catch (e) { AC = null; SND = null; }
+}
+addEventListener("pointerdown", soundInit, { capture: true });
+addEventListener("keydown", soundInit, { capture: true });
+function updateSound(f) {
+  if (!SND) return;
+  const t = AC.currentTime, on = soundOn && f && !f.crashed && !document.hidden;
+  const thr = f ? (f.reverse ? 0.6 : f.throttle) : 0, prop = f && f.cfg.engines === "prop";
+  const spool = 0.25 + thr * 0.75, spd = f ? Math.min(1, f.speed / f.cfg.maxKts) : 0;
+  const k = (v) => (on ? v : 0);
+  SND.band.frequency.setTargetAtTime(prop ? 300 + thr * 500 : 500 + thr * 1500, t, 0.3);
+  SND.nGain.gain.setTargetAtTime(k(0.05 + thr * 0.22 + spd * 0.08), t, 0.25);
+  SND.hum.frequency.setTargetAtTime(prop ? 38 + thr * 70 : 55 + thr * 45, t, 0.3);
+  SND.hGain.gain.setTargetAtTime(k(prop ? 0.05 + thr * 0.12 : 0.02 + thr * 0.04), t, 0.25);
+  SND.whine.frequency.setTargetAtTime(1400 + spool * 2600, t, 0.4);
+  SND.wGain.gain.setTargetAtTime(k(prop ? 0 : 0.006 + thr * 0.018), t, 0.3);
+}
+function soundCrash() {
+  if (!SND || !soundOn) return;
+  const t = AC.currentTime;
+  const src = AC.createBufferSource(); src.buffer = SND.band.context.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+  const d = src.buffer.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+  const lp = AC.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 700;
+  const g = AC.createGain(); g.gain.value = 0.9; g.gain.setTargetAtTime(0, t + 0.4, 0.5);
+  src.connect(lp).connect(g).connect(AC.destination); src.start();
+}
+function toggleSound() {
+  soundOn = !soundOn; try { localStorage.setItem("skypilot.sound", soundOn ? "on" : "off"); } catch (e) {}
+  $("bSnd").textContent = "Звук: " + (soundOn ? "вкл" : "выкл"); $("bSnd").setAttribute("aria-pressed", soundOn);
+  if (soundOn) soundInit();
+}
+$("bSnd").textContent = "Звук: " + (soundOn ? "вкл" : "выкл");
+"""
+
+
+def add_sound(s):
+    """Звук двигателей (WebAudio-синтез) и удар при крушении; кнопка «Звук»."""
+    s = patch(s, '<button class="tb" id="bNav">Навигация</button>', '<button class="tb" id="bNav">Навигация</button>\n    <button class="tb" id="bSnd" aria-pressed="true">Звук: вкл</button>')
+    s = patch(s, "// ============================================================ HUD\n", "// ============================================================ HUD\n" + SOUND_JS)
+    s = patch(s, '$("bNav").onclick = () => cycleNav();', '$("bNav").onclick = () => cycleNav();\n$("bSnd").onclick = () => toggleSound();')
+    s = patch(s, "  $(\"htape\").hidden = f.crashed; drawTape(hdg);\n", "  $(\"htape\").hidden = f.crashed; drawTape(hdg);\n  updateSound(f);\n")
+    s = patch(s, "function doCrash(reason) {", "function doCrash(reason) {\n  soundCrash(); updateSound(null);")
+    s = patch(s, "<div><kbd>V</kbd> камера, <kbd>M</kbd> ангар</div>", "<div><kbd>V</kbd> камера, <kbd>M</kbd> меню, кнопка «Звук» — гул двигателей</div>")
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -486,6 +559,7 @@ def main():
     s = add_flow(s)
     s = add_menu(s)
     s = add_tape(s)
+    s = add_sound(s)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)
