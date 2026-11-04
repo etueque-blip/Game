@@ -240,7 +240,7 @@ def add_flow(s):
     s = patch(s, "function newFlight(cfg, mode) {", FLOW_JS + "function newFlight(cfg, mode) {")
     # ангар по категориям
     s = patch(s, "for (const id of ORDER) {\n  const c = PLANES[id];\n  const b = document.createElement(\"button\"); b.className = \"card\";",
-              "const CATS = [[\"ЛЁГКИЕ И БИЗНЕС-ДЖЕТЫ\", [\"C172\", \"LEAR75\", \"G650\", \"GL7500\"]], [\"УЗКОФЮЗЕЛЯЖНЫЕ\", [\"B737\", \"A220\", \"A320\"]], [\"ШИРОКОФЮЗЕЛЯЖНЫЕ\", [\"B787\", \"A330\", \"A350\", \"B777\", \"B747\", \"A380\"]], [\"ВОЕННЫЕ\", [\"F16\"]]];\n"
+              "const CATS = [[\"BOEING\", [\"B737\", \"B787\", \"B777\", \"B747\"]], [\"AIRBUS\", [\"A220\", \"A320\", \"A330\", \"A350\", \"A380\"]], [\"GULFSTREAM · BOMBARDIER · LEARJET\", [\"G650\", \"GL7500\", \"LEAR75\"]], [\"CESSNA\", [\"C172\"]], [\"ВОЕННЫЕ\", [\"F16\"]]];\n"
               "for (const [catName, ids] of CATS) { const h = document.createElement(\"div\"); h.className = \"cat\"; h.textContent = catName; grid.appendChild(h);\nfor (const id of ids) {\n  const c = PLANES[id];\n  const b = document.createElement(\"button\"); b.className = \"card\";")
     s = patch(s, "  b.onclick = () => startFlight(c, spawnMode);\n  grid.appendChild(b);\n}", "  b.onclick = () => startFlight(c, currentMode());\n  grid.appendChild(b);\n}}")
     s = patch(s, 'const setMode = (m) => { spawnMode = m; $("mRunway").setAttribute("aria-pressed", m === "runway"); $("mAir").setAttribute("aria-pressed", m === "air"); };\n$("mRunway").onclick = () => setMode("runway"); $("mAir").onclick = () => setMode("air");', FLOW_UI_JS)
@@ -298,6 +298,10 @@ MENU_CSS = """
 .fprev { display: flex; flex-direction: column; justify-content: flex-end; padding: 20px; min-height: 260px; }
 .fprev h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: clamp(26px, 4vw, 44px); }
 .fprev p { margin: 4px 0 0; color: #dfe8f7; max-width: 60ch; text-shadow: 0 1px 8px rgba(0,0,0,.7); }
+.livrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.lv { background: rgba(14,26,48,.85); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: var(--fg); display: inline-flex; align-items: center; gap: 4px; }
+.lv i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.lv[aria-pressed="true"] { border-color: #fff; background: #fff; color: #0b1324; }
 .fbtns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
 .fbtns .go { background: #2ea050; border-color: transparent; color: #fff; font-size: 16px; padding: 11px 26px; }
 .fbtns .tb { font-size: 15px; padding: 11px 22px; }
@@ -332,6 +336,7 @@ MENU_HTML = """
     <div class="flow">
       <div class="flist" id="fList"></div>
       <div class="fprev" id="fPrev"><h2 id="fTitle"></h2><p id="fText"></p>
+        <div class="livrow" id="fLiv"></div>
         <div class="fbtns"><button class="tb" id="fMenu">Меню</button><button class="tb" id="fBack">Назад</button><button class="tb go" id="fNext">Далее →</button></div>
       </div>
     </div>
@@ -339,6 +344,17 @@ MENU_HTML = """
 """
 
 MENU_JS = r"""
+// ===== ливреи (как PlaneConfigs.LIVERIES в Roblox): цвета в духе авиакомпаний, без логотипов
+const LIVERIES = [["std", "Стандарт", null], ["bosphorus", "Алый Босфор", [0xf6f6f4, 0xc8102e, 0xc8102e, 0xd8dadd]],
+  ["desert", "Золото пустыни", [0xf4f3ef, 0xb8975a, 0xb8975a, 0xe4e1da]], ["indigo", "Индиго Эр-Рияда", [0x3b1f6e, 0xa98be0, 0x2c1656, 0x3b1f6e]],
+  ["silk", "Небо Шёлкового пути", [0xfbfbfb, 0x0099b5, 0x0099b5, 0x1eb53a]], ["graphite", "Ночной графит", [0x2b2f36, 0xff7a1a, 0x1c1f24, 0x3a3f47]]];
+let selLivery = "std";
+function withLivery(c) { const L = LIVERIES.find((l) => l[0] === selLivery); if (!L || !L[2]) return c; const [body, accent, tail, engine] = L[2]; return Object.assign({}, c, { colors: { body, accent, tail, engine } }); }
+function renderLiveries() {
+  const hex = (v) => "#" + v.toString(16).padStart(6, "0");
+  $("fLiv").innerHTML = LIVERIES.map(([id, n, c]) => `<button class="lv" data-l="${id}" aria-pressed="${selLivery === id}">${c ? `<i style="background:${hex(c[0])}"></i><i style="background:${hex(c[2])}"></i>` : ""}${n}</button>`).join("");
+  $("fLiv").querySelectorAll(".lv").forEach((b) => (b.onclick = () => { selLivery = b.dataset.l; renderLiveries(); }));
+}
 // ===== главное меню с фото, ангар с фото самолётов, выбор аэропорта
 const FL = { mode: "free", plane: null, from: "A", to: null, step: "planes" };
 const ph = (k) => (PHOTOS[k] ? `url(${PHOTOS[k]})` : "");
@@ -383,6 +399,7 @@ function renderFlow() {
     $("fTitle").textContent = key === "from" ? "Аэропорт вылета" : "Аэропорт назначения";
     $("fText").textContent = ap ? ap.code + " · " + ap.title : "Выберите аэропорт слева.";
   }
+  $("fLiv").hidden = FL.step !== "planes"; renderLiveries();
   const last = FL.step === "to" || (FL.step === "from" && FL.mode !== "career") || (FL.step === "planes" && FL.mode === "race");
   $("fNext").textContent = last ? "Полёт ✈" : "Далее →";
 }
@@ -395,7 +412,7 @@ function flowNext() {
 function launchFlow() {
   gameMode = FL.mode; flightDest = FL.mode === "career" ? FL.to : null;
   $("flow").hidden = true;
-  startFlight(PLANES[FL.plane], FL.mode === "race" ? "race" : "runway:" + FL.from);
+  startFlight(withLivery(PLANES[FL.plane]), FL.mode === "race" ? "race" : "runway:" + FL.from);
 }
 $("fNext").onclick = flowNext;
 $("fBack").onclick = () => { if (FL.step === "to") FL.step = "from"; else if (FL.step === "from") FL.step = "planes"; else return openMenu(); renderFlow(); };
@@ -813,6 +830,51 @@ def add_ils(s):
     return s
 
 
+GUIDE_JS = r"""
+// ===== инструкция по полёту (те же формулы, что Guide.luau)
+function guideSteps(c) {
+  const r5 = (v) => Math.round(v / 5) * 5;
+  const flapsTo = c.noFlaps ? "без закрылков" : "закрылки 1–2 (F)";
+  const v2 = r5(c.vrKts * 1.15), flapsUp = r5(c.vrKts + 35), cruiseAlt = Math.round(c.ceilingFt * 0.8 / 1000) * 1000;
+  const cruiseSpd = r5(c.maxKts * 0.8), vapp = r5(c.stallKts * (c.noFlaps ? 1 : 0.79) * 1.3), climb = c.maxKts < 200 ? "700–900" : "1500–2500";
+  return [
+    ["1. Взлёт", `Отпусти тормоз (пробел), ${flapsTo}, тяга 100% (Shift). На ${c.vrKts} kt плавно тяни на себя (S) до 8–10°, не больше ${c.maxRotate}°.`],
+    ["2. Набор", `После отрыва — шасси (G). Держи ${v2} kt, вертикальная ${climb} ft/min. Выше ${flapsUp} kt убери закрылки (R).`],
+    ["3. Крейсер", `Эшелон около ${cruiseAlt.toLocaleString("ru-RU")} ft, скорость ${cruiseSpd} kt. Навигация (N) покажет дорогу.`],
+    ["4. Снижение", "За 30–40 км до аэропорта снижайся 1500–2000 ft/min, уменьши тягу (Ctrl). Набери 2000–3000 ft к 12 км."],
+    ["5. Заход", `Скорость захода ${vapp} kt, ${c.noFlaps ? "без закрылков" : "закрылки 3 (не быстрее " + c.flapMaxKts + " kt)"}, шасси выпущено. Держи ILS «на глиссаде ✓» (~700 ft/min).`],
+    ["6. Посадка", `Касание мягче 600 ft/min (лучше 250, лимит ${c.maxTouchdownFpm}). После касания — малый газ (Z), реверс (T), тормоз (B).`],
+  ];
+}
+function showGuide(c) {
+  $("gTitle").textContent = "Инструкция · " + c.name;
+  $("gBody").innerHTML = guideSteps(c).map(([t, x]) => `<div class="gstep"><b>${t}</b><span>${x}</span></div>`).join("");
+  $("guide").hidden = false;
+}
+"""
+
+GUIDE_CSS = """
+.gstep { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; display: grid; gap: 3px; }
+.gstep b { color: var(--magenta); font-family: var(--f-display); font-weight: 400; letter-spacing: .02em; }
+.gstep span { color: var(--fg); font-size: 14px; line-height: 1.45; }
+#menu, #flow { background: linear-gradient(150deg, #0a1a33 0%, #0f2f55 45%, #12506e 100%) !important; }
+"""
+
+
+def add_guide(s):
+    """Кнопка «Инструкция»: скорости и порядок полёта для выбранного самолёта. Новый сплошной фон меню."""
+    s = patch(s, ".card:hover {", GUIDE_CSS + ".card:hover {")
+    s = patch(s, '<button class="tb" id="bHelp">Клавиши</button>', '<button class="tb" id="bGuide">Инструкция</button>\n    <button class="tb" id="bHelp">Клавиши</button>')
+    s = patch(s, '  <div class="overlay" id="errBox" hidden', '  <div class="overlay" id="guide" hidden style="z-index:45"><div class="sheet"><h2 id="gTitle">Инструкция</h2><div id="gBody" style="display:grid;gap:8px"></div><div class="row"><button class="tb primary" id="gClose">Понятно</button></div></div></div>\n  <div class="overlay" id="errBox" hidden')
+    s = patch(s, "// ============================================================ HUD\n", "// ============================================================ HUD\n" + GUIDE_JS)
+    s = patch(s, '$("bNav").onclick = () => cycleNav();', '$("bNav").onclick = () => cycleNav();\n$("bGuide").onclick = () => showGuide(flight ? flight.cfg : PLANES[FL.plane || "C172"]); $("gClose").onclick = () => { $("guide").hidden = true; };')
+    s = patch(s, '<button class="tb" id="fMenu">Меню</button>', '<button class="tb" id="fMenu">Меню</button><button class="tb" id="fGuide">Инструкция</button>')
+    s = patch(s, '$("fMenu").onclick = openMenu;', '$("fMenu").onclick = openMenu; $("fGuide").onclick = () => showGuide(PLANES[FL.plane || "C172"]);')
+    s = patch(s, 'KeyN: "nav", Space: "park" };', 'KeyN: "nav", Space: "park", KeyI: "guide" };')
+    s = patch(s, '  if (a === "nav") { cycleNav(); return; }', '  if (a === "nav") { cycleNav(); return; }\n  if (a === "guide") { showGuide(flight ? flight.cfg : PLANES.C172); return; }')
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -844,10 +906,14 @@ def main():
     s = add_weather(s)
     s = add_gates(s)
     s = add_atc(s)
+    REAL_NAMES = [('C172', 'Cessna 172 Skyhawk', 'Лёгкий учебный'), ('LEAR75', 'Learjet 75', 'Бизнес-джет'), ('G650', 'Gulfstream G650', 'Бизнес-джет (люкс)'), ('GL7500', 'Bombardier Global 7500', 'Бизнес-джет (люкс)'), ('B737', 'Boeing 737-800', 'Узкофюзеляжный лайнер'), ('A220', 'Airbus A220-300', 'Узкофюзеляжный лайнер'), ('A320', 'Airbus A320neo', 'Узкофюзеляжный лайнер'), ('B787', 'Boeing 787-9 Dreamliner', 'Широкофюзеляжный лайнер'), ('A330', 'Airbus A330-300', 'Широкофюзеляжный лайнер'), ('A350', 'Airbus A350-900', 'Широкофюзеляжный лайнер'), ('B777', 'Boeing 777-300ER', 'Широкофюзеляжный лайнер'), ('B747', 'Boeing 747-400', 'Четырёхмоторный гигант'), ('A380', 'Airbus A380-800', 'Двухпалубный гигант'), ('F16', 'F-16 Fighting Falcon', 'Истребитель')]
+    names_js = ''.join(f'PLANES.{k}.name = "{n}"; PLANES.{k}.cls = "{c}"; ' for k, n, c in REAL_NAMES)
+    s = patch(s, 'for (const id in PLANES) { PLANES[id].id = id;', names_js + 'for (const id in PLANES) { PLANES[id].id = id;')
     s = add_ai(s)
     s = add_daynight(s)
     s = add_score(s)
     s = add_ils(s)
+    s = add_guide(s)
     s = add_mobile(s)
     s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс

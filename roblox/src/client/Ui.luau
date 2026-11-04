@@ -82,7 +82,7 @@ local function primary(b: TextButton)
 end
 
 export type Callbacks = {
-	onPick: (planeId: string, mode: string, destination: string?) -> (),
+	onPick: (planeId: string, mode: string, destination: string?, livery: string?) -> (),
 	onAction: (name: string) -> (),
 	onAgain: () -> (),
 	onToHangar: () -> (),
@@ -115,6 +115,7 @@ function Ui.new(cb: Callbacks)
 	local bAP = button(top, "Автопилот")
 	local bNav = button(top, "Навигация")
 	local bDebug = button(top, "Отладка")
+	local bGuide = button(top, "Инструкция")
 	local bHelp = button(top, "Клавиши")
 	local planeName = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.fromOffset(200, 32), Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "", TextStrokeTransparency = 0.6 }, top)
 	self.bCam, self.bMouse, self.bAP = bCam, bMouse, bAP
@@ -467,7 +468,7 @@ function Ui.new(cb: Callbacks)
 	end
 
 	-- состояние мастера
-	local flow = { mode = "free", plane = nil :: string?, from = "A", to = nil :: string? }
+	local flow = { mode = "free", plane = nil :: string?, from = "A", to = nil :: string?, livery = "std" }
 	local step = "menu"
 	local pg: { [string]: ScrollingFrame } = {}
 
@@ -497,11 +498,31 @@ function Ui.new(cb: Callbacks)
 	pg.planes = page("Planes")
 	local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
 	local cats = {
-		{ "ЛЁГКИЕ И БИЗНЕС-ДЖЕТЫ", { "C172", "LEAR75", "G650", "GL7500" } },
-		{ "УЗКОФЮЗЕЛЯЖНЫЕ", { "B737", "A220", "A320" } },
-		{ "ШИРОКОФЮЗЕЛЯЖНЫЕ", { "B787", "A330", "A350", "B777", "B747", "A380" } },
+		{ "BOEING", { "B737", "B787", "B777", "B747" } },
+		{ "AIRBUS", { "A220", "A320", "A330", "A350", "A380" } },
+		{ "GULFSTREAM · BOMBARDIER · LEARJET", { "G650", "GL7500", "LEAR75" } },
+		{ "CESSNA", { "C172" } },
 		{ "ВОЕННЫЕ", { "F16" } },
 	}
+	-- ливрея
+	section(pg.planes, "ЛИВРЕЯ", 0)
+	local lvRow = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 0, ZIndex = 22 }, pg.planes)
+	new("UIGridLayout", { CellSize = UDim2.new(1 / 3, -6, 0, 40), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, lvRow)
+	for i, lv in (PlaneConfigs :: any).LIVERIES do
+		local cd = card(lvRow, "livery", i)
+		if lv.colors then
+			new("Frame", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(10, 13), BackgroundColor3 = lv.colors.body, BorderSizePixel = 0, ZIndex = 24 }, cd)
+			new("Frame", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(26, 13), BackgroundColor3 = lv.colors.tail, BorderSizePixel = 0, ZIndex = 24 }, cd)
+		end
+		new("TextLabel", { Size = UDim2.new(1, -50, 1, 0), Position = UDim2.fromOffset(46, 0), BackgroundTransparency = 1, Font = FONT, TextSize = 13, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = lv.name, ZIndex = 24 }, cd):SetAttribute("Role", "title")
+		cd.Activated:Connect(function()
+			flow.livery = lv.id
+			selectCard("livery", cd)
+		end)
+		if i == 1 then
+			selectCard("livery", cd)
+		end
+	end
 	local order = 0
 	for _, cat in cats do
 		order += 1
@@ -592,7 +613,7 @@ function Ui.new(cb: Callbacks)
 	local function launch()
 		hangar.Visible = false
 		local mode = if flow.mode == "race" then "race" else "runway:" .. flow.from
-		cb.onPick(flow.plane :: string, mode, if flow.mode == "career" then flow.to else nil)
+		cb.onPick(flow.plane :: string, mode, if flow.mode == "career" then flow.to else nil, flow.livery)
 	end
 	bNext.Activated:Connect(function()
 		if step == "menu" then
@@ -660,6 +681,36 @@ function Ui.new(cb: Callbacks)
 		help.Visible = false
 	end)
 
+	-- инструкция по полёту для выбранного самолёта
+	local Guide = require(Shared:WaitForChild("Guide"))
+	local guide, gs = overlay("Guide", 680)
+	local gTitle = h2(gs, "Инструкция", nil, 1)
+	local gBody = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 2, ZIndex = 22 }, gs)
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, gBody)
+	local gRow = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, gs)
+	local gClose = button(gRow, "Понятно", { ZIndex = 23 })
+	primary(gClose)
+	gClose.Activated:Connect(function()
+		guide.Visible = false
+	end)
+	function self.showGuide(c: any)
+		gTitle.Text = "Инструкция · " .. c.name
+		for _, ch in gBody:GetChildren() do
+			if ch:IsA("GuiObject") then
+				ch:Destroy()
+			end
+		end
+		for i, st in Guide.steps(c) do
+			local row = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = Color3.fromRGB(22, 34, 58), LayoutOrder = i, ZIndex = 22 }, gBody)
+			corner(row, 8)
+			new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, row)
+			new("UIListLayout", { Padding = UDim.new(0, 2) }, row)
+			new("TextLabel", { Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT, TextSize = 15, TextColor3 = C.magenta, TextXAlignment = Enum.TextXAlignment.Left, Text = st[1], ZIndex = 23 }, row)
+			new("TextLabel", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.fg, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = st[2], ZIndex = 23 }, row)
+		end
+		guide.Visible = true
+	end
+
 	-- крушение
 	local crash, cs = overlay("Crash", 440)
 	h2(cs, "Крушение", C.red, 1)
@@ -693,6 +744,9 @@ function Ui.new(cb: Callbacks)
 	end)
 	bNav.Activated:Connect(function()
 		cb.onAction("nav")
+	end)
+	bGuide.Activated:Connect(function()
+		cb.onAction("guide")
 	end)
 	bHelp.Activated:Connect(function()
 		help.Visible = true

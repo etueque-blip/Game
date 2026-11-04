@@ -190,7 +190,7 @@ local function explode(a: Active)
 end
 PhysicsService:CollisionGroupSetCollidable(DEBRIS, "Default", true)
 
-local function startFlight(p: Player, planeId: any, mode: any, destination: any)
+local function startFlight(p: Player, planeId: any, mode: any, destination: any, liveryId: any)
 	if type(planeId) ~= "string" or type(mode) ~= "string" then
 		return
 	end
@@ -222,7 +222,16 @@ local function startFlight(p: Player, planeId: any, mode: any, destination: any)
 	if rid and air then
 		Notify:FireClient(p, "Полоса занята — старт в воздухе", "amber")
 	end
-	local model = PlaneBuilder.build(cfg, { seat = true, label = p.DisplayName })
+	local buildCfg = cfg
+	if type(liveryId) == "string" then
+		for _, lv in (PlaneConfigs :: any).LIVERIES do
+			if lv.id == liveryId and lv.colors then
+				buildCfg = table.clone(cfg)
+				buildCfg.colors = lv.colors
+			end
+		end
+	end
+	local model = PlaneBuilder.build(buildCfg, { seat = true, label = p.DisplayName })
 	model.Name = p.Name .. "_Plane"
 	model:SetAttribute("Owner", p.UserId)
 	model:SetAttribute("Gear", air == false or cfg.fixedGear == true)
@@ -265,8 +274,8 @@ local function startFlight(p: Player, planeId: any, mode: any, destination: any)
 	FlightStarted:FireClient(p, model, planeId, a.mode, spawnCF)
 end
 
-RequestFlight.OnServerEvent:Connect(function(p, planeId, mode, destination)
-	startFlight(p, planeId, mode, destination)
+RequestFlight.OnServerEvent:Connect(function(p, planeId, mode, destination, liveryId)
+	startFlight(p, planeId, mode, destination, liveryId)
 end)
 
 ClientReady.OnServerEvent:Connect(function(p, model)

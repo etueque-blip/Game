@@ -106,6 +106,9 @@ local function onAction(a: string)
 	elseif a == "cam" then
 		ui.setCamLabel(cameraRig.cycle())
 		return
+	elseif a == "guide" then
+		ui.showGuide(if flight then flight.cfg else PlaneConfigs.PLANES[lastPlaneId or "C172"])
+		return
 	elseif a == "mouse" then
 		controls.mouseYoke = not controls.mouseYoke
 		ui.setMouseLabel(controls.mouseYoke)
@@ -166,11 +169,15 @@ local function onAction(a: string)
 	end
 end
 
-local function requestFlight(planeId: string, mode: string, destination: string?)
+local lastLivery: string? = nil
+local function requestFlight(planeId: string, mode: string, destination: string?, livery: string?)
 	lastPlaneId, lastMode, lastDest = planeId, mode, destination
+	if livery then
+		lastLivery = livery
+	end
 	ui.showHangar(false)
 	ui.hideCrash()
-	RequestFlight:FireServer(planeId, mode, destination)
+	RequestFlight:FireServer(planeId, mode, destination, lastLivery)
 end
 
 ui = Ui.new({

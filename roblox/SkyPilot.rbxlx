@@ -1,6 +1,6 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
-<Item class="Workspace" referent="RBX00000013"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
-<Item class="ReplicatedStorage" referent="RBX00000014"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000007"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Autopilot</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="Workspace" referent="RBX00000014"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX00000015"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000008"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Autopilot</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Автопилот: держит курс / высоту / скорость, выдавая обычный ввод штурвала.
 -- Им пользуется игрок (клавиша P) и ИИ-трафик на сервере — одна и та же физика.
 local World = require(script.Parent.World)
@@ -5271,7 +5271,37 @@ end
 
 return FlightPhysics
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Инструкция по полёту для конкретного самолёта: цифры считаются из его характеристик
+-- (те же формулы, что в веб-версии).
+local Guide = {}
+
+local function r5(v: number): number
+	return math.floor(v / 5 + 0.5) * 5
+end
+
+function Guide.steps(c: any): { { string } }
+	local flapsTo = if c.noFlaps then "без закрылков" else "закрылки 1–2 (F)"
+	local v2 = r5(c.vrKts * 1.15)
+	local flapsUp = r5(c.vrKts + 35)
+	local cruiseAlt = math.floor(c.ceilingFt * 0.8 / 1000 + 0.5) * 1000
+	local cruiseSpd = r5(c.maxKts * 0.8)
+	local stall3 = c.stallKts * (if c.noFlaps then 1 else 0.79)
+	local vapp = r5(stall3 * 1.3)
+	local climb = if c.maxKts < 200 then "700–900" else "1500–2500"
+	return {
+		{ "1. Взлёт", string.format("Отпусти тормоз (пробел), %s, тяга 100%% (Shift). На %d kt плавно тяни на себя (S) до 8–10°, не больше %d°.", flapsTo, c.vrKts, c.maxRotate) },
+		{ "2. Набор", string.format("После отрыва — шасси (G). Держи %d kt, вертикальная %s ft/min. Выше %d kt убери закрылки (R).", v2, climb, flapsUp) },
+		{ "3. Крейсер", string.format("Эшелон около %s ft, скорость %d kt. Включи навигацию (N) и автопилот (P) — он сам долетит.", tostring(cruiseAlt), cruiseSpd) },
+		{ "4. Снижение", "За 30–40 км до аэропорта снижайся 1500–2000 ft/min, уменьши тягу (Ctrl). Набери 2000–3000 ft к 12 км." },
+		{ "5. Заход", string.format("Скорость захода %d kt, %s, шасси выпущено. Держи ILS «на глиссаде ✓» (вертикальная ~700 ft/min).", vapp, if c.noFlaps then "без закрылков" else string.format("закрылки 3 (не быстрее %d kt)", c.flapMaxKts)) },
+		{ "6. Посадка", string.format("Касание мягче 600 ft/min (лучше 250, лимит %d). После касания — тяга 0 (Z), реверс (T), тормоз (B).", c.maxTouchdownFpm) },
+	}
+end
+
+return Guide
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит модель самолёта из обычных деталей Roblox по PlaneConfigs.
 -- Оси модели: нос -Z, верх +Y, правое крыло +X. Корень (Root) — центр фюзеляжа,
 -- он стоит на высоте gearHeight над землёй, когда шасси касается полосы.
@@ -5854,7 +5884,7 @@ end
 
 return PlaneBuilder
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Те же PlaneConfigs, что и в HTML-полигоне Sky Pilot (1 stud/s = 1 kt, 1 stud = 1.69 ft).
 local WHITE = Color3.fromHex("f3f5f8")
 local GREY = Color3.fromHex("c4c8ce")
@@ -5875,33 +5905,33 @@ export type Config = {
 }
 
 local PLANES: { [string]: any } = {
-	C172 = { name = "Sparrow S1", cls = "Лёгкий учебный", length = 29, diameter = 6, span = 39, chord = 5.5, wing = "high", wingPos = 0.38, sweep = 0, dihedral = 2, engines = "prop", tail = "conventional", hstabSpan = 13, finHeight = 8, finSweep = 35, gearLen = 3, fixedGear = true, thrust = 4.6, maxKts = 125, stallKts = 48, vrKts = 55, flapMaxKts = 85, pitchRate = 0.7, rollRate = 1.4, yawRate = 0.45, turnBoost = 2.5, groundSteer = 0.9, brakeDecel = 6, stallSink = 30, maxRotate = 12, ceilingFt = 14000, maxTouchdownFpm = 1100,
+	C172 = { name = "Cessna 172 Skyhawk", cls = "Лёгкий учебный", length = 29, diameter = 6, span = 39, chord = 5.5, wing = "high", wingPos = 0.38, sweep = 0, dihedral = 2, engines = "prop", tail = "conventional", hstabSpan = 13, finHeight = 8, finSweep = 35, gearLen = 3, fixedGear = true, thrust = 4.6, maxKts = 125, stallKts = 48, vrKts = 55, flapMaxKts = 85, pitchRate = 0.7, rollRate = 1.4, yawRate = 0.45, turnBoost = 2.5, groundSteer = 0.9, brakeDecel = 6, stallSink = 30, maxRotate = 12, ceilingFt = 14000, maxTouchdownFpm = 1100,
 		colors = { body = WHITE, accent = Color3.fromHex("1e50aa"), tail = Color3.fromHex("1e50aa"), engine = GREY } },
-	LEAR75 = { name = "Swift 75", cls = "Частный джет", length = 63, diameter = 7, span = 55, chord = 8, wing = "low", wingPos = 0.52, sweep = 14, dihedral = 3, engines = "tail2", engineD = 3.2, engineLen = 8, tail = "T", hstabSpan = 22, finHeight = 12, finSweep = 45, gearLen = 3, windows = true, winglets = true, thrust = 7.5, maxKts = 465, stallKts = 100, vrKts = 115, flapMaxKts = 200, pitchRate = 0.55, rollRate = 1.3, yawRate = 0.35, turnBoost = 2.3, groundSteer = 0.6, brakeDecel = 8, stallSink = 45, maxRotate = 14, ceilingFt = 51000, maxTouchdownFpm = 1100,
+	LEAR75 = { name = "Learjet 75", cls = "Бизнес-джет", length = 63, diameter = 7, span = 55, chord = 8, wing = "low", wingPos = 0.52, sweep = 14, dihedral = 3, engines = "tail2", engineD = 3.2, engineLen = 8, tail = "T", hstabSpan = 22, finHeight = 12, finSweep = 45, gearLen = 3, windows = true, winglets = true, thrust = 7.5, maxKts = 465, stallKts = 100, vrKts = 115, flapMaxKts = 200, pitchRate = 0.55, rollRate = 1.3, yawRate = 0.35, turnBoost = 2.3, groundSteer = 0.6, brakeDecel = 8, stallSink = 45, maxRotate = 14, ceilingFt = 51000, maxTouchdownFpm = 1100,
 		colors = { body = WHITE, accent = Color3.fromHex("c81e28"), tail = Color3.fromHex("c81e28"), engine = GREY } },
-	G650 = { name = "Aurora LX", cls = "Частный джет (люкс)", length = 108, diameter = 9.5, span = 108, chord = 13, wing = "low", wingPos = 0.5, sweep = 32, dihedral = 4, engines = "tail2", engineD = 5, engineLen = 13, tail = "T", hstabSpan = 36, finHeight = 20, finSweep = 48, gearLen = 4, windows = true, winglets = true, thrust = 7, maxKts = 500, stallKts = 105, vrKts = 120, flapMaxKts = 210, pitchRate = 0.5, rollRate = 1.1, yawRate = 0.3, turnBoost = 2.2, groundSteer = 0.55, brakeDecel = 8, stallSink = 50, maxRotate = 14, ceilingFt = 51000, maxTouchdownFpm = 1150,
+	G650 = { name = "Gulfstream G650", cls = "Бизнес-джет (люкс)", length = 108, diameter = 9.5, span = 108, chord = 13, wing = "low", wingPos = 0.5, sweep = 32, dihedral = 4, engines = "tail2", engineD = 5, engineLen = 13, tail = "T", hstabSpan = 36, finHeight = 20, finSweep = 48, gearLen = 4, windows = true, winglets = true, thrust = 7, maxKts = 500, stallKts = 105, vrKts = 120, flapMaxKts = 210, pitchRate = 0.5, rollRate = 1.1, yawRate = 0.3, turnBoost = 2.2, groundSteer = 0.55, brakeDecel = 8, stallSink = 50, maxRotate = 14, ceilingFt = 51000, maxTouchdownFpm = 1150,
 		colors = { body = WHITE, accent = Color3.fromHex("142346"), tail = Color3.fromHex("142346"), engine = GREY } },
-	GL7500 = { name = "Meridian 7000", cls = "Частный джет (люкс)", length = 121, diameter = 10, span = 113, chord = 14, wing = "low", wingPos = 0.5, sweep = 33, dihedral = 4, engines = "tail2", engineD = 5.3, engineLen = 14, tail = "T", hstabSpan = 38, finHeight = 21, finSweep = 48, gearLen = 4.2, windows = true, winglets = true, thrust = 6.9, maxKts = 510, stallKts = 108, vrKts = 125, flapMaxKts = 210, pitchRate = 0.48, rollRate = 1.05, yawRate = 0.3, turnBoost = 2.2, groundSteer = 0.55, brakeDecel = 8, stallSink = 50, maxRotate = 14, ceilingFt = 51000, maxTouchdownFpm = 1150,
+	GL7500 = { name = "Bombardier Global 7500", cls = "Бизнес-джет (люкс)", length = 121, diameter = 10, span = 113, chord = 14, wing = "low", wingPos = 0.5, sweep = 33, dihedral = 4, engines = "tail2", engineD = 5.3, engineLen = 14, tail = "T", hstabSpan = 38, finHeight = 21, finSweep = 48, gearLen = 4.2, windows = true, winglets = true, thrust = 6.9, maxKts = 510, stallKts = 108, vrKts = 125, flapMaxKts = 210, pitchRate = 0.48, rollRate = 1.05, yawRate = 0.3, turnBoost = 2.2, groundSteer = 0.55, brakeDecel = 8, stallSink = 50, maxRotate = 14, ceilingFt = 51000, maxTouchdownFpm = 1150,
 		colors = { body = WHITE, accent = Color3.fromHex("780a1e"), tail = Color3.fromHex("780a1e"), engine = GREY } },
-	B737 = { name = "Skyliner 200", cls = "Авиалайнер", length = 141, diameter = 13.5, span = 128, chord = 20, wing = "low", wingPos = 0.47, sweep = 25, dihedral = 6, engines = "wing2", engineD = 7, engineLen = 13, tail = "conventional", hstabSpan = 50, finHeight = 28, finSweep = 38, gearLen = 5, windows = true, winglets = true, thrust = 5.9, maxKts = 470, stallKts = 125, vrKts = 145, flapMaxKts = 230, pitchRate = 0.4, rollRate = 0.9, yawRate = 0.25, turnBoost = 2, groundSteer = 0.5, brakeDecel = 8, stallSink = 55, maxRotate = 12, ceilingFt = 41000, maxTouchdownFpm = 1200,
+	B737 = { name = "Boeing 737-800", cls = "Узкофюзеляжный лайнер", length = 141, diameter = 13.5, span = 128, chord = 20, wing = "low", wingPos = 0.47, sweep = 25, dihedral = 6, engines = "wing2", engineD = 7, engineLen = 13, tail = "conventional", hstabSpan = 50, finHeight = 28, finSweep = 38, gearLen = 5, windows = true, winglets = true, thrust = 5.9, maxKts = 470, stallKts = 125, vrKts = 145, flapMaxKts = 230, pitchRate = 0.4, rollRate = 0.9, yawRate = 0.25, turnBoost = 2, groundSteer = 0.5, brakeDecel = 8, stallSink = 55, maxRotate = 12, ceilingFt = 41000, maxTouchdownFpm = 1200,
 		colors = { body = WHITE, accent = Color3.fromHex("005ac8"), tail = Color3.fromHex("003ca0"), engine = GREY } },
-	B787 = { name = "Skyliner 900", cls = "Широкофюзеляжный", length = 224, diameter = 20, span = 214, chord = 30, wing = "low", wingPos = 0.47, sweep = 32, dihedral = 7, engines = "wing2", engineD = 11, engineLen = 20, tail = "conventional", hstabSpan = 75, finHeight = 42, finSweep = 40, gearLen = 7, windows = true, thrust = 5.7, maxKts = 490, stallKts = 128, vrKts = 150, flapMaxKts = 230, pitchRate = 0.35, rollRate = 0.75, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 43000, maxTouchdownFpm = 1200,
+	B787 = { name = "Boeing 787-9 Dreamliner", cls = "Широкофюзеляжный лайнер", length = 224, diameter = 20, span = 214, chord = 30, wing = "low", wingPos = 0.47, sweep = 32, dihedral = 7, engines = "wing2", engineD = 11, engineLen = 20, tail = "conventional", hstabSpan = 75, finHeight = 42, finSweep = 40, gearLen = 7, windows = true, thrust = 5.7, maxKts = 490, stallKts = 128, vrKts = 150, flapMaxKts = 230, pitchRate = 0.35, rollRate = 0.75, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 43000, maxTouchdownFpm = 1200,
 		colors = { body = WHITE, accent = Color3.fromHex("008c96"), tail = Color3.fromHex("0a285a"), engine = GREY } },
-	B747 = { name = "Titan 4", cls = "Четырёхмоторный гигант", length = 272, diameter = 23, span = 244, chord = 36, wing = "low", wingPos = 0.46, sweep = 37, dihedral = 7, engines = "wing4", engineD = 10, engineLen = 19, tail = "conventional", hstabSpan = 82, finHeight = 50, finSweep = 42, gearLen = 8, windows = true, hump = true, thrust = 5.1, maxKts = 495, stallKts = 135, vrKts = 160, flapMaxKts = 230, pitchRate = 0.3, rollRate = 0.65, yawRate = 0.18, turnBoost = 2, groundSteer = 0.4, brakeDecel = 8, stallSink = 65, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
+	B747 = { name = "Boeing 747-400", cls = "Четырёхмоторный гигант", length = 272, diameter = 23, span = 244, chord = 36, wing = "low", wingPos = 0.46, sweep = 37, dihedral = 7, engines = "wing4", engineD = 10, engineLen = 19, tail = "conventional", hstabSpan = 82, finHeight = 50, finSweep = 42, gearLen = 8, windows = true, hump = true, thrust = 5.1, maxKts = 495, stallKts = 135, vrKts = 160, flapMaxKts = 230, pitchRate = 0.3, rollRate = 0.65, yawRate = 0.18, turnBoost = 2, groundSteer = 0.4, brakeDecel = 8, stallSink = 65, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
 		colors = { body = WHITE, accent = Color3.fromHex("d22828"), tail = Color3.fromHex("b4141e"), engine = GREY } },
-	A320 = { name = "Strato 320", cls = "Узкофюзеляжный (тип Airbus A320)", length = 139, diameter = 13.5, span = 132, chord = 20, wing = "low", wingPos = 0.47, sweep = 25, dihedral = 5, engines = "wing2", engineD = 7.5, engineLen = 13, tail = "conventional", hstabSpan = 46, finHeight = 26, finSweep = 36, gearLen = 5, windows = true, winglets = true, thrust = 6.0, maxKts = 470, stallKts = 122, vrKts = 142, flapMaxKts = 230, pitchRate = 0.42, rollRate = 0.95, yawRate = 0.25, turnBoost = 2, groundSteer = 0.5, brakeDecel = 8, stallSink = 55, maxRotate = 12, ceilingFt = 39000, maxTouchdownFpm = 1200,
+	A320 = { name = "Airbus A320neo", cls = "Узкофюзеляжный лайнер", length = 139, diameter = 13.5, span = 132, chord = 20, wing = "low", wingPos = 0.47, sweep = 25, dihedral = 5, engines = "wing2", engineD = 7.5, engineLen = 13, tail = "conventional", hstabSpan = 46, finHeight = 26, finSweep = 36, gearLen = 5, windows = true, winglets = true, thrust = 6.0, maxKts = 470, stallKts = 122, vrKts = 142, flapMaxKts = 230, pitchRate = 0.42, rollRate = 0.95, yawRate = 0.25, turnBoost = 2, groundSteer = 0.5, brakeDecel = 8, stallSink = 55, maxRotate = 12, ceilingFt = 39000, maxTouchdownFpm = 1200,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("0b2a6f"), tail = Color3.fromHex("0b2a6f"), engine = Color3.fromHex("c4c8ce") } },
-	A330 = { name = "Strato 330", cls = "Широкофюзеляжный (тип Airbus A330)", length = 236, diameter = 20.5, span = 223, chord = 32, wing = "low", wingPos = 0.47, sweep = 30, dihedral = 6, engines = "wing2", engineD = 11.5, engineLen = 21, tail = "conventional", hstabSpan = 72, finHeight = 44, finSweep = 40, gearLen = 7.2, windows = true, winglets = true, thrust = 5.6, maxKts = 480, stallKts = 130, vrKts = 152, flapMaxKts = 230, pitchRate = 0.34, rollRate = 0.72, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 41000, maxTouchdownFpm = 1200,
+	A330 = { name = "Airbus A330-300", cls = "Широкофюзеляжный лайнер", length = 236, diameter = 20.5, span = 223, chord = 32, wing = "low", wingPos = 0.47, sweep = 30, dihedral = 6, engines = "wing2", engineD = 11.5, engineLen = 21, tail = "conventional", hstabSpan = 72, finHeight = 44, finSweep = 40, gearLen = 7.2, windows = true, winglets = true, thrust = 5.6, maxKts = 480, stallKts = 130, vrKts = 152, flapMaxKts = 230, pitchRate = 0.34, rollRate = 0.72, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 41000, maxTouchdownFpm = 1200,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1a7f4b"), tail = Color3.fromHex("0f5a34"), engine = Color3.fromHex("c4c8ce") } },
-	A350 = { name = "Strato 350", cls = "Широкофюзеляжный (тип Airbus A350)", length = 247, diameter = 21.5, span = 240, chord = 33, wing = "low", wingPos = 0.47, sweep = 32, dihedral = 6, engines = "wing2", engineD = 12, engineLen = 21, tail = "conventional", hstabSpan = 76, finHeight = 46, finSweep = 40, gearLen = 7.5, windows = true, winglets = true, mask = true, thrust = 5.8, maxKts = 490, stallKts = 128, vrKts = 150, flapMaxKts = 230, pitchRate = 0.34, rollRate = 0.74, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 43000, maxTouchdownFpm = 1200,
+	A350 = { name = "Airbus A350-900", cls = "Широкофюзеляжный лайнер", length = 247, diameter = 21.5, span = 240, chord = 33, wing = "low", wingPos = 0.47, sweep = 32, dihedral = 6, engines = "wing2", engineD = 12, engineLen = 21, tail = "conventional", hstabSpan = 76, finHeight = 46, finSweep = 40, gearLen = 7.5, windows = true, winglets = true, mask = true, thrust = 5.8, maxKts = 490, stallKts = 128, vrKts = 150, flapMaxKts = 230, pitchRate = 0.34, rollRate = 0.74, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 43000, maxTouchdownFpm = 1200,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("5a2d82"), tail = Color3.fromHex("3d1d5c"), engine = Color3.fromHex("c4c8ce") } },
-	A380 = { name = "Strato 380", cls = "Двухпалубный гигант (тип Airbus A380)", length = 269, diameter = 26, span = 295, chord = 42, wing = "low", wingPos = 0.47, sweep = 33, dihedral = 5.6, engines = "wing4", engineD = 11, engineLen = 20, tail = "conventional", hstabSpan = 100, finHeight = 54, finSweep = 42, gearLen = 8.5, windows = true, winglets = true, doubleDeck = true, thrust = 5.0, maxKts = 490, stallKts = 135, vrKts = 158, flapMaxKts = 230, pitchRate = 0.28, rollRate = 0.6, yawRate = 0.17, turnBoost = 2, groundSteer = 0.4, brakeDecel = 8, stallSink = 68, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
+	A380 = { name = "Airbus A380-800", cls = "Двухпалубный гигант", length = 269, diameter = 26, span = 295, chord = 42, wing = "low", wingPos = 0.47, sweep = 33, dihedral = 5.6, engines = "wing4", engineD = 11, engineLen = 20, tail = "conventional", hstabSpan = 100, finHeight = 54, finSweep = 42, gearLen = 8.5, windows = true, winglets = true, doubleDeck = true, thrust = 5.0, maxKts = 490, stallKts = 135, vrKts = 158, flapMaxKts = 230, pitchRate = 0.28, rollRate = 0.6, yawRate = 0.17, turnBoost = 2, groundSteer = 0.4, brakeDecel = 8, stallSink = 68, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("c8a032"), tail = Color3.fromHex("8c1d2a"), engine = Color3.fromHex("c4c8ce") } },
-	A220 = { name = "Strato 220", cls = "Узкофюзеляжный (тип Airbus A220)", length = 143, diameter = 13, span = 130, chord = 19, wing = "low", wingPos = 0.48, sweep = 25, dihedral = 5, engines = "wing2", engineD = 7.6, engineLen = 13, tail = "conventional", hstabSpan = 44, finHeight = 27, finSweep = 38, gearLen = 5, windows = true, winglets = true, thrust = 6.2, maxKts = 470, stallKts = 118, vrKts = 138, flapMaxKts = 230, pitchRate = 0.44, rollRate = 1.0, yawRate = 0.26, turnBoost = 2.1, groundSteer = 0.5, brakeDecel = 8, stallSink = 52, maxRotate = 12, ceilingFt = 41000, maxTouchdownFpm = 1200,
+	A220 = { name = "Airbus A220-300", cls = "Узкофюзеляжный лайнер", length = 143, diameter = 13, span = 130, chord = 19, wing = "low", wingPos = 0.48, sweep = 25, dihedral = 5, engines = "wing2", engineD = 7.6, engineLen = 13, tail = "conventional", hstabSpan = 44, finHeight = 27, finSweep = 38, gearLen = 5, windows = true, winglets = true, thrust = 6.2, maxKts = 470, stallKts = 118, vrKts = 138, flapMaxKts = 230, pitchRate = 0.44, rollRate = 1.0, yawRate = 0.26, turnBoost = 2.1, groundSteer = 0.5, brakeDecel = 8, stallSink = 52, maxRotate = 12, ceilingFt = 41000, maxTouchdownFpm = 1200,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1f6f8b"), tail = Color3.fromHex("13485a"), engine = Color3.fromHex("c4c8ce") } },
-	B777 = { name = "Skyliner 777", cls = "Широкофюзеляжный (тип Boeing 777)", length = 270, diameter = 23, span = 240, chord = 38, wing = "low", wingPos = 0.46, sweep = 31, dihedral = 6, engines = "wing2", engineD = 14, engineLen = 24, tail = "conventional", hstabSpan = 82, finHeight = 46, finSweep = 40, gearLen = 8, windows = true, thrust = 5.5, maxKts = 490, stallKts = 132, vrKts = 155, flapMaxKts = 230, pitchRate = 0.32, rollRate = 0.7, yawRate = 0.19, turnBoost = 2, groundSteer = 0.42, brakeDecel = 8, stallSink = 62, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
+	B777 = { name = "Boeing 777-300ER", cls = "Широкофюзеляжный лайнер", length = 270, diameter = 23, span = 240, chord = 38, wing = "low", wingPos = 0.46, sweep = 31, dihedral = 6, engines = "wing2", engineD = 14, engineLen = 24, tail = "conventional", hstabSpan = 82, finHeight = 46, finSweep = 40, gearLen = 8, windows = true, thrust = 5.5, maxKts = 490, stallKts = 132, vrKts = 155, flapMaxKts = 230, pitchRate = 0.32, rollRate = 0.7, yawRate = 0.19, turnBoost = 2, groundSteer = 0.42, brakeDecel = 8, stallSink = 62, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("c0392b"), tail = Color3.fromHex("1c2f5e"), engine = Color3.fromHex("c4c8ce") } },
-	F16 = { name = "Striker X", cls = "Истребитель", length = 54, diameter = 5.5, span = 35, chord = 14, wing = "mid", wingPos = 0.6, sweep = 40, dihedral = 0, engines = "jet1", engineD = 4, tail = "conventional", hstabSpan = 20, finHeight = 12, finSweep = 45, gearLen = 2.5, canopy = true, noFlaps = true, thrust = 22, maxKts = 800, stallKts = 115, vrKts = 140, flapMaxKts = 9999, pitchRate = 1.5, rollRate = 4, yawRate = 0.5, turnBoost = 6, groundSteer = 0.6, brakeDecel = 10, stallSink = 40, maxRotate = 15, ceilingFt = 50000, maxTouchdownFpm = 1500,
+	F16 = { name = "F-16 Fighting Falcon", cls = "Истребитель", length = 54, diameter = 5.5, span = 35, chord = 14, wing = "mid", wingPos = 0.6, sweep = 40, dihedral = 0, engines = "jet1", engineD = 4, tail = "conventional", hstabSpan = 20, finHeight = 12, finSweep = 45, gearLen = 2.5, canopy = true, noFlaps = true, thrust = 22, maxKts = 800, stallKts = 115, vrKts = 140, flapMaxKts = 9999, pitchRate = 1.5, rollRate = 4, yawRate = 0.5, turnBoost = 6, groundSteer = 0.6, brakeDecel = 10, stallSink = 40, maxRotate = 15, ceilingFt = 50000, maxTouchdownFpm = 1500,
 		colors = { body = Color3.fromHex("8e98a3"), accent = Color3.fromHex("6b737d"), tail = Color3.fromHex("78808a"), engine = Color3.fromHex("3c3c41") } },
 }
 
@@ -5917,6 +5947,15 @@ return {
 	ORDER = ORDER,
 	-- Звук двигателя: вставьте сюда id своего звука (rbxassetid://...), пусто = без звука
 	ENGINE_SOUND_ID = "",
+	-- Ливреи: цветовые схемы в духе разных авиакомпаний (без логотипов и названий — это товарные знаки)
+	LIVERIES = {
+		{ id = "std", name = "Стандарт" },
+		{ id = "bosphorus", name = "Алый Босфор", colors = { body = Color3.fromHex("f6f6f4"), accent = Color3.fromHex("c8102e"), tail = Color3.fromHex("c8102e"), engine = Color3.fromHex("d8dadd") } },
+		{ id = "desert", name = "Золото пустыни", colors = { body = Color3.fromHex("f4f3ef"), accent = Color3.fromHex("b8975a"), tail = Color3.fromHex("b8975a"), engine = Color3.fromHex("e4e1da") } },
+		{ id = "indigo", name = "Индиго Эр-Рияда", colors = { body = Color3.fromHex("3b1f6e"), accent = Color3.fromHex("a98be0"), tail = Color3.fromHex("2c1656"), engine = Color3.fromHex("3b1f6e") } },
+		{ id = "silk", name = "Небо Шёлкового пути", colors = { body = Color3.fromHex("fbfbfb"), accent = Color3.fromHex("0099b5"), tail = Color3.fromHex("0099b5"), engine = Color3.fromHex("1eb53a") } },
+		{ id = "graphite", name = "Ночной графит", colors = { body = Color3.fromHex("2b2f36"), accent = Color3.fromHex("ff7a1a"), tail = Color3.fromHex("1c1f24"), engine = Color3.fromHex("3a3f47") } },
+	},
 	-- Фото для меню и ангара. Файлы лежат в roblox/assets/photos/*.jpg — загрузите их в Studio
 	-- (Asset Manager → Bulk Import или Create → Decals) и вставьте сюда "rbxassetid://ЧИСЛО".
 	-- Пустая строка = вместо фото показывается 3D-превью самолёта.
@@ -5943,7 +5982,7 @@ return {
 	} :: { [string]: string },
 }
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Данные мира. Один и тот же модуль используют сервер (строит визуал) и клиент (физика),
 -- поэтому рельеф, полосы и здания всегда совпадают с тем, что видно на экране.
 local PlaneConfigs = require(script.Parent.PlaneConfigs)
@@ -6253,7 +6292,7 @@ return World
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX00000015"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000B"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ServerScriptService" referent="RBX00000016"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000C"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — сервер: мир, выдача самолётов, посадка пилота, очки, крушения, ИИ-трафик.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6445,7 +6484,7 @@ local function explode(a: Active)
 end
 PhysicsService:CollisionGroupSetCollidable(DEBRIS, "Default", true)
 
-local function startFlight(p: Player, planeId: any, mode: any, destination: any)
+local function startFlight(p: Player, planeId: any, mode: any, destination: any, liveryId: any)
 	if type(planeId) ~= "string" or type(mode) ~= "string" then
 		return
 	end
@@ -6477,7 +6516,16 @@ local function startFlight(p: Player, planeId: any, mode: any, destination: any)
 	if rid and air then
 		Notify:FireClient(p, "Полоса занята — старт в воздухе", "amber")
 	end
-	local model = PlaneBuilder.build(cfg, { seat = true, label = p.DisplayName })
+	local buildCfg = cfg
+	if type(liveryId) == "string" then
+		for _, lv in (PlaneConfigs :: any).LIVERIES do
+			if lv.id == liveryId and lv.colors then
+				buildCfg = table.clone(cfg)
+				buildCfg.colors = lv.colors
+			end
+		end
+	end
+	local model = PlaneBuilder.build(buildCfg, { seat = true, label = p.DisplayName })
 	model.Name = p.Name .. "_Plane"
 	model:SetAttribute("Owner", p.UserId)
 	model:SetAttribute("Gear", air == false or cfg.fixedGear == true)
@@ -6520,8 +6568,8 @@ local function startFlight(p: Player, planeId: any, mode: any, destination: any)
 	FlightStarted:FireClient(p, model, planeId, a.mode, spawnCF)
 end
 
-RequestFlight.OnServerEvent:Connect(function(p, planeId, mode, destination)
-	startFlight(p, planeId, mode, destination)
+RequestFlight.OnServerEvent:Connect(function(p, planeId, mode, destination, liveryId)
+	startFlight(p, planeId, mode, destination, liveryId)
 end)
 
 ClientReady.OnServerEvent:Connect(function(p, model)
@@ -6694,7 +6742,7 @@ end
 if AI_TRAFFIC_COUNT > 0 then
 	AITraffic.start(AI_TRAFFIC_COUNT)
 end
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
 -- ИИ-пилоты (боты-«агенты»): летают по маршрутам между аэропортами и городом
 -- на той же физике, что и игроки, управляются автопилотом.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6785,7 +6833,7 @@ end
 
 return AITraffic
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Очки и статистика игрока (leaderstats + DataStore, если включён доступ к API).
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -6902,7 +6950,7 @@ end)
 
 return Scores
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит визуальный мир по данным World (сервер, один раз при старте).
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7389,7 +7437,7 @@ return WorldBuilder
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX00000017"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000016"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000012"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="StarterPlayer" referent="RBX00000018"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000017"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000013"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — клиент: локальная физика полёта (как FlightClient), ввод, камера, приборы.
 -- Самолёт принадлежит игроку по сети (SetNetworkOwner), поэтому управление без задержки,
 -- а другие игроки видят движение через обычную репликацию физики Roblox.
@@ -7497,6 +7545,9 @@ local function onAction(a: string)
 	elseif a == "cam" then
 		ui.setCamLabel(cameraRig.cycle())
 		return
+	elseif a == "guide" then
+		ui.showGuide(if flight then flight.cfg else PlaneConfigs.PLANES[lastPlaneId or "C172"])
+		return
 	elseif a == "mouse" then
 		controls.mouseYoke = not controls.mouseYoke
 		ui.setMouseLabel(controls.mouseYoke)
@@ -7557,11 +7608,15 @@ local function onAction(a: string)
 	end
 end
 
-local function requestFlight(planeId: string, mode: string, destination: string?)
+local lastLivery: string? = nil
+local function requestFlight(planeId: string, mode: string, destination: string?, livery: string?)
 	lastPlaneId, lastMode, lastDest = planeId, mode, destination
+	if livery then
+		lastLivery = livery
+	end
 	ui.showHangar(false)
 	ui.hideCrash()
-	RequestFlight:FireServer(planeId, mode, destination)
+	RequestFlight:FireServer(planeId, mode, destination, lastLivery)
 end
 
 ui = Ui.new({
@@ -8062,7 +8117,7 @@ ui.showHangar = function(on: boolean?)
 end
 
 ui.showHangar(true)
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Локальная анимация всех самолётов (своих, чужих и ИИ): винт, огни, шасси, закрылки,
 -- инверсионный след, форсаж. Состояние приходит атрибутами модели от сервера,
 -- а для своего самолёта — прямо из локальной физики (без задержки сети).
@@ -8189,7 +8244,7 @@ end
 
 return Animator
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Камеры: сзади (плавная), кабина, орбита. Плюс облёт аэропорта в ангаре.
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8301,7 +8356,7 @@ end
 
 return CameraRig
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Ввод: клавиатура, геймпад, сенсорный штурвал и мышь-штурвал -> общий ввод физики.
 local UserInputService = game:GetService("UserInputService")
 
@@ -8310,7 +8365,7 @@ local Controls = {}
 local ONCE: { [Enum.KeyCode]: string } = {
 	[Enum.KeyCode.G] = "gear", [Enum.KeyCode.F] = "flapDn", [Enum.KeyCode.R] = "flapUp",
 	[Enum.KeyCode.T] = "rev", [Enum.KeyCode.Z] = "idle", [Enum.KeyCode.V] = "cam",
-	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.Space] = "park", [Enum.KeyCode.DPadRight] = "nav",
+	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.Space] = "park", [Enum.KeyCode.I] = "guide", [Enum.KeyCode.DPadRight] = "nav",
 	-- геймпад
 	[Enum.KeyCode.ButtonY] = "gear", [Enum.KeyCode.DPadUp] = "flapUp", [Enum.KeyCode.DPadDown] = "flapDn",
 	[Enum.KeyCode.ButtonX] = "rev", [Enum.KeyCode.ButtonA] = "autopilot", [Enum.KeyCode.ButtonSelect] = "cam",
@@ -8408,7 +8463,7 @@ end
 
 return Controls
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Гонка через кольца: маршрут Skyport → Дубай → Ташкент → Лондон → Skyport.
 -- Кольца строятся у каждого игрока локально, поэтому подсветка своя у каждого.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8536,7 +8591,7 @@ end
 
 return Race
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Радар: курс вверх, радиус 12 000 stud (~6 км). Аэропорты, города, самолёты, следующее кольцо.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -8681,7 +8736,7 @@ end
 
 return Radar
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Интерфейс Sky Pilot: верхняя панель, приборы, авиагоризонт, ангар, справка,
 -- экран крушения и сенсорное управление (штурвал, РУД, кнопки).
 local Players = game:GetService("Players")
@@ -8765,7 +8820,7 @@ local function primary(b: TextButton)
 end
 
 export type Callbacks = {
-	onPick: (planeId: string, mode: string, destination: string?) -> (),
+	onPick: (planeId: string, mode: string, destination: string?, livery: string?) -> (),
 	onAction: (name: string) -> (),
 	onAgain: () -> (),
 	onToHangar: () -> (),
@@ -8798,6 +8853,7 @@ function Ui.new(cb: Callbacks)
 	local bAP = button(top, "Автопилот")
 	local bNav = button(top, "Навигация")
 	local bDebug = button(top, "Отладка")
+	local bGuide = button(top, "Инструкция")
 	local bHelp = button(top, "Клавиши")
 	local planeName = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.fromOffset(200, 32), Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "", TextStrokeTransparency = 0.6 }, top)
 	self.bCam, self.bMouse, self.bAP = bCam, bMouse, bAP
@@ -9150,7 +9206,7 @@ function Ui.new(cb: Callbacks)
 	end
 
 	-- состояние мастера
-	local flow = { mode = "free", plane = nil :: string?, from = "A", to = nil :: string? }
+	local flow = { mode = "free", plane = nil :: string?, from = "A", to = nil :: string?, livery = "std" }
 	local step = "menu"
 	local pg: { [string]: ScrollingFrame } = {}
 
@@ -9180,11 +9236,31 @@ function Ui.new(cb: Callbacks)
 	pg.planes = page("Planes")
 	local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
 	local cats = {
-		{ "ЛЁГКИЕ И БИЗНЕС-ДЖЕТЫ", { "C172", "LEAR75", "G650", "GL7500" } },
-		{ "УЗКОФЮЗЕЛЯЖНЫЕ", { "B737", "A220", "A320" } },
-		{ "ШИРОКОФЮЗЕЛЯЖНЫЕ", { "B787", "A330", "A350", "B777", "B747", "A380" } },
+		{ "BOEING", { "B737", "B787", "B777", "B747" } },
+		{ "AIRBUS", { "A220", "A320", "A330", "A350", "A380" } },
+		{ "GULFSTREAM · BOMBARDIER · LEARJET", { "G650", "GL7500", "LEAR75" } },
+		{ "CESSNA", { "C172" } },
 		{ "ВОЕННЫЕ", { "F16" } },
 	}
+	-- ливрея
+	section(pg.planes, "ЛИВРЕЯ", 0)
+	local lvRow = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 0, ZIndex = 22 }, pg.planes)
+	new("UIGridLayout", { CellSize = UDim2.new(1 / 3, -6, 0, 40), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, lvRow)
+	for i, lv in (PlaneConfigs :: any).LIVERIES do
+		local cd = card(lvRow, "livery", i)
+		if lv.colors then
+			new("Frame", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(10, 13), BackgroundColor3 = lv.colors.body, BorderSizePixel = 0, ZIndex = 24 }, cd)
+			new("Frame", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(26, 13), BackgroundColor3 = lv.colors.tail, BorderSizePixel = 0, ZIndex = 24 }, cd)
+		end
+		new("TextLabel", { Size = UDim2.new(1, -50, 1, 0), Position = UDim2.fromOffset(46, 0), BackgroundTransparency = 1, Font = FONT, TextSize = 13, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = lv.name, ZIndex = 24 }, cd):SetAttribute("Role", "title")
+		cd.Activated:Connect(function()
+			flow.livery = lv.id
+			selectCard("livery", cd)
+		end)
+		if i == 1 then
+			selectCard("livery", cd)
+		end
+	end
 	local order = 0
 	for _, cat in cats do
 		order += 1
@@ -9275,7 +9351,7 @@ function Ui.new(cb: Callbacks)
 	local function launch()
 		hangar.Visible = false
 		local mode = if flow.mode == "race" then "race" else "runway:" .. flow.from
-		cb.onPick(flow.plane :: string, mode, if flow.mode == "career" then flow.to else nil)
+		cb.onPick(flow.plane :: string, mode, if flow.mode == "career" then flow.to else nil, flow.livery)
 	end
 	bNext.Activated:Connect(function()
 		if step == "menu" then
@@ -9343,6 +9419,36 @@ function Ui.new(cb: Callbacks)
 		help.Visible = false
 	end)
 
+	-- инструкция по полёту для выбранного самолёта
+	local Guide = require(Shared:WaitForChild("Guide"))
+	local guide, gs = overlay("Guide", 680)
+	local gTitle = h2(gs, "Инструкция", nil, 1)
+	local gBody = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 2, ZIndex = 22 }, gs)
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, gBody)
+	local gRow = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, gs)
+	local gClose = button(gRow, "Понятно", { ZIndex = 23 })
+	primary(gClose)
+	gClose.Activated:Connect(function()
+		guide.Visible = false
+	end)
+	function self.showGuide(c: any)
+		gTitle.Text = "Инструкция · " .. c.name
+		for _, ch in gBody:GetChildren() do
+			if ch:IsA("GuiObject") then
+				ch:Destroy()
+			end
+		end
+		for i, st in Guide.steps(c) do
+			local row = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = Color3.fromRGB(22, 34, 58), LayoutOrder = i, ZIndex = 22 }, gBody)
+			corner(row, 8)
+			new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, row)
+			new("UIListLayout", { Padding = UDim.new(0, 2) }, row)
+			new("TextLabel", { Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT, TextSize = 15, TextColor3 = C.magenta, TextXAlignment = Enum.TextXAlignment.Left, Text = st[1], ZIndex = 23 }, row)
+			new("TextLabel", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.fg, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = st[2], ZIndex = 23 }, row)
+		end
+		guide.Visible = true
+	end
+
 	-- крушение
 	local crash, cs = overlay("Crash", 440)
 	h2(cs, "Крушение", C.red, 1)
@@ -9376,6 +9482,9 @@ function Ui.new(cb: Callbacks)
 	end)
 	bNav.Activated:Connect(function()
 		cb.onAction("nav")
+	end)
+	bGuide.Activated:Connect(function()
+		cb.onAction("guide")
 	end)
 	bHelp.Activated:Connect(function()
 		help.Visible = true
