@@ -279,6 +279,26 @@ function World.navIndexForAirport(id: string): number
 end
 World.METERS_PER_STUD = 0.515
 
+-- Глиссада 3° к аэропорту назначения: отклонение по высоте (ft) и от оси полосы (°)
+function World.glideslope(ap: Airport, pos: Vector3): (number?, number?, string?)
+	local dx, dz = pos.X - ap.cx, pos.Z - ap.cz
+	local lx, lz
+	if ap.rot == 1 then
+		lx, lz = -dz, dx
+	else
+		lx, lz = dx, dz
+	end
+	local dist = math.abs(lz) - ap.L / 2 -- до торца вдоль оси
+	if dist < 250 or dist > 23000 or math.abs(lx) > dist * 0.5 then
+		return nil, nil, nil
+	end
+	local ideal = 0.5 + dist * math.tan(math.rad(3))
+	local devFt = (pos.Y - ideal) * World.FT
+	local s = if lz > 0 then 1 else -1
+	local latDeg = math.deg(math.atan2(lx * s, dist)) -- плюс = правее оси (смотря на полосу)
+	return devFt, latDeg, if lz > 0 then ap.south else ap.north
+end
+
 -- Компасный курс (0..360, по часовой) из направления взгляда
 function World.headingDeg(look: Vector3): number
 	return (math.deg(math.atan2(look.X, -look.Z)) + 360) % 360

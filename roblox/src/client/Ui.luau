@@ -731,6 +731,7 @@ function Ui.new(cb: Callbacks)
 			tape.Visible = false
 			wx.Visible = false
 			raceTag.Visible = false
+			ils.Visible = false
 			banner.Visible = false
 		end
 	end
@@ -765,6 +766,17 @@ function Ui.new(cb: Callbacks)
 	end
 	function self.setCamLabel(name: string)
 		bCam.Text = "Камера: " .. name
+	end
+	-- указатель глиссады (ILS)
+	local ils = new("TextLabel", { Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 226), BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.amber, Text = "", Visible = false }, root)
+	corner(ils, 6)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, ils)
+	function self.setIls(text: string?, good: boolean?)
+		ils.Visible = text ~= nil and hud.Visible
+		if text then
+			ils.Text = text
+			ils.TextColor3 = if good then C.green else C.amber
+		end
 	end
 	function self.setRace(text: string?)
 		raceTag.Visible = text ~= nil and hud.Visible

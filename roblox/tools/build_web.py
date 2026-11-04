@@ -779,6 +779,38 @@ def add_mobile(s):
     return patch(s, "</style>\n\n<div id=\"app\">", MOBILE_CSS + "</style>\n\n<div id=\"app\">")
 
 
+ILS_JS = r"""
+// ===== глиссада 3° к аэропорту назначения (то же, что World.glideslope в Roblox)
+function glideslope(ap, p) {
+  const dx = p.x - ap.cx, dz = p.z - ap.cz, lx = ap.rot ? -dz : dx, lz = ap.rot ? dx : dz;
+  const dist = Math.abs(lz) - ap.L / 2;
+  if (dist < 250 || dist > 23000 || Math.abs(lx) > dist * 0.5) return null;
+  const dev = (p.y - (0.5 + dist * Math.tan(3 * Math.PI / 180))) * FT, s = lz > 0 ? 1 : -1;
+  return { dev, lat: THREE.MathUtils.radToDeg(Math.atan2(lx * s, dist)), rwy: lz > 0 ? ap.south : ap.north };
+}
+function updateIls(f) {
+  const el = $("ils"), dest = flightDest || lastDest, ap = dest && AIRPORTS.find((a) => a.id === dest);
+  const g = ap && !f.onGround && !f.crashed ? glideslope(ap, f.pos) : null;
+  if (!g) { el.hidden = true; return; }
+  const good = Math.abs(g.dev) < 80 && Math.abs(g.lat) < 1.5;
+  const v = Math.abs(g.dev) < 80 ? "на глиссаде" : g.dev > 0 ? `выше ${Math.round(g.dev)} ft` : `ниже ${Math.round(-g.dev)} ft`;
+  const h = Math.abs(g.lat) < 1.5 ? "по оси" : g.lat > 0 ? `правее ${g.lat.toFixed(0)}°` : `левее ${(-g.lat).toFixed(0)}°`;
+  el.hidden = false; el.style.color = good ? "var(--green)" : "var(--amber)";
+  el.textContent = `ILS ${ap.code} ${g.rwy} · ${v} · ${h}${good ? " ✓" : ""}`;
+}
+"""
+
+
+def add_ils(s):
+    """Указатель глиссады на заходе к аэропорту назначения."""
+    s = patch(s, "#warn {", "#ils { position: absolute; left: 50%; top: calc(236px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-family: var(--f-num); font-size: 13px; white-space: nowrap; }\n@media (max-width: 600px) { #ils { top: calc(196px + env(safe-area-inset-top, 0px)); font-size: 11px; } }\n#warn {")
+    s = patch(s, '<div id="nav" hidden></div>', '<div id="nav" hidden></div>\n  <div id="ils" hidden></div>')
+    s = patch(s, "// ============================================================ HUD\n", "// ============================================================ HUD\n" + ILS_JS)
+    s = patch(s, "  updateSound(f);\n", "  updateSound(f);\n  updateIls(f);\n")
+    s = patch(s, '$("radar").hidden = true; $("atc").hidden = true;', '$("radar").hidden = true; $("ils").hidden = true; $("atc").hidden = true;')
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -813,6 +845,7 @@ def main():
     s = add_ai(s)
     s = add_daynight(s)
     s = add_score(s)
+    s = add_ils(s)
     s = add_mobile(s)
     s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс

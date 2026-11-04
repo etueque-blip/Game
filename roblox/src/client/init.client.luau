@@ -508,6 +508,22 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	ui.setBanner(if parkBrake then "Ⓟ  Стояночный тормоз · пробел или нажми, чтобы отключить" else nil)
 	radar.update(f.pos, hdg, model, ringPos or race.firstRing())
 	ui.setRace(race.status(now))
+	-- глиссада к аэропорту назначения
+	do
+		local dst = lastDest and World.airportById(lastDest)
+		local dev, lat, rwy
+		if dst and not f.onGround then
+			dev, lat, rwy = World.glideslope(dst, f.pos)
+		end
+		if dev and lat then
+			local good = math.abs(dev) < 80 and math.abs(lat) < 1.5
+			local v = if math.abs(dev) < 80 then "на глиссаде" elseif dev > 0 then string.format("выше %d ft", math.round(dev)) else string.format("ниже %d ft", math.round(-dev))
+			local h = if math.abs(lat) < 1.5 then "по оси" elseif lat > 0 then string.format("правее %.0f°", lat) else string.format("левее %.0f°", -lat)
+			ui.setIls(string.format("ILS %s %s · %s · %s%s", dst.code, rwy, v, h, if good then " ✓" else ""), good)
+		else
+			ui.setIls(nil)
+		end
+	end
 	local n = World.NAV[navIdx]
 	if ringPos then
 		local brg = Autopilot.bearingDeg(f.pos, ringPos)
