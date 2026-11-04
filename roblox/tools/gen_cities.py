@@ -121,14 +121,20 @@ def pad(cx, cz, half, h=0.45, c=(150, 150, 155)):
     box((cx, h / 2, cz), (half * 2, h, half * 2), c=c, m="Concrete", solid=False)
 
 
-def roads(cx, cz, half, step, offset=0.0):
+def roads(cx, cz, half, step, offset=0.0, gap_x=None):
+    """Сетка улиц. gap_x=(x0, x1) — полоса воды с севера на юг: улицы её не пересекают."""
     n = int(half * 2 // step)
     for i in range(n + 1):
         t = -half + offset + i * step
         if abs(t) > half:
             continue
-        box((cx + t, 0.47, cz), (16, 0.05, half * 2), c=(55, 56, 60), m="Asphalt", solid=False)
-        box((cx, 0.47, cz + t), (half * 2, 0.05, 16), c=(55, 56, 60), m="Asphalt", solid=False)
+        if not (gap_x and gap_x[0] - 8 < cx + t < gap_x[1] + 8):
+            box((cx + t, 0.47, cz), (16, 0.05, half * 2), c=(55, 56, 60), m="Asphalt", solid=False)
+        if gap_x:
+            for a_, b_ in ((cx - half, gap_x[0]), (gap_x[1], cx + half)):
+                box(((a_ + b_) / 2, 0.47, cz + t), (b_ - a_, 0.05, 16), c=(55, 56, 60), m="Asphalt", solid=False)
+        else:
+            box((cx, 0.47, cz + t), (half * 2, 0.05, 16), c=(55, 56, 60), m="Asphalt", solid=False)
 
 
 def street_trees(cx, cz, half, step, offset, kind, zones, skip=None, avenues=3, spacing=80, side=11):
@@ -299,7 +305,7 @@ def london():
     for a, b in zip(xs, xs[1:]):
         za, zb = zr(a), zr(b)
         L = math.hypot(b - a, zb - za)
-        box(((a + b) / 2, 0.48, (za + zb) / 2), (L + 6, 0.05, 150), math.atan2(-(zb - za), b - a), c=(58, 92, 102), m="Glass", solid=False, refl=0.3)
+        box(((a + b) / 2, 0.53, (za + zb) / 2), (L + 6, 0.05, 150), math.atan2(-(zb - za), b - a), c=(58, 92, 102), m="Glass", solid=False, refl=0.3)
     roads(cx, cz, half, 128, 64)
 
     bigben_x = cx - 760
@@ -554,8 +560,8 @@ def istanbul():
     pad(cx, cz, half, c=(176, 170, 158))
     labels.append({"name": "ISTANBUL", "x": cx, "y": 900, "z": cz})
     # пролив Босфор с севера на юг через город
-    box((cx + 150, 0.48, cz), (230, 0.05, 2 * half), c=(40, 96, 128), m="Glass", solid=False, refl=0.35)
-    roads(cx, cz, half, 130, 65)
+    box((cx + 150, 0.53, cz), (230, 0.05, 2 * half), c=(40, 96, 128), m="Glass", solid=False, refl=0.35)
+    roads(cx, cz, half, 130, 65, gap_x=(cx + 150 - 115, cx + 150 + 115))
     sofia, blue, galata = (cx - 520, cz + 300), (cx - 520, cz - 260), (cx + 600, cz - 420)
     zones = [(sofia[0], sofia[1], 190), (blue[0], blue[1], 210), (galata[0], galata[1], 80), (cx + 150, cz, 170)]
     ROOF = (176, 74, 52)
@@ -605,6 +611,25 @@ def istanbul():
     for sz_ in (-11, 11):
         tilted_cyl((cx + 150 - 170, m2s(165), bz + sz_), (cx + 150, 40, bz + sz_), 1.2, c=(230, 230, 235), m="Metal", solid=False)
         tilted_cyl((cx + 150 + 170, m2s(165), bz + sz_), (cx + 150, 40, bz + sz_), 1.2, c=(230, 230, 235), m="Metal", solid=False)
+    # Девичья башня (Кыз-Кулеси) на островке посреди пролива
+    tx, tz = cx + 150, cz - 720
+    ell((tx, 0.5, tz), (34, 3, 30), c=(150, 140, 125), m="Rock")
+    box((tx, 0.45 + 7, tz + 6), (34, 14, 22), c=(236, 230, 216), m="Plaster")
+    wedge((tx, 0.45 + 14 + 3, tz + 6 - 5.5), (34, 6, 11), c=(120, 132, 140), m="Slate", solid=False)
+    wedge((tx, 0.45 + 14 + 3, tz + 6 + 5.5), (34, 6, 11), (0, math.pi, 0), c=(120, 132, 140), m="Slate", solid=False)
+    vcyl(tx, 0.45, tz - 10, m2s(15), 12, c=(240, 236, 226), m="Plaster")
+    vcyl(tx, 0.45 + m2s(15), tz - 10, 4, 15, c=(240, 236, 226), m="Plaster", solid=False)
+    for k, (w_, h_) in enumerate(((11, 5), (7, 5), (3, 5))):
+        box((tx, 0.45 + m2s(15) + 4 + k * 5 + h_ / 2, tz - 10), (w_, h_, w_), math.radians(45), c=(120, 132, 140), m="Slate", solid=False)
+    vcyl(tx, 0.45 + m2s(15) + 19, tz - 10, 6, 1, c=(220, 190, 90), m="Metal", solid=False)
+    # паромы на Босфоре: тёмный корпус, белые палубы, труба (не мешают полёту)
+    for fz, fx in ((-420, -45), (-80, 40), (260, 20), (560, -40), (-980, 30)):
+        x, z, yaw = cx + 150 + fx, cz + fz, rng.uniform(-0.25, 0.25)
+        box((x, 0.5 + 2.5, z), (16, 5, 48), yaw, c=(36, 46, 66), m="Metal", solid=False)
+        box((x, 0.5 + 6.5, z), (15, 3, 40), yaw, c=(242, 242, 238), m="SmoothPlastic", solid=False)
+        box((x, 0.5 + 9.5, z), (12, 3, 28), yaw, c=(242, 242, 238), m="SmoothPlastic", solid=False)
+        box((x, 0.5 + 9.5, z), (12.2, 1, 28.2), yaw, c=(60, 80, 110), m="Glass", solid=False)
+        vcyl(x, 0.5 + 11, z, 5, 3, c=(196, 60, 46), m="Metal", solid=False)
     street_trees(cx, cz, half, 130, 65, "leaf", zones, skip=lambda x, z: abs(x - (cx + 150)) < 140, avenues=2)
 
 
