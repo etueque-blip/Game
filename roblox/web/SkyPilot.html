@@ -664,9 +664,11 @@ function physicsStep1(f, input, dt) {
     if (!f.gear) return crash(f, "Посадка без шасси!");
     if (fpm > c.maxTouchdownFpm) return crash(f, `Слишком жёсткая посадка: ${fpm} fpm (лимит ${c.maxTouchdownFpm})`);
     if (Math.abs(bankDeg) > 20 || pitchDeg < -8 || up.y < 0) return crash(f, `Удар крылом о землю (крен ${bankDeg.toFixed(0)}°, тангаж ${pitchDeg.toFixed(0)}°)`);
+    const tailStrike = pitchDeg > c.maxRotate + 2;
+    if (tailStrike) { f.damage = Math.min(0.95, (f.damage || 0) + 0.35); f.events.push({ type: "warn", text: `Удар хвостом о полосу: тангаж ${pitchDeg.toFixed(0)}° (предел ${c.maxRotate}°) — повреждение` }); }
     if (f.speed > 15 && f.airTime > 1) {
-      const grade = fpm < 250 ? "Идеальная посадка!" : fpm < 600 ? "Хорошая посадка" : "Жёсткая посадка";
-      f.events.push({ type: "landing", text: `${grade}  ${Math.max(fpm, 0)} fpm`, good: fpm < 600 });
+      const grade = tailStrike ? "Жёсткая посадка" : fpm < 250 ? "Идеальная посадка!" : fpm < 600 ? "Хорошая посадка" : "Жёсткая посадка";
+      f.events.push({ type: "landing", text: `${grade}  ${Math.max(fpm, 0)} fpm`, good: fpm < 600 && !tailStrike });
     }
   }
   if (!nowGround && f.onGround && f.speed > 20) f.events.push({ type: "log", text: `Отрыв на ${f.speed.toFixed(0)} kt` });

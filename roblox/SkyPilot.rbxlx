@@ -8294,12 +8294,18 @@ local function stepOnce(f: Flight, input: Input, dt: number)
 		if math.abs(bankDeg) > 20 or pitchDeg < -8 or up.Y < 0 then
 			return crash(f, string.format("Удар крылом о землю (крен %d°, тангаж %d°)", math.round(bankDeg), math.round(pitchDeg)))
 		end
+		-- удар хвостом: нос задран выше предела — повреждение (как в жизни), посадка считается жёсткой
+		local tailStrike = pitchDeg > c.maxRotate + 2
+		if tailStrike then
+			f.damage = math.min(0.95, f.damage + 0.35)
+			table.insert(f.events, { type = "warn", text = string.format("Удар хвостом о полосу: тангаж %d° (предел %d°) — повреждение", math.round(pitchDeg), c.maxRotate) })
+		end
 		if f.speed > 15 and f.airTime > 1 then
-			local grade = if fpm < 250 then "perfect" elseif fpm < 600 then "good" else "hard"
+			local grade = if tailStrike then "hard" elseif fpm < 250 then "perfect" elseif fpm < 600 then "good" else "hard"
 			local label = if grade == "perfect" then "Идеальная посадка!" elseif grade == "good" then "Хорошая посадка" else "Жёсткая посадка"
 			table.insert(f.events, {
 				type = "landing", text = string.format("%s  %d fpm", label, math.max(fpm, 0)),
-				good = fpm < 600, fpm = math.max(fpm, 0), grade = grade, airport = World.runwayAt(pos.X, pos.Z, 20),
+				good = fpm < 600 and not tailStrike, fpm = math.max(fpm, 0), grade = grade, airport = World.runwayAt(pos.X, pos.Z, 20),
 			})
 		end
 	end

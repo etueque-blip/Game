@@ -998,6 +998,15 @@ def main():
     s = add_gload(s)
     # подшаги физики: при 30/20 FPS перегрузка и защита FBW как при 60 FPS
     s = patch(s, "function physicsStep(f, input, dt) {", "function physicsStep(f, input, dt) {\n  const n = Math.max(1, Math.ceil(dt * 60 - 0.01)), h = dt / n;\n  for (let i = 0; i < n && !f.crashed; i++) physicsStep1(f, input, h);\n}\nfunction physicsStep1(f, input, dt) {")
+    # удар хвостом при посадке (как в FlightPhysics.luau)
+    s = patch(s, """    if (f.speed > 15 && f.airTime > 1) {
+      const grade = fpm < 250 ? "Идеальная посадка!" : fpm < 600 ? "Хорошая посадка" : "Жёсткая посадка";""",
+              """    const tailStrike = pitchDeg > c.maxRotate + 2;
+    if (tailStrike) { f.damage = Math.min(0.95, (f.damage || 0) + 0.35); f.events.push({ type: "warn", text: `Удар хвостом о полосу: тангаж ${pitchDeg.toFixed(0)}° (предел ${c.maxRotate}°) — повреждение` }); }
+    if (f.speed > 15 && f.airTime > 1) {
+      const grade = tailStrike ? "Жёсткая посадка" : fpm < 250 ? "Идеальная посадка!" : fpm < 600 ? "Хорошая посадка" : "Жёсткая посадка";""")
+    s = patch(s, "f.events.push({ type: \"landing\", text: `${grade}  ${Math.max(fpm, 0)} fpm`, good: fpm < 600 });",
+              "f.events.push({ type: \"landing\", text: `${grade}  ${Math.max(fpm, 0)} fpm`, good: fpm < 600 && !tailStrike });")
     s = add_mobile(s)
     s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс
