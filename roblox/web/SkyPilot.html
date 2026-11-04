@@ -347,6 +347,24 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   .fbtns { margin-top: 10px; gap: 6px; } .fbtns .tb, .fbtns .go { font-size: 13px; padding: 8px 14px; min-height: 36px; }
   .flist h3 { font-size: 18px; } .pcard { font-size: 14px; } .pcard small { font-size: 9px; }
 }
+
+/* отчёт о посадке */
+#lrep { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); z-index: 6;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.1);
+  backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); padding: 14px 16px 12px; pointer-events: none;
+  animation: lrepIn .35s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes lrepIn { from { opacity: 0; transform: translate(-50%, -40%) scale(.94); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+#lrep .lh { display: flex; align-items: center; gap: 10px; }
+#lrep .lb { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; color: #fff; flex: 0 0 auto; }
+#lrep .lt { font-family: var(--f-display); font-weight: 800; font-size: 22px; line-height: 1.1; }
+#lrep .ls { color: var(--dim); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+#lrep .lg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+#lrep .lg div { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 12px; padding: 6px 4px; text-align: center; min-width: 0; }
+#lrep .lg b { display: block; font-family: var(--f-num); font-size: 18px; color: #fff; }
+#lrep .lg small { display: block; font-size: 9px; letter-spacing: .1em; color: var(--dim); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lrep .lp { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--dim); }
+#lrep .lp em { font-style: normal; font-family: var(--f-display); font-weight: 800; font-size: 20px; color: var(--gold); }
+@media (max-height: 500px) { #lrep { top: 62%; width: min(380px, calc(100% - 300px)); padding: 10px 12px; } #lrep .lt { font-size: 18px; } #lrep .lg b { font-size: 15px; } }
 </style>
 
 <div id="app">
@@ -376,6 +394,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   <canvas id="htape" width="880" height="68" hidden></canvas>
   <div id="nav" hidden></div>
   <div id="gm" hidden></div>
+  <div id="lrep" hidden></div>
   <div id="gfx"></div>
   <div id="ils" hidden></div>
   <div id="atc" hidden></div>
@@ -1486,7 +1505,7 @@ function doCrash(reason) {
     debris.push({ m, v: flight.vel.clone().multiplyScalar(0.25).add(new V3(R(-1, 1), R(0.3, 1.5), R(-1, 1)).multiplyScalar(R(20, 80))), w: new V3(R(-3, 3), R(-3, 3), R(-3, 3)) }); } });
   const sz = flight.cfg.length;
   for (let i = 0; i < 26; i++) spawnPuff(flight.pos.clone().add(new V3(R(-1, 1), R(0, 1), R(-1, 1)).multiplyScalar(sz * 0.3)), i < 12 ? 0xffa030 : 0x2a2a2a, sz * 0.3, i < 12 ? 1.4 : 6, sz * (i < 12 ? 0.8 : 0.35), new V3(R(-8, 8), R(10, 30), R(-8, 8)), i < 12 ? 1 : 0.8);
-  crashTimer = 1.8; $("crashReason").textContent = reason; $("hud").hidden = true; $("adi").hidden = true; $("radar").hidden = true; $("gm").hidden = true; $("gfx").style.opacity = 0; $("ils").hidden = true; $("atc").hidden = true; $("htape").hidden = true; $("wx").hidden = true; $("race").hidden = true; $("nav").hidden = true; raceReset(); $("warn").textContent = "";
+  crashTimer = 1.8; $("crashReason").textContent = reason; $("hud").hidden = true; $("adi").hidden = true; $("radar").hidden = true; $("gm").hidden = true; $("lrep").hidden = true; $("gfx").style.opacity = 0; $("ils").hidden = true; $("atc").hidden = true; $("htape").hidden = true; $("wx").hidden = true; $("race").hidden = true; $("nav").hidden = true; raceReset(); $("warn").textContent = "";
 }
 
 // ============================================================ INPUT
@@ -1630,6 +1649,23 @@ function addScore(pts, label) {
   try { localStorage.setItem("skypilot.score", JSON.stringify(SCORE)); } catch (e) {}
   setTimeout(() => toast(`+${pts} очков · ${label}`, "var(--green)"), 1200);
 }
+
+// ===== отчёт о посадке: оценка, вертикальная, скорость, перегрузка, отклонение от оси, очки
+let lrepT = null;
+function showLandingReport(f, ap, text, pts) {
+  const fpm = (/(\d+) fpm/.exec(text) || [0, 0])[1] | 0;
+  const grade = text.startsWith("Идеальная") ? ["Идеальная посадка", "#22c07a", "★"] : text.startsWith("Хорошая") ? ["Хорошая посадка", "#3ba7ff", "✓"] : ["Жёсткая посадка", "#f0a531", "!"];
+  let off = null;
+  if (ap) { const dx = f.pos.x - ap.cx, dz = f.pos.z - ap.cz; off = Math.abs(ap.rot ? -dz : dx) * 0.515; }
+  const el = $("lrep");
+  el.innerHTML = `<div class="lh"><span class="lb" style="background:${grade[1]}">${grade[2]}</span><div><div class="lt">${grade[0]}</div>` +
+    `<div class="ls">${ap ? ap.code + " · полоса" : "вне аэропорта"}${f.damage > 0.3 ? " · есть повреждения" : ""}</div></div></div>` +
+    `<div class="lg"><div><b>${fpm}</b><small>fpm</small></div><div><b>${Math.round(f.speed)}</b><small>kt</small></div>` +
+    `<div><b>${f.gload.toFixed(1)}</b><small>G</small></div><div><b>${off === null ? "—" : off.toFixed(off < 10 ? 1 : 0)}</b><small>м от оси</small></div></div>` +
+    `<div class="lp"><span>${off !== null && off < 5 ? "Точно по оси!" : off !== null && off > 25 ? "Далеко от оси полосы" : "Посадка засчитана"}</span>${pts ? `<em>+${pts}</em>` : ""}</div>`;
+  el.hidden = false; el.style.animation = "none"; void el.offsetWidth; el.style.animation = "";
+  clearTimeout(lrepT); lrepT = setTimeout(() => (el.hidden = true), 6500);
+}
 function scoreLanding(ap, text) {
   const now = performance.now() / 1000; if (now - lastScoredLanding < 8) return;
   lastScoredLanding = now;
@@ -1638,6 +1674,7 @@ function scoreLanding(ap, text) {
   if (scoreFrom && scoreFrom !== ap.id) { pts += 500; label += " · перелёт " + scoreFrom + " → " + ap.id; }
   scoreFrom = ap.id; SCORE.landings++; if (!SCORE.best || fpm < SCORE.best) SCORE.best = Math.max(1, fpm);
   addScore(pts, label);
+  return pts;
 }
 
 // ===== смена дня и ночи: сутки за 40 минут (как в Roblox), рассвет/закат, ночные огни города
@@ -2022,8 +2059,8 @@ function frame(t) {
     if (!f.crashed) raceStep(__prev, f.pos);
     for (const ev of f.events) {
       if (ev.type === "landing") {
-        toast(ev.text, ev.good ? "var(--green)" : "var(--amber)"); addLog(ev.text);
-        { const ap = airportAt(f.pos.x, f.pos.z); if (ap) scoreLanding(ap, ev.text); if (ap && flightDest && ap.id === flightDest) addScore(1000, "рейс выполнен"); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
+        addLog(ev.text);
+        { const ap = airportAt(f.pos.x, f.pos.z); { const __pts = ap ? scoreLanding(ap, ev.text) : 0; showLandingReport(f, ap, ev.text, __pts || 0); } if (ap && flightDest && ap.id === flightDest) addScore(1000, "рейс выполнен"); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
         for (const g of planeObj.userData.mainGear) for (let i = 0; i < 5; i++) spawnPuff(g.clone().applyQuaternion(f.att).add(f.pos), 0xdcdcdc, f.cfg.diameter * 0.5, 1.8, f.cfg.diameter * 1.2, new V3(R(-3, 3), R(1, 4), R(-3, 3)).add(f.vel.clone().multiplyScalar(0.3)), 0.7);
       }
       else if (ev.type === "log") { addLog(ev.text); if (ev.text.startsWith("Отрыв")) atc(`${callsign}, взлёт в ${hhmm()}. Набирайте 3000 ft, курс по навигации.`); }

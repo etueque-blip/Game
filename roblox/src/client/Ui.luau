@@ -855,6 +855,48 @@ function Ui.new(cb: Callbacks)
 	local gSub = new("TextLabel", { Size = UDim2.new(1, -4, 0, 14), Position = UDim2.fromOffset(2, 27), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 10, TextColor3 = C.dim, Text = "" }, gBox)
 	-- «потемнение в глазах» на больших перегрузках
 	local vignette = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 15, Active = false }, gui)
+	-- отчёт о посадке: оценка, вертикальная, скорость, перегрузка, отклонение от оси, очки
+	local lrep = glass(root, { Size = UDim2.fromOffset(400, 150), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.58, 0), Visible = false, ZIndex = 8 })
+	local lrScale = new("UIScale", { Scale = 1 }, lrep)
+	local lrBadge = new("TextLabel", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(14, 12), BackgroundColor3 = C.green, Font = FONT_TITLE, TextSize = 20, TextColor3 = Color3.new(1, 1, 1), Text = "★", ZIndex = 9 }, lrep)
+	corner(lrBadge, 12)
+	local lrTitle = new("TextLabel", { Size = UDim2.new(1, -80, 0, 26), Position = UDim2.fromOffset(64, 10), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 22, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "", ZIndex = 9 }, lrep)
+	local lrSub = new("TextLabel", { Size = UDim2.new(1, -80, 0, 16), Position = UDim2.fromOffset(64, 36), BackgroundTransparency = 1, Font = FONT, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = "", ZIndex = 9 }, lrep)
+	local lrCells: { TextLabel } = {}
+	for i, k in { "FPM", "KT", "G", "М ОТ ОСИ" } do
+		local cbox = new("Frame", { Size = UDim2.new(0.25, -9, 0, 50), Position = UDim2.new((i - 1) * 0.25, 14 - (i - 1) * 3, 0, 62), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.94, ZIndex = 9 }, lrep)
+		corner(cbox, 10)
+		stroke(cbox)
+		lrCells[i] = new("TextLabel", { Size = UDim2.new(1, 0, 0, 26), Position = UDim2.fromOffset(0, 5), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 19, TextColor3 = C.fg, Text = "", ZIndex = 10 }, cbox)
+		new("TextLabel", { Size = UDim2.new(1, 0, 0, 12), Position = UDim2.fromOffset(0, 32), BackgroundTransparency = 1, Font = FONT, TextSize = 9, TextColor3 = C.dim, Text = k, ZIndex = 10 }, cbox)
+	end
+	local lrNote = new("TextLabel", { Size = UDim2.new(0.7, 0, 0, 22), Position = UDim2.fromOffset(16, 120), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 13, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = "", ZIndex = 9 }, lrep)
+	local lrPts = new("TextLabel", { Size = UDim2.new(0.3, -16, 0, 24), Position = UDim2.new(0.7, 0, 0, 118), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 20, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Right, Text = "", ZIndex = 9 }, lrep)
+	local lrSeq = 0
+	function self.landingReport(r: { grade: string, fpm: number, kts: number, g: number, offM: number?, pts: number, where: string, damaged: boolean })
+		local look = if r.grade == "perfect" then { "Идеальная посадка", C.green, "★" } elseif r.grade == "good" then { "Хорошая посадка", C.magenta, "✓" } else { "Жёсткая посадка", C.amber, "!" }
+		lrTitle.Text = look[1]
+		lrBadge.BackgroundColor3 = look[2]
+		lrBadge.Text = look[3]
+		lrSub.Text = string.upper(r.where) .. (if r.damaged then " · ЕСТЬ ПОВРЕЖДЕНИЯ" else "")
+		lrCells[1].Text = tostring(r.fpm)
+		lrCells[2].Text = tostring(math.round(r.kts))
+		lrCells[3].Text = string.format("%.1f", r.g)
+		lrCells[4].Text = if r.offM then string.format(if r.offM < 10 then "%.1f" else "%.0f", r.offM) else "—"
+		lrNote.Text = if r.offM and r.offM < 5 then "Точно по оси!" elseif r.offM and r.offM > 25 then "Далеко от оси полосы" else "Посадка засчитана"
+		lrPts.Text = if r.pts > 0 then "+" .. r.pts else ""
+		lrep.Visible = true
+		lrScale.Scale = 0.92
+		game:GetService("TweenService"):Create(lrScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		lrSeq += 1
+		local my = lrSeq
+		task.delay(6.5, function()
+			if my == lrSeq then
+				lrep.Visible = false
+			end
+		end)
+	end
+
 	function self.setG(g: number, gMax: number, gMin: number, damage: number)
 		gBox.Visible = hud.Visible
 		gVal.Text = string.format("%.1f G", g)

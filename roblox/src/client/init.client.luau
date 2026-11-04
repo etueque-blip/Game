@@ -345,8 +345,22 @@ end
 local function handleEvents(f: FlightPhysics.Flight)
 	for _, ev in f.events do
 		if ev.type == "landing" then
-			ui.toast(ev.text, if ev.good then "green" else "amber")
 			addLog(ev.text)
+			-- карточка «отчёт о посадке» (очки за касание — как на сервере; бонусы за перелёт/рейс приходят уведомлением)
+			do
+				local ap = ev.airport and World.airportById(ev.airport)
+				local offM: number? = nil
+				if ap then
+					local dx, dz = f.pos.X - ap.cx, f.pos.Z - ap.cz
+					offM = math.abs(if ap.rot == 1 then -dz else dx) * World.METERS_PER_STUD
+				end
+				local fpmV = ev.fpm or 0
+				ui.landingReport({
+					grade = ev.grade or "hard", fpm = fpmV, kts = f.speed, g = f.gload, offM = offM,
+					pts = if ap then (if fpmV < 120 then 400 elseif fpmV < 250 then 300 elseif fpmV < 600 then 150 else 50) else 0,
+					where = if ap then ap.code .. " · полоса" else "вне аэропорта", damaged = f.damage > 0.3,
+				})
+			end
 			Landing:FireServer(ev.fpm)
 			if ev.airport then
 				local ap = World.airportById(ev.airport)

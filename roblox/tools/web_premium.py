@@ -243,6 +243,46 @@ FACADE_JS = r"""
     })(),"""
 
 
+LREP_CSS = """
+/* отчёт о посадке */
+#lrep { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); z-index: 6;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.1);
+  backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); padding: 14px 16px 12px; pointer-events: none;
+  animation: lrepIn .35s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes lrepIn { from { opacity: 0; transform: translate(-50%, -40%) scale(.94); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+#lrep .lh { display: flex; align-items: center; gap: 10px; }
+#lrep .lb { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; color: #fff; flex: 0 0 auto; }
+#lrep .lt { font-family: var(--f-display); font-weight: 800; font-size: 22px; line-height: 1.1; }
+#lrep .ls { color: var(--dim); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+#lrep .lg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+#lrep .lg div { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 12px; padding: 6px 4px; text-align: center; min-width: 0; }
+#lrep .lg b { display: block; font-family: var(--f-num); font-size: 18px; color: #fff; }
+#lrep .lg small { display: block; font-size: 9px; letter-spacing: .1em; color: var(--dim); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lrep .lp { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--dim); }
+#lrep .lp em { font-style: normal; font-family: var(--f-display); font-weight: 800; font-size: 20px; color: var(--gold); }
+@media (max-height: 500px) { #lrep { top: 62%; width: min(380px, calc(100% - 300px)); padding: 10px 12px; } #lrep .lt { font-size: 18px; } #lrep .lg b { font-size: 15px; } }
+"""
+
+LREP_JS = r"""
+// ===== отчёт о посадке: оценка, вертикальная, скорость, перегрузка, отклонение от оси, очки
+let lrepT = null;
+function showLandingReport(f, ap, text, pts) {
+  const fpm = (/(\d+) fpm/.exec(text) || [0, 0])[1] | 0;
+  const grade = text.startsWith("Идеальная") ? ["Идеальная посадка", "#22c07a", "★"] : text.startsWith("Хорошая") ? ["Хорошая посадка", "#3ba7ff", "✓"] : ["Жёсткая посадка", "#f0a531", "!"];
+  let off = null;
+  if (ap) { const dx = f.pos.x - ap.cx, dz = f.pos.z - ap.cz; off = Math.abs(ap.rot ? -dz : dx) * 0.515; }
+  const el = $("lrep");
+  el.innerHTML = `<div class="lh"><span class="lb" style="background:${grade[1]}">${grade[2]}</span><div><div class="lt">${grade[0]}</div>` +
+    `<div class="ls">${ap ? ap.code + " · полоса" : "вне аэропорта"}${f.damage > 0.3 ? " · есть повреждения" : ""}</div></div></div>` +
+    `<div class="lg"><div><b>${fpm}</b><small>fpm</small></div><div><b>${Math.round(f.speed)}</b><small>kt</small></div>` +
+    `<div><b>${f.gload.toFixed(1)}</b><small>G</small></div><div><b>${off === null ? "—" : off.toFixed(off < 10 ? 1 : 0)}</b><small>м от оси</small></div></div>` +
+    `<div class="lp"><span>${off !== null && off < 5 ? "Точно по оси!" : off !== null && off > 25 ? "Далеко от оси полосы" : "Посадка засчитана"}</span>${pts ? `<em>+${pts}</em>` : ""}</div>`;
+  el.hidden = false; el.style.animation = "none"; void el.offsetWidth; el.style.animation = "";
+  clearTimeout(lrepT); lrepT = setTimeout(() => (el.hidden = true), 6500);
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -301,6 +341,14 @@ def add_premium(s, patch):
   };
 """)
     s = patch(s, "    if (g) g.emissive.copy(WARM).multiplyScalar(1.1 * n);", "    if (g) g.emissive.copy(WARM).multiplyScalar(1.1 * n);\n    if (window.__facadeU) window.__facadeU.uNight.value = n;")
+    # отчёт о посадке (карточка вместо короткого уведомления)
+    s = patch(s, '<div id="gm" hidden></div>', '<div id="gm" hidden></div>\n  <div id="lrep" hidden></div>')
+    s = patch(s, "</style>\n\n<div id=\"app\">", LREP_CSS + "</style>\n\n<div id=\"app\">")
+    s = patch(s, "function scoreLanding(ap, text) {", LREP_JS + "function scoreLanding(ap, text) {")
+    s = patch(s, "  addScore(pts, label);\n}\n\n// ===== смена дня", "  addScore(pts, label);\n  return pts;\n}\n\n// ===== смена дня")
+    s = patch(s, 'toast(ev.text, ev.good ? "var(--green)" : "var(--amber)"); addLog(ev.text);', 'addLog(ev.text);')
+    s = patch(s, "if (ap) scoreLanding(ap, ev.text);", "{ const __pts = ap ? scoreLanding(ap, ev.text) : 0; showLandingReport(f, ap, ev.text, __pts || 0); }")
+    s = patch(s, '$("radar").hidden = true; $("gm").hidden = true;', '$("radar").hidden = true; $("gm").hidden = true; $("lrep").hidden = true;')
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);
