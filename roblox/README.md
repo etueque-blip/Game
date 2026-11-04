@@ -29,6 +29,9 @@ rojo build -o SkyPilot.rbxlx
 
 ## Что есть в игре
 
+- **Премиум-интерфейс**: тёмное стекло, небесно-голубой акцент и золото, крупные кнопки, логотип SKY PILOT,
+  размытый фон за меню (веб — фото, Roblox — BlurEffect), шрифты Exo 2 / Inter / JetBrains Mono в веб-версии.
+
 - **Главное меню и режимы**: «Свободный полёт», «Рейс» (вылет из одного аэропорта и посадка в другом, +1000 очков)
   и «Гонка колец». Дальше ангар по категориям с 3D-превью самолётов и выбор аэропорта вылета/назначения.
 - **8 аэропортов** (ещё ISB Istanbul Bosphorus, RYD Riyadh King, SKD Samarkand): SKP Skyport International (A), MTV Mountain View (B), LNW London West (C),

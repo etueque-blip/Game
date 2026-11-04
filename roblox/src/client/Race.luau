@@ -9,7 +9,7 @@ local World = require(Shared:WaitForChild("World"))
 local Race = {}
 
 local SEGMENTS = 28
-local COLOR_NEXT = Color3.fromRGB(255, 79, 216)
+local COLOR_NEXT = Color3.fromRGB(59, 167, 255)
 local COLOR_DONE = Color3.fromRGB(77, 255, 149)
 local COLOR_IDLE = Color3.fromRGB(235, 240, 255)
 

@@ -999,6 +999,11 @@ def main():
     s = patch(s, "setTimeout(() => { const d = AIRPORTS[navIdx - 1];", "setTimeout(() => { if (__seq !== window.__flightSeq) return; const d = AIRPORTS[navIdx - 1];")
     s = patch(s, "setTimeout(() => { if (!flight || flight.crashed) return", "const __aseq = window.__flightSeq; setTimeout(() => { if (__aseq !== window.__flightSeq || !flight || flight.crashed) return")
     s = patch(s, "<script>const PHOTOS = ", "<script>window.__flightSeq = 0;</script>\n<script>const PHOTOS = ")
+    # премиум-оформление — последним, поверх всех стилей
+    import sys as _sys
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from web_premium import add_premium
+    s = add_premium(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

@@ -10789,7 +10789,7 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 			end)
 		end
 	end
-	ui.toast(if lastMode == "race" then "Гонка: впереди розовое кольцо — пролети сквозь него" elseif mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: отпусти тормоз (пробел), тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
+	ui.toast(if lastMode == "race" then "Гонка: впереди голубое кольцо — пролети сквозь него" elseif mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: отпусти тормоз (пробел), тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
 	ClientReady:FireServer(m)
 end)
 
@@ -11545,7 +11545,7 @@ local World = require(Shared:WaitForChild("World"))
 local Race = {}
 
 local SEGMENTS = 28
-local COLOR_NEXT = Color3.fromRGB(255, 79, 216)
+local COLOR_NEXT = Color3.fromRGB(59, 167, 255)
 local COLOR_DONE = Color3.fromRGB(77, 255, 149)
 local COLOR_IDLE = Color3.fromRGB(235, 240, 255)
 
@@ -11679,7 +11679,7 @@ function Radar.new(parent: Instance, colors: any)
 	local frame = Instance.new("CanvasGroup")
 	frame.Name = "Radar"
 	frame.Size = UDim2.fromOffset(SIZE, SIZE)
-	frame.Position = UDim2.fromOffset(0, 116)
+	frame.Position = UDim2.fromOffset(0, 128)
 	frame.BackgroundColor3 = colors.panel
 	frame.BackgroundTransparency = 0.25
 	frame.Visible = false
@@ -11820,14 +11820,17 @@ local PlaneConfigs = require(Shared:WaitForChild("PlaneConfigs"))
 local World = require(Shared:WaitForChild("World"))
 
 local C = {
-	bg = Color3.fromRGB(7, 13, 24),
-	panel = Color3.fromRGB(9, 17, 33),
-	panelSolid = Color3.fromRGB(14, 26, 48),
-	line = Color3.fromRGB(120, 170, 255),
-	fg = Color3.fromRGB(228, 238, 255),
-	dim = Color3.fromRGB(142, 163, 196),
-	magenta = Color3.fromRGB(255, 79, 216),
-	green = Color3.fromRGB(77, 255, 149),
+	bg = Color3.fromRGB(5, 8, 15),
+	panel = Color3.fromRGB(26, 35, 54),
+	panelSolid = Color3.fromRGB(13, 20, 36),
+	line = Color3.fromRGB(255, 255, 255),
+	fg = Color3.fromRGB(243, 246, 251),
+	dim = Color3.fromRGB(154, 167, 187),
+	magenta = Color3.fromRGB(59, 167, 255), -- акцент (имя оставлено для совместимости)
+	accentTop = Color3.fromRGB(86, 185, 255),
+	accentBot = Color3.fromRGB(29, 111, 224),
+	gold = Color3.fromRGB(244, 193, 82),
+	green = Color3.fromRGB(92, 240, 162),
 	amber = Color3.fromRGB(255, 191, 60),
 	red = Color3.fromRGB(255, 77, 94),
 	dark = Color3.fromRGB(26, 2, 22),
@@ -11835,6 +11838,7 @@ local C = {
 local FONT = Enum.Font.GothamBold
 local FONT_BODY = Enum.Font.Gotham
 local FONT_NUM = Enum.Font.RobotoMono
+local FONT_TITLE = Enum.Font.GothamBlack
 
 local Ui = {}
 Ui.Colors = C
@@ -11854,26 +11858,28 @@ local function corner(parent: Instance, r: number)
 	new("UICorner", { CornerRadius = UDim.new(0, r) }, parent)
 end
 local function stroke(parent: Instance, color: Color3?, transp: number?)
-	new("UIStroke", { Color = color or C.line, Transparency = transp or 0.78, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, parent)
+	new("UIStroke", { Color = color or C.line, Transparency = transp or 0.86, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, parent)
 end
 local function glass(parent: Instance, props: { [string]: any }): Frame
 	local f = new("Frame", props, parent)
 	f.BackgroundColor3 = C.panel
-	f.BackgroundTransparency = 0.28
+	f.BackgroundTransparency = 0.22
 	f.BorderSizePixel = 0
-	corner(f, 8)
+	corner(f, 12)
 	stroke(f)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 156, 172)) }, f)
 	return f
 end
 local function button(parent: Instance, text: string, props: { [string]: any }?): TextButton
 	local b = new("TextButton", {
-		Text = text, Font = FONT, TextSize = 14, TextColor3 = C.fg, AutoButtonColor = true,
-		BackgroundColor3 = C.panel, BackgroundTransparency = 0.28, BorderSizePixel = 0,
-		Size = UDim2.fromOffset(0, 32), AutomaticSize = Enum.AutomaticSize.X,
+		Text = text, Font = FONT, TextSize = 15, TextColor3 = C.fg, AutoButtonColor = true,
+		BackgroundColor3 = C.panel, BackgroundTransparency = 0.2, BorderSizePixel = 0,
+		Size = UDim2.fromOffset(0, 40), AutomaticSize = Enum.AutomaticSize.X,
 	}, parent)
-	new("UIPadding", { PaddingLeft = UDim.new(0, 11), PaddingRight = UDim.new(0, 11) }, b)
-	corner(b, 8)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16) }, b)
+	corner(b, 12)
 	stroke(b)
+	new("UIGradient", { Name = "Sheen", Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 156, 172)) }, b)
 	if props then
 		for k, v in props do
 			(b :: any)[k] = v
@@ -11882,12 +11888,18 @@ local function button(parent: Instance, text: string, props: { [string]: any }?)
 	return b
 end
 local function primary(b: TextButton)
-	b.BackgroundColor3 = C.magenta
+	b.BackgroundColor3 = Color3.new(1, 1, 1)
 	b.BackgroundTransparency = 0
-	b.TextColor3 = C.dark
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.Font = FONT_TITLE
+	b.TextStrokeTransparency = 0.75
+	local g = b:FindFirstChild("Sheen") :: UIGradient?
+	if g then
+		g.Color = ColorSequence.new(C.accentTop, C.accentBot)
+	end
 	local s = b:FindFirstChildOfClass("UIStroke")
 	if s then
-		s.Transparency = 1
+		s.Transparency = 0.7
 	end
 end
 
@@ -11916,29 +11928,29 @@ function Ui.new(cb: Callbacks)
 	new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }, root)
 
 	-- ================= верхняя панель
-	local top = new("Frame", { Size = UDim2.new(1, 0, 0, 34), Position = UDim2.fromOffset(0, 0), BackgroundTransparency = 1 }, root)
+	local top = new("Frame", { Size = UDim2.new(1, 0, 0, 42), Position = UDim2.fromOffset(0, 0), BackgroundTransparency = 1 }, root)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center }, top)
 	local bHangar = button(top, "✈ Ангар")
 	primary(bHangar)
 	local bCam = button(top, "Камера: сзади")
-	local bMouse = button(top, "Мышь-штурвал: выкл")
+	local bMouse = button(top, "Мышь: выкл")
 	local bAP = button(top, "Автопилот")
 	local bNav = button(top, "Навигация")
 	local bDebug = button(top, "Отладка")
 	local bGuide = button(top, "Инструкция")
 	local bHelp = button(top, "Клавиши")
-	local planeName = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.fromOffset(200, 32), Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "", TextStrokeTransparency = 0.6 }, top)
+	local planeName = new("TextLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -4, 0, 48), Size = UDim2.fromOffset(260, 20), Font = FONT_TITLE, TextSize = 15, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Right, Text = "", TextStrokeTransparency = 0.6 }, root)
 	self.bCam, self.bMouse, self.bAP = bCam, bMouse, bAP
 
 	-- ================= приборы
-	local hud = new("Frame", { Size = UDim2.fromOffset(560, 62), Position = UDim2.new(0.5, 0, 0, 44), AnchorPoint = Vector2.new(0.5, 0), BackgroundTransparency = 1, Visible = false }, root)
+	local hud = new("Frame", { Size = UDim2.fromOffset(560, 62), Position = UDim2.new(0.5, 0, 0, 56), AnchorPoint = Vector2.new(0.5, 0), BackgroundTransparency = 1, Visible = false }, root)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), HorizontalAlignment = Enum.HorizontalAlignment.Center }, hud)
 	local cells: { [string]: any } = {}
 	local function cell(id: string, k: string, u: string)
 		local f = glass(hud, { Size = UDim2.fromOffset(90, 62), ClipsDescendants = true })
 		local fill = new("Frame", { Name = "Fill", BackgroundColor3 = C.magenta, BackgroundTransparency = 0.72, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0), Visible = id == "thr" }, f)
 		new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 14), Position = UDim2.fromOffset(0, 4), Font = FONT, TextSize = 10, TextColor3 = C.dim, Text = string.upper(k) }, f)
-		local v = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 26), Position = UDim2.fromOffset(0, 17), Font = FONT_NUM, TextSize = 23, TextColor3 = C.green, Text = "0" }, f)
+		local v = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 26), Position = UDim2.fromOffset(0, 17), Font = FONT_NUM, TextSize = 25, TextColor3 = C.fg, Text = "0" }, f)
 		local uu = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -4, 0, 13), Position = UDim2.fromOffset(2, 44), Font = FONT_NUM, TextSize = 10, TextColor3 = C.dim, Text = u, TextTruncate = Enum.TextTruncate.AtEnd }, f)
 		cells[id] = { v = v, u = uu, fill = fill }
 	end
@@ -11950,7 +11962,7 @@ function Ui.new(cb: Callbacks)
 	cell("flaps", "Закрылки", "шасси ▼")
 
 	-- авиагоризонт
-	local adi = new("CanvasGroup", { Size = UDim2.fromOffset(96, 96), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 116), BackgroundColor3 = C.panel, Visible = false, GroupTransparency = 0 }, root)
+	local adi = new("CanvasGroup", { Size = UDim2.fromOffset(96, 96), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 128), BackgroundColor3 = C.panel, Visible = false, GroupTransparency = 0 }, root)
 	corner(adi, 48)
 	stroke(adi, C.line, 0.5)
 	local horizon = new("Frame", { Size = UDim2.fromOffset(400, 400), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1 }, adi)
@@ -11969,7 +11981,7 @@ function Ui.new(cb: Callbacks)
 
 	-- гонка через кольца: таймер
 	-- погода и время: время суток по Lighting, температура за бортом по стандартной атмосфере
-	local wx = glass(root, { Size = UDim2.fromOffset(176, 50), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 278), Visible = false })
+	local wx = glass(root, { Size = UDim2.fromOffset(176, 50), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 290), Visible = false })
 	local wxTop = new("TextLabel", { Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(10, 4), BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, wx)
 	local wxBot = new("TextLabel", { Size = UDim2.new(1, -16, 0, 18), Position = UDim2.fromOffset(10, 26), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, wx)
 	function self.setWeather(altFt: number)
@@ -11992,17 +12004,17 @@ function Ui.new(cb: Callbacks)
 		wxBot.Text = string.format("за бортом %+d °C · ясно", math.round(temp))
 	end
 
-	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 246), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = C.dark, Text = "", Visible = false }, root)
+	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 258), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = Color3.new(1, 1, 1), Text = "", Visible = false }, root)
 	corner(raceTag, 6)
 	self.root = root
 
 	-- автопилот-индикатор
-	local apTag = new("TextLabel", { Size = UDim2.fromOffset(96, 22), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 218), BackgroundColor3 = C.green, Font = FONT, TextSize = 13, TextColor3 = C.dark, Text = "АВТОПИЛОТ", Visible = false }, root)
+	local apTag = new("TextLabel", { Size = UDim2.fromOffset(96, 22), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 230), BackgroundColor3 = C.green, Font = FONT, TextSize = 13, TextColor3 = C.dark, Text = "АВТОПИЛОТ", Visible = false }, root)
 	corner(apTag, 6)
 
 	-- шкала курса: лента с делениями, текущий курс в центре
 	local TAPE_W, PPD_T = 440, 4
-	local tape = glass(root, { Size = UDim2.fromOffset(TAPE_W, 34), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 112), ClipsDescendants = true, Visible = false })
+	local tape = glass(root, { Size = UDim2.fromOffset(TAPE_W, 34), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 124), ClipsDescendants = true, Visible = false })
 	local tapeMarks: { { label: TextLabel, tick: Frame } } = {}
 	for _ = 1, 15 do
 		local tk = new("Frame", { Size = UDim2.fromOffset(2, 7), AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = C.dim, BorderSizePixel = 0 }, tape)
@@ -12027,8 +12039,8 @@ function Ui.new(cb: Callbacks)
 	end
 
 	-- навигация: стрелка на цель + расстояние и курс
-	local nav = glass(root, { Size = UDim2.fromOffset(300, 30), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 150), Visible = false })
-	local navArrow = new("TextLabel", { Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, Font = FONT, TextSize = 22, TextColor3 = C.magenta, Text = "↑" }, nav)
+	local nav = glass(root, { Size = UDim2.fromOffset(300, 30), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 162), Visible = false })
+	local navArrow = new("TextLabel", { Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, Font = FONT, TextSize = 22, TextColor3 = C.gold, Text = "↑" }, nav)
 	local navText = new("TextLabel", { Size = UDim2.new(1, -36, 1, 0), Position = UDim2.fromOffset(32, 0), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, nav)
 
 	local banner = new("TextButton", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -200), Size = UDim2.fromOffset(0, 46), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = Color3.fromRGB(120, 20, 30), BackgroundTransparency = 0.15, Font = FONT, TextSize = 16, TextColor3 = C.fg, Text = "", Visible = false, AutoButtonColor = true, RichText = true }, root)
@@ -12065,12 +12077,12 @@ function Ui.new(cb: Callbacks)
 	end
 
 	local warn = new("TextLabel", { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromScale(0, 0.32), BackgroundTransparency = 1, Font = FONT, TextSize = 32, TextColor3 = C.red, Text = "", TextStrokeTransparency = 0.4 }, root)
-	local toastF = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 188), Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.05, Font = FONT, TextSize = 15, TextColor3 = C.fg, Text = "", Visible = false }, root)
+	local toastF = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 200), Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.05, Font = FONT, TextSize = 15, TextColor3 = C.fg, Text = "", Visible = false }, root)
 	corner(toastF, 8)
 	stroke(toastF)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }, toastF)
 
-	local debug = glass(root, { Size = UDim2.fromOffset(330, 250), Position = UDim2.fromOffset(0, 276), Visible = false })
+	local debug = glass(root, { Size = UDim2.fromOffset(330, 250), Position = UDim2.fromOffset(0, 288), Visible = false })
 	local debugText = new("TextLabel", { Size = UDim2.new(1, -16, 1, -12), Position = UDim2.fromOffset(8, 6), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Text = "", RichText = true }, debug)
 
 	-- ================= сенсорное управление
@@ -12078,13 +12090,16 @@ function Ui.new(cb: Callbacks)
 	local touch = { x = 0, y = 0, rl = 0, rr = 0, brake = false, throttle = nil :: number?, active = isTouch }
 	self.touch = touch
 	local touchF = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, root)
-	local stick = glass(touchF, { Size = UDim2.fromOffset(140, 140), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 6, 1, -48) })
-	corner(stick, 70)
+	local stick = glass(touchF, { Size = UDim2.fromOffset(150, 150), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 6, 1, -54) })
+	corner(stick, 75)
 	new("Frame", { Size = UDim2.new(0, 1, 0.8, 0), Position = UDim2.fromScale(0.5, 0.1), BackgroundColor3 = C.line, BackgroundTransparency = 0.7, BorderSizePixel = 0 }, stick)
 	new("Frame", { Size = UDim2.new(0.8, 0, 0, 1), Position = UDim2.fromScale(0.1, 0.5), BackgroundColor3 = C.line, BackgroundTransparency = 0.7, BorderSizePixel = 0 }, stick)
-	local knob = new("Frame", { Size = UDim2.fromOffset(54, 54), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.magenta, BorderSizePixel = 0 }, stick)
-	corner(knob, 27)
-	local rudderRow = new("Frame", { Size = UDim2.fromOffset(140, 38), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 6, 1, -4), BackgroundTransparency = 1 }, touchF)
+	local knob = new("Frame", { Size = UDim2.fromOffset(60, 60), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.magenta, BorderSizePixel = 0 }, stick)
+	corner(knob, 30)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(C.accentTop, C.accentBot) }, knob)
+	new("UIStroke", { Color = C.accentTop, Transparency = 0.6, Thickness = 4 }, knob)
+	knob.BackgroundColor3 = Color3.new(1, 1, 1)
+	local rudderRow = new("Frame", { Size = UDim2.fromOffset(150, 44), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 6, 1, -4), BackgroundTransparency = 1 }, touchF)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }, rudderRow)
 
 	local function holdBtn(parent: Instance, text: string, size: Vector2, on: () -> (), off: () -> ()): TextButton
@@ -12103,11 +12118,11 @@ function Ui.new(cb: Callbacks)
 		end)
 		return b
 	end
-	holdBtn(rudderRow, "◀ РУЛЬ", Vector2.new(67, 38), function() touch.rl = 1 end, function() touch.rl = 0 end)
-	holdBtn(rudderRow, "РУЛЬ ▶", Vector2.new(67, 38), function() touch.rr = 1 end, function() touch.rr = 0 end)
+	holdBtn(rudderRow, "◀ РУЛЬ", Vector2.new(72, 44), function() touch.rl = 1 end, function() touch.rl = 0 end)
+	holdBtn(rudderRow, "РУЛЬ ▶", Vector2.new(72, 44), function() touch.rr = 1 end, function() touch.rr = 0 end)
 
-	local btns = new("Frame", { Size = UDim2.fromOffset(140, 140), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -76, 1, -4), BackgroundTransparency = 1 }, touchF)
-	new("UIGridLayout", { CellSize = UDim2.fromOffset(66, 40), CellPadding = UDim2.fromOffset(6, 6) }, btns)
+	local btns = new("Frame", { Size = UDim2.fromOffset(158, 160), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -82, 1, -4), BackgroundTransparency = 1 }, touchF)
+	new("UIGridLayout", { CellSize = UDim2.fromOffset(74, 48), CellPadding = UDim2.fromOffset(8, 8) }, btns)
 	local function tapBtn(text: string, action: string)
 		local b = button(btns, text, { AutomaticSize = Enum.AutomaticSize.None, TextSize = 12, Font = FONT_NUM })
 		b.Activated:Connect(function()
@@ -12115,18 +12130,18 @@ function Ui.new(cb: Callbacks)
 		end)
 	end
 	tapBtn("ШАССИ", "gear")
-	holdBtn(btns, "ТОРМОЗ", Vector2.new(66, 40), function() touch.brake = true end, function() touch.brake = false end)
+	holdBtn(btns, "ТОРМОЗ", Vector2.new(74, 48), function() touch.brake = true end, function() touch.brake = false end)
 	tapBtn("ЗАКР −", "flapUp")
 	tapBtn("ЗАКР +", "flapDn")
 	tapBtn("РЕВЕРС", "rev")
 	tapBtn("МАЛ.ГАЗ", "idle")
 
-	local thrWrap = new("Frame", { Size = UDim2.fromOffset(60, 190), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, -4), BackgroundTransparency = 1 }, touchF)
+	local thrWrap = new("Frame", { Size = UDim2.fromOffset(66, 210), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, -4), BackgroundTransparency = 1 }, touchF)
 	new("TextLabel", { Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Font = FONT, TextSize = 10, TextColor3 = C.dim, Text = "ТЯГА" }, thrWrap)
 	local thr = glass(thrWrap, { Size = UDim2.new(1, 0, 1, -18), Position = UDim2.fromOffset(0, 18), ClipsDescendants = true })
 	local thrLevel = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0), BackgroundColor3 = C.magenta, BackgroundTransparency = 0.5, BorderSizePixel = 0 }, thr)
-	local thrHandle = new("Frame", { AnchorPoint = Vector2.new(0, 1), Size = UDim2.new(1, -8, 0, 14), Position = UDim2.new(0, 4, 1, 0), BackgroundColor3 = C.magenta, BorderSizePixel = 0 }, thr)
-	corner(thrHandle, 4)
+	local thrHandle = new("Frame", { AnchorPoint = Vector2.new(0, 1), Size = UDim2.new(1, -8, 0, 14), Position = UDim2.new(0, 4, 1, 0), BackgroundColor3 = Color3.fromRGB(235, 244, 255), BorderSizePixel = 0 }, thr)
+	corner(thrHandle, 6)
 	local function setThrottleUI(v: number)
 		thrLevel.Size = UDim2.fromScale(1, v)
 		thrHandle.Position = UDim2.new(0, 4, 1 - v, v * 14)
@@ -12191,17 +12206,18 @@ function Ui.new(cb: Callbacks)
 
 	-- ================= оверлеи
 	local function overlay(name: string, w: number): (Frame, Frame)
-		local o = new("Frame", { Name = name, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(4, 8, 16), BackgroundTransparency = 0.55, Visible = false, ZIndex = 20, Active = true }, gui)
-		local sheet = new("Frame", { Size = UDim2.fromOffset(w, 0), AutomaticSize = Enum.AutomaticSize.Y, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.08, ZIndex = 21 }, o)
-		corner(sheet, 14)
+		local o = new("Frame", { Name = name, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(3, 6, 12), BackgroundTransparency = 0.4, Visible = false, ZIndex = 20, Active = true }, gui)
+		local sheet = new("Frame", { Size = UDim2.fromOffset(w, 0), AutomaticSize = Enum.AutomaticSize.Y, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.panel, BackgroundTransparency = 0.04, ZIndex = 21 }, o)
+		corner(sheet, 20)
 		stroke(sheet)
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(110, 116, 132)) }, sheet)
 		new("UIPadding", { PaddingTop = UDim.new(0, 16), PaddingBottom = UDim.new(0, 16), PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }, sheet)
 		new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, sheet)
 		new("UISizeConstraint", { MaxSize = Vector2.new(w, 640) }, sheet)
 		return o, sheet
 	end
 	local function h2(parent: Instance, text: string, color: Color3?, order: number): TextLabel
-		return new("TextLabel", { Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Font = FONT, TextSize = 21, TextColor3 = color or C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = text, LayoutOrder = order, ZIndex = 22 }, parent)
+		return new("TextLabel", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 24, TextColor3 = color or C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = text, LayoutOrder = order, ZIndex = 22 }, parent)
 	end
 	local function para(parent: Instance, text: string, order: number): TextLabel
 		return new("TextLabel", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.dim, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = text, LayoutOrder = order, ZIndex = 22 }, parent)
@@ -12209,10 +12225,10 @@ function Ui.new(cb: Callbacks)
 
 	-- ангар: главное меню → самолёт → аэропорт вылета → (рейс) аэропорт назначения
 	local hangar, hs = overlay("Hangar", 800)
-	local title = h2(hs, "Sky Pilot", nil, 1)
+	local title = h2(hs, "✈  SKY PILOT", nil, 1)
 	local scoreLine = para(hs, "", 2)
 	local pages = new("Frame", { Size = UDim2.new(1, 0, 0, 380), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22, ClipsDescendants = true }, hs)
-	local navRow = new("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, hs)
+	local navRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, hs)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, navRow)
 	local bClose = button(navRow, "Закрыть", { ZIndex = 23, LayoutOrder = 0 })
 	bClose.Activated:Connect(function()
@@ -12221,8 +12237,11 @@ function Ui.new(cb: Callbacks)
 	local bExit = button(navRow, "Выйти из самолёта", { ZIndex = 23, Visible = false, LayoutOrder = 1 })
 	local bBack = button(navRow, "Назад", { ZIndex = 23, LayoutOrder = 2 })
 	local bNext = button(navRow, "Далее →", { ZIndex = 23, LayoutOrder = 3 })
-	bNext.BackgroundColor3 = Color3.fromRGB(46, 160, 80)
-	bNext.BackgroundTransparency = 0
+	primary(bNext)
+	local blur = new("BlurEffect", { Name = "SkyPilotMenuBlur", Size = 0 }, game:GetService("Lighting"))
+	hangar:GetPropertyChangedSignal("Visible"):Connect(function()
+		blur.Size = if hangar.Visible then 14 else 0
+	end)
 	self.bExit = bExit
 
 	local function page(name: string): ScrollingFrame
@@ -12254,12 +12273,12 @@ function Ui.new(cb: Callbacks)
 	local function selectCard(group: string, card: TextButton)
 		for _, c in selectables[group] or {} do
 			local on = c == card
-			c.BackgroundColor3 = if on then Color3.fromRGB(235, 240, 250) else Color3.fromRGB(22, 34, 58)
+			c.BackgroundColor3 = if on then Color3.fromRGB(235, 240, 250) else Color3.fromRGB(24, 32, 50)
 			local st = c:FindFirstChildOfClass("UIStroke")
 			if st then
 				st.Thickness = if on then 3 else 1
-				st.Color = if on then Color3.new(1, 1, 1) else C.line
-				st.Transparency = if on then 0 else 0.78
+				st.Color = if on then C.gold else C.line
+				st.Transparency = if on then 0 else 0.86
 			end
 			for _, t in c:GetDescendants() do
 				if t:IsA("TextLabel") and t:GetAttribute("Role") then
@@ -12269,8 +12288,8 @@ function Ui.new(cb: Callbacks)
 		end
 	end
 	local function card(parent: Instance, group: string, order: number): TextButton
-		local c = new("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromRGB(22, 34, 58), BorderSizePixel = 0, LayoutOrder = order, ZIndex = 23, ClipsDescendants = true }, parent)
-		corner(c, 14)
+		local c = new("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromRGB(24, 32, 50), BorderSizePixel = 0, LayoutOrder = order, ZIndex = 23, ClipsDescendants = true }, parent)
+		corner(c, 16)
 		stroke(c)
 		selectables[group] = selectables[group] or {}
 		table.insert(selectables[group], c)
@@ -12473,7 +12492,7 @@ function Ui.new(cb: Callbacks)
 		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)      Пробел — стояночный тормоз",
 		"V — камера (сзади / кабина / орбита)      M — ангар      C — мышь-штурвал",
 		"N — навигация: стрелка на аэропорт или город; с выбранной целью автопилот (P) летит к ней сам",
-		"Гонка: пролети сквозь розовое кольцо у Skyport — маршрут Дубай → Ташкент → Лондон → домой, 13 колец, +1500 очков",
+		"Гонка: пролети сквозь голубое кольцо у Skyport — маршрут Дубай → Ташкент → Лондон → домой, 13 колец, +1500 очков",
 		"",
 		"Геймпад: левый стик — штурвал, R2/L2 — тяга, R1/L1 — руль, Y — шасси,",
 		"крестовина ↑/↓ — закрылки, → — навигация, X — реверс, B — тормоз, A — автопилот, Select — камера.",
@@ -12515,7 +12534,7 @@ function Ui.new(cb: Callbacks)
 			corner(row, 8)
 			new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, row)
 			new("UIListLayout", { Padding = UDim.new(0, 2) }, row)
-			new("TextLabel", { Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT, TextSize = 15, TextColor3 = C.magenta, TextXAlignment = Enum.TextXAlignment.Left, Text = st[1], ZIndex = 23 }, row)
+			new("TextLabel", { Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT, TextSize = 15, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Left, Text = st[1], ZIndex = 23 }, row)
 			new("TextLabel", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.fg, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = st[2], ZIndex = 23 }, row)
 		end
 		guide.Visible = true
@@ -12627,14 +12646,14 @@ function Ui.new(cb: Callbacks)
 		crash.Visible = false
 	end
 	function self.setMouseLabel(on: boolean)
-		bMouse.Text = "Мышь-штурвал: " .. (if on then "вкл" else "выкл")
+		bMouse.Text = "Мышь: " .. (if on then "вкл" else "выкл")
 		bMouse.TextColor3 = if on then C.green else C.fg
 	end
 	function self.setCamLabel(name: string)
 		bCam.Text = "Камера: " .. name
 	end
 	-- перегрузка G и состояние конструкции (слева от авиагоризонта)
-	local gBox = glass(root, { Size = UDim2.fromOffset(76, 44), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -104, 0, 168), Visible = false })
+	local gBox = glass(root, { Size = UDim2.fromOffset(76, 44), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -104, 0, 180), Visible = false })
 	local gVal = new("TextLabel", { Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 2), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 20, TextColor3 = C.green, Text = "1.0 G" }, gBox)
 	local gSub = new("TextLabel", { Size = UDim2.new(1, -4, 0, 14), Position = UDim2.fromOffset(2, 27), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 10, TextColor3 = C.dim, Text = "" }, gBox)
 	-- «потемнение в глазах» на больших перегрузках
@@ -12651,7 +12670,7 @@ function Ui.new(cb: Callbacks)
 	end
 
 	-- указатель глиссады (ILS)
-	local ils = new("TextLabel", { Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 226), BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.amber, Text = "", Visible = false }, root)
+	local ils = new("TextLabel", { Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 238), BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.amber, Text = "", Visible = false }, root)
 	corner(ils, 6)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, ils)
 	function self.setIls(text: string?, good: boolean?)

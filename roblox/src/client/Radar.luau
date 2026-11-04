@@ -15,7 +15,7 @@ function Radar.new(parent: Instance, colors: any)
 	local frame = Instance.new("CanvasGroup")
 	frame.Name = "Radar"
 	frame.Size = UDim2.fromOffset(SIZE, SIZE)
-	frame.Position = UDim2.fromOffset(0, 116)
+	frame.Position = UDim2.fromOffset(0, 128)
 	frame.BackgroundColor3 = colors.panel
 	frame.BackgroundTransparency = 0.25
 	frame.Visible = false

@@ -290,7 +290,7 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 			end)
 		end
 	end
-	ui.toast(if lastMode == "race" then "Гонка: впереди розовое кольцо — пролети сквозь него" elseif mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: отпусти тормоз (пробел), тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
+	ui.toast(if lastMode == "race" then "Гонка: впереди голубое кольцо — пролети сквозь него" elseif mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: отпусти тормоз (пробел), тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
 	ClientReady:FireServer(m)
 end)
 
