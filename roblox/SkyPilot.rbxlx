@@ -12183,7 +12183,7 @@ function Ui.new(cb: Callbacks)
 	holdBtn(rudderRow, "◀ РУЛЬ", Vector2.new(72, 44), function() touch.rl = 1 end, function() touch.rl = 0 end)
 	holdBtn(rudderRow, "РУЛЬ ▶", Vector2.new(72, 44), function() touch.rr = 1 end, function() touch.rr = 0 end)
 
-	local btns = new("Frame", { Size = UDim2.fromOffset(158, 160), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -82, 1, -4), BackgroundTransparency = 1 }, touchF)
+	local btns = new("Frame", { Size = UDim2.fromOffset(158, 216), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -82, 1, -4), BackgroundTransparency = 1 }, touchF)
 	new("UIGridLayout", { CellSize = UDim2.fromOffset(74, 48), CellPadding = UDim2.fromOffset(8, 8) }, btns)
 	local function tapBtn(text: string, action: string)
 		local b = button(btns, text, { AutomaticSize = Enum.AutomaticSize.None, TextSize = 12, Font = FONT_NUM })
@@ -12197,6 +12197,8 @@ function Ui.new(cb: Callbacks)
 	tapBtn("ЗАКР +", "flapDn")
 	tapBtn("РЕВЕРС", "rev")
 	tapBtn("МАЛ.ГАЗ", "idle")
+	tapBtn("ИНТЕРЦ.", "spoiler") -- на телефоне нет клавиши X
+	tapBtn("АВТОПИЛ.", "autopilot")
 
 	local thrWrap = new("Frame", { Size = UDim2.fromOffset(66, 210), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, -4), BackgroundTransparency = 1 }, touchF)
 	new("TextLabel", { Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Font = FONT, TextSize = 10, TextColor3 = C.dim, Text = "ТЯГА" }, thrWrap)
