@@ -245,16 +245,104 @@ local function buildAirport(folder: Folder, ap: any)
 	part(f, Vector3.new(160, 3, 930), cf(tx + 5, 41.5, 0), Color3.fromRGB(61, 67, 76), Enum.Material.Metal, true)
 	local sign = part(f, Vector3.new(2, 30, 500), cf(tx - 74.5, 58, 0), FRAME)
 	textDecal(sign, Enum.NormalId.Left, ap.title, Color3.fromRGB(20, 60, 120), FRAME)
-	-- телетрапы к лайнерам
+	-- телетрапы: ротонда на колонне у терминала, телескопические секции, кабина с окном, гармошка к двери, опора на колёсах
+	local JW = Color3.fromRGB(196, 201, 208)
+	local JD = Color3.fromRGB(70, 76, 86)
+	local JG = Color3.fromRGB(34, 52, 72)
+	local function cylX(size: Vector3, c: CFrame, color: Color3, mat: Enum.Material?)
+		local p = part(f, size, c, color, mat or Enum.Material.Metal)
+		p.Shape = Enum.PartType.Cylinder
+		return p
+	end
 	for _, p in ap.parked do
 		local c = PlaneConfigs.PLANES[p[1]]
 		if c.windows and c.length >= 100 then
 			local doorX = W / 2 + 760 - c.length * 0.12
-			local zb = p[2] - c.diameter * 0.5 - 4
-			local len = (tx - 70) - doorX
+			local zb = p[2] - c.diameter * 0.5 - 6
 			local y = 0.5 + c.gearHeight + c.diameter * 0.1
-			part(f, Vector3.new(len, 8, 8), cf(doorX + len / 2, y, zb), Color3.fromRGB(184, 190, 198), Enum.Material.Metal)
-			part(f, Vector3.new(2, y, 2), cf(doorX + len * 0.35, y / 2, zb), Color3.fromRGB(107, 112, 120), Enum.Material.Metal)
+			local xR = tx - 84
+			cylX(Vector3.new(y, 6, 6), cf(xR, y / 2, zb) * CFrame.Angles(0, 0, math.pi / 2), JD)
+			cylX(Vector3.new(11, 15, 15), cf(xR, y + 1, zb) * CFrame.Angles(0, 0, math.pi / 2), JW)
+			part(f, Vector3.new(14, 8, 8), cf((xR + tx - 70) / 2, y + 1, zb), JW, Enum.Material.Metal)
+			local x0, x1 = xR - 7, doorX + 7
+			local len = x0 - x1
+			for k = 0, 2 do
+				local a = x0 - len * k / 3
+				local b = x0 - len * (k + 1) / 3 - (if k < 2 then 2 else 0)
+				local sz = 9 - k * 0.6
+				part(f, Vector3.new(a - b, sz, sz), cf((a + b) / 2, y + 1, zb), JW, Enum.Material.Metal)
+				part(f, Vector3.new(a - b - 1, 2, sz + 0.2), cf((a + b) / 2, y + 2, zb), JG, Enum.Material.Glass)
+			end
+			part(f, Vector3.new(12, 10, 12), cf(doorX + 2, y + 1.5, zb + 2), JW, Enum.Material.Metal)
+			part(f, Vector3.new(10, 3, 12.2), cf(doorX + 2, y + 3, zb + 2), JG, Enum.Material.Glass)
+			part(f, Vector3.new(9, 8, 3), cf(doorX, y + 1, zb + 9), JD, Enum.Material.Fabric)
+			local legX = x1 + len * 0.3
+			for _, dz in { -3, 3 } do
+				part(f, Vector3.new(1.4, y - 2, 1.4), cf(legX, (y - 2) / 2 + 1.5, zb + dz), JD, Enum.Material.Metal)
+			end
+			part(f, Vector3.new(3, 1.4, 9), cf(legX, 1.5, zb), JD, Enum.Material.Metal)
+			for _, dz in { -4, 4 } do
+				cylX(Vector3.new(2, 3, 3), cf(legX, 1.5, zb + dz) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(24, 24, 26), Enum.Material.Rubber)
+			end
+		end
+	end
+	-- служебные машины у самолётов: буксир, багажный тягач с тележками, топливозаправщик
+	local YEL = Color3.fromRGB(242, 190, 40)
+	local WHEEL = Color3.fromRGB(24, 24, 26)
+	local function wheels(x: number, z: number, lenX: number, wid: number)
+		for _, dx in { -lenX / 2 + 1.4, lenX / 2 - 1.4 } do
+			for _, dz in { -wid / 2, wid / 2 } do
+				cylX(Vector3.new(1, 2.4, 2.4), cf(x + dx, 1.2, z + dz) * CFrame.Angles(0, math.pi / 2, 0), WHEEL, Enum.Material.Rubber)
+			end
+		end
+	end
+	for _, p in ap.parked do
+		local c = PlaneConfigs.PLANES[p[1]]
+		local z = p[2]
+		local noseX = W / 2 + 760
+		-- буксир у носовой стойки
+		part(f, Vector3.new(10, 2.6, 6), cf(noseX + 8, 1.8, z), YEL, Enum.Material.SmoothPlastic)
+		part(f, Vector3.new(3, 2, 5), cf(noseX + 11, 4, z), Color3.fromRGB(40, 46, 56), Enum.Material.Glass)
+		wheels(noseX + 8, z, 10, 6.2)
+		if c.windows and c.length >= 100 then
+			-- багажный тягач и три тележки у заднего грузового люка
+			local bx = noseX - c.length * 0.72
+			local bz = z + c.diameter * 0.5 + 10
+			part(f, Vector3.new(7, 3, 5), cf(bx, 2, bz), YEL, Enum.Material.SmoothPlastic)
+			part(f, Vector3.new(3, 2.5, 5), cf(bx + 1.5, 4.6, bz), Color3.fromRGB(40, 46, 56), Enum.Material.Glass)
+			wheels(bx, bz, 7, 5.2)
+			for k = 1, 3 do
+				local cx = bx - 3 - k * 8
+				part(f, Vector3.new(6.5, 0.6, 5), cf(cx, 1.8, bz), Color3.fromRGB(120, 126, 134), Enum.Material.Metal)
+				part(f, Vector3.new(5.5, 2.4, 4.2), cf(cx, 3.3, bz), ({ Color3.fromRGB(58, 74, 110), Color3.fromRGB(140, 60, 50), Color3.fromRGB(70, 70, 76) })[k], Enum.Material.Fabric)
+				wheels(cx, bz, 6.5, 4.6)
+			end
+			-- топливозаправщик под крылом
+			local fx, fz = noseX - c.length * 0.45, z + c.span * 0.3
+			part(f, Vector3.new(6, 5, 7), cf(fx + 11, 3.2, fz), Color3.fromRGB(230, 232, 236), Enum.Material.SmoothPlastic)
+			part(f, Vector3.new(2, 2.2, 6.4), cf(fx + 13.6, 4.4, fz), Color3.fromRGB(40, 46, 56), Enum.Material.Glass)
+			cylX(Vector3.new(18, 7, 7), cf(fx - 1, 4.6, fz), Color3.fromRGB(236, 238, 240), Enum.Material.Metal)
+			part(f, Vector3.new(18, 0.8, 7.2), cf(fx - 1, 3.6, fz), Color3.fromRGB(200, 40, 40), Enum.Material.SmoothPlastic)
+			wheels(fx + 4, fz, 26, 6.4)
+		end
+	end
+	-- мачты освещения перрона: ночью лампы светятся (клиент переключает детали «ApronLamp»)
+	for _, mz in { -900, -300, 300, 900 } do
+		local mx = W / 2 + 300
+		part(f, Vector3.new(2.4, 70, 2.4), cf(mx, 35, mz), Color3.fromRGB(150, 156, 164), Enum.Material.Metal)
+		part(f, Vector3.new(4, 2, 18), cf(mx + 1, 70, mz), Color3.fromRGB(70, 76, 86), Enum.Material.Metal)
+		for _, dz in { -6, 0, 6 } do
+			local lamp = part(f, Vector3.new(3, 1.2, 4), cf(mx + 2.5, 69, mz + dz), Color3.fromRGB(255, 238, 200), Enum.Material.SmoothPlastic)
+			lamp.Name = "ApronLamp"
+			lamp.CastShadow = false
+			local sl = Instance.new("SpotLight")
+			sl.Face = Enum.NormalId.Bottom
+			sl.Angle = 100
+			sl.Range = 60
+			sl.Brightness = 2.5
+			sl.Color = Color3.fromRGB(255, 226, 180)
+			sl.Enabled = false
+			sl.Parent = lamp
 		end
 	end
 	-- вышка

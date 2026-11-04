@@ -683,9 +683,12 @@ task.spawn(function()
 	end
 	task.wait(5) -- даём серверу достроить город
 	local glass: { { p: BasePart, color: Color3, mat: Enum.Material } } = {}
+	local lamps: { BasePart } = {}
 	for _, d in worldFolder:GetDescendants() do
 		if d:IsA("BasePart") and d.Material == Enum.Material.Glass and d.Size.Y > 20 and d.Transparency < 0.5 then
 			table.insert(glass, { p = d, color = d.Color, mat = d.Material })
+		elseif d:IsA("BasePart") and d.Name == "ApronLamp" then
+			table.insert(lamps, d)
 		end
 	end
 	local WARM = Color3.fromRGB(255, 205, 130)
@@ -695,6 +698,14 @@ task.spawn(function()
 		local isNight = t < 6.3 or t > 18.7
 		if isNight ~= night then
 			night = isNight
+			-- мачты освещения перрона
+			for _, l in lamps do
+				l.Material = if isNight then Enum.Material.Neon else Enum.Material.SmoothPlastic
+				local sl = l:FindFirstChildOfClass("SpotLight")
+				if sl then
+					sl.Enabled = isNight
+				end
+			end
 			for i, g in glass do
 				if g.p.Parent then
 					if isNight then
