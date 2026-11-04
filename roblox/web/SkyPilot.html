@@ -311,6 +311,42 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   .rb { width: 62px; } #thr { width: 56px; height: 180px; }
   .mwrap { padding-block: 18px 20px; }
 }
+
+/* телефон горизонтально (низкий экран): компактные приборы сверху, управление по углам, ничего не перекрывается */
+@media (max-height: 500px) {
+  #top { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 5px; }
+  #top::-webkit-scrollbar { display: none; }
+  #bGfx, #bDebug, #bHelp, #planeName { display: none !important; }
+  #top .tb { padding: 6px 11px; font-size: 12.5px; min-height: 34px; border-radius: 10px; flex: 0 0 auto; }
+  #hud { top: calc(46px + env(safe-area-inset-top, 0px)); width: min(500px, calc(100% - 260px)); gap: 4px; }
+  .cell { padding: 3px 2px 3px; border-radius: 10px; }
+  .cell .k { font-size: 8px; letter-spacing: .08em; } .cell .u { font-size: 8px; }
+  .cell .v { font-size: 17px; line-height: 1.15; }
+  #htape { top: calc(100px + env(safe-area-inset-top, 0px)); width: min(340px, calc(100% - 260px)); height: 26px; }
+  #radar { top: calc(46px + env(safe-area-inset-top, 0px)); width: 88px; height: 88px; }
+  #adi { top: calc(46px + env(safe-area-inset-top, 0px)) !important; width: 80px !important; height: 80px !important; }
+  #gm { top: calc(134px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); padding: 2px 8px; }
+  #gm b { font-size: 15px; }
+  #race { top: calc(140px + env(safe-area-inset-top, 0px)); left: calc(8px + env(safe-area-inset-left, 0px)); right: auto; }
+  #nav { top: calc(132px + env(safe-area-inset-top, 0px)); font-size: 12px; max-width: calc(100% - 260px); }
+  #toast { top: calc(166px + env(safe-area-inset-top, 0px)); max-width: calc(100% - 300px); font-size: 12px; }
+  #ils { top: calc(200px + env(safe-area-inset-top, 0px)); font-size: 11px; }
+  #wx, #debug { display: none !important; }
+  #atc { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 420px); font-size: 11px; white-space: normal; text-align: center; }
+  #park { bottom: calc(62px + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 420px); font-size: 12px; white-space: normal; text-align: center; padding: 7px 12px; }
+  #touch { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  #stick { width: 116px; height: 116px; } #knob { width: 48px; height: 48px; left: 34px; top: 34px; }
+  #rudder .rb { width: 54px; height: 34px; font-size: 11px; }
+  #btns { grid-template-columns: repeat(2, 58px); gap: 5px; } #btns .rb { width: 58px; height: 34px; font-size: 10.5px; }
+  #thr { width: 50px; height: 150px; } #thrWrap span { font-size: 8px; }
+  .mwrap { padding-block: 14px 16px; }
+  .flow { height: calc(100vh - 24px); margin-block: 12px; gap: 10px; }
+  .fprev { min-height: 0; padding: 12px 14px; overflow-y: auto; justify-content: flex-start; }
+  .fprev h2 { font-size: 24px; } .fprev p { font-size: 12px; }
+  .livrow { gap: 5px; margin-top: 8px; } .lv { padding: 5px 10px; font-size: 11.5px; }
+  .fbtns { margin-top: 10px; gap: 6px; } .fbtns .tb, .fbtns .go { font-size: 13px; padding: 8px 14px; min-height: 36px; }
+  .flist h3 { font-size: 18px; } .pcard { font-size: 14px; } .pcard small { font-size: 9px; }
+}
 </style>
 
 <div id="app">
