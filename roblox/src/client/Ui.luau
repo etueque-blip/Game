@@ -403,7 +403,7 @@ function Ui.new(cb: Callbacks)
 		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(110, 116, 132)) }, sheet)
 		new("UIPadding", { PaddingTop = UDim.new(0, 16), PaddingBottom = UDim.new(0, 16), PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }, sheet)
 		new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, sheet)
-		new("UISizeConstraint", { MaxSize = Vector2.new(w, 640) }, sheet)
+		new("UISizeConstraint", { MaxSize = Vector2.new(w, 660) }, sheet)
 		return o, sheet
 	end
 	local function h2(parent: Instance, text: string, color: Color3?, order: number): TextLabel
@@ -693,7 +693,7 @@ function Ui.new(cb: Callbacks)
 		"Взлёт: тяга 100%, на скорости Vr плавно тяни на себя. Посадка: шасси вниз,",
 		"закрылки 2–3, вертикальная < 600 ft/min. Перелёт A → B даёт +500 очков.",
 	}, "\n"), 2)
-	local hb = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, hp)
+	local hb = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, hp)
 	local helpClose = button(hb, "Понятно", { ZIndex = 23 })
 	primary(helpClose)
 	helpClose.Activated:Connect(function()
@@ -702,11 +702,13 @@ function Ui.new(cb: Callbacks)
 
 	-- инструкция по полёту для выбранного самолёта
 	local Guide = require(Shared:WaitForChild("Guide"))
-	local guide, gs = overlay("Guide", 680)
+	local guide, gs = overlay("Guide", 780)
 	local gTitle = h2(gs, "Инструкция", nil, 1)
-	local gBody = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 2, ZIndex = 22 }, gs)
-	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, gBody)
-	local gRow = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, gs)
+	-- прокрутка: 7 пунктов помещаются на любом экране
+	local gBody = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 470), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 4, ScrollBarImageColor3 = C.dim, BorderSizePixel = 0, BackgroundTransparency = 1, LayoutOrder = 2, ZIndex = 22 }, gs)
+	new("UIPadding", { PaddingRight = UDim.new(0, 8) }, gBody)
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, gBody)
+	local gRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, gs)
 	local gClose = button(gRow, "Понятно", { ZIndex = 23 })
 	primary(gClose)
 	gClose.Activated:Connect(function()
@@ -714,6 +716,7 @@ function Ui.new(cb: Callbacks)
 	end)
 	function self.showGuide(c: any)
 		gTitle.Text = "Инструкция · " .. c.name
+		gBody.CanvasPosition = Vector2.zero
 		for _, ch in gBody:GetChildren() do
 			if ch:IsA("GuiObject") then
 				ch:Destroy()
@@ -722,7 +725,7 @@ function Ui.new(cb: Callbacks)
 		for i, st in Guide.steps(c) do
 			local row = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = Color3.fromRGB(22, 34, 58), LayoutOrder = i, ZIndex = 22 }, gBody)
 			corner(row, 8)
-			new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, row)
+			new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 7), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, row)
 			new("UIListLayout", { Padding = UDim.new(0, 2) }, row)
 			new("TextLabel", { Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Font = FONT, TextSize = 15, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Left, Text = st[1], ZIndex = 23 }, row)
 			new("TextLabel", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.fg, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = st[2], ZIndex = 23 }, row)
@@ -734,7 +737,7 @@ function Ui.new(cb: Callbacks)
 	local crash, cs = overlay("Crash", 440)
 	h2(cs, "Крушение", C.red, 1)
 	local crashReason = para(cs, "", 2)
-	local cr = new("Frame", { Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, cs)
+	local cr = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, cs)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, cr)
 	local again = button(cr, "Снова", { ZIndex = 23 })
 	primary(again)
