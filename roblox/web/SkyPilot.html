@@ -1165,7 +1165,7 @@ function startFlight(cfg, mode) {
   if (planeObj) scene.remove(planeObj);
   debris.forEach((d) => scene.remove(d.m)); debris.length = 0;
   lastCfg = cfg; lastMode = mode; lastDest = flightDest; raceReset(); gateTarget = null; const __seq = ++window.__flightSeq; atcStart(mode);
-  parkBrake = mode.startsWith("runway"); if (mode === "race") navIdx = 0;
+  parkBrake = mode.startsWith("runway"); { const a0 = AIRPORTS.find((a) => "runway:" + a.id === mode); scoreFrom = a0 ? a0.id : null; } if (mode === "race") navIdx = 0;
   if (flightDest) { navIdx = AIRPORTS.findIndex((a) => a.id === flightDest) + 1; setTimeout(() => { if (__seq !== window.__flightSeq) return; const d = AIRPORTS[navIdx - 1]; toast("Рейс в " + d.code + " · " + d.title + " — навигация включена", "var(--magenta)"); }, 3200); }
   flight = newFlight(cfg, mode);
   planeObj = buildPlane(cfg, false); scene.add(planeObj);
@@ -1258,6 +1258,25 @@ function setThrottleUI(v) { $("thrLevel").style.height = v * 100 + "%"; $("thrHa
 }
 
 // ============================================================ HUD
+
+// ===== очки (те же правила, что на сервере Roblox), хранятся в браузере
+const SCORE = { points: 0, landings: 0, best: 0 };
+try { Object.assign(SCORE, JSON.parse(localStorage.getItem("skypilot.score") || "{}")); } catch (e) {}
+let scoreFrom = null, lastScoredLanding = -1e9;
+function addScore(pts, label) {
+  SCORE.points += pts;
+  try { localStorage.setItem("skypilot.score", JSON.stringify(SCORE)); } catch (e) {}
+  setTimeout(() => toast(`+${pts} очков · ${label}`, "var(--green)"), 1200);
+}
+function scoreLanding(ap, text) {
+  const now = performance.now() / 1000; if (now - lastScoredLanding < 8) return;
+  lastScoredLanding = now;
+  const m = /(\d+) fpm/.exec(text); const fpm = m ? parseInt(m[1], 10) : 999;
+  let pts = fpm < 120 ? 400 : fpm < 250 ? 300 : fpm < 600 ? 150 : 50, label = "посадка " + fpm + " fpm";
+  if (scoreFrom && scoreFrom !== ap.id) { pts += 500; label += " · перелёт " + scoreFrom + " → " + ap.id; }
+  scoreFrom = ap.id; SCORE.landings++; if (!SCORE.best || fpm < SCORE.best) SCORE.best = Math.max(1, fpm);
+  addScore(pts, label);
+}
 
 // ===== смена дня и ночи: сутки за 40 минут (как в Roblox), рассвет/закат, ночные огни города
 let gameClock = 10;
@@ -1483,7 +1502,7 @@ function raceStep(prev, pos) {
     const t = now - raceStart;
     let msg = "ФИНИШ гонки: " + fmtT(t);
     if (!bestRace || t < bestRace) { bestRace = t; msg += " · новый рекорд!"; try { localStorage.setItem("skypilot.bestRace", String(t)); } catch (e) {} }
-    toast(msg, "var(--green)"); addLog(msg); raceIdx = 0; raceStart = null; setTimeout(racePaint, 3000);
+    toast(msg, "var(--green)"); addLog(msg); if (t >= 60) addScore(1500, "гонка колец"); raceIdx = 0; raceStart = null; setTimeout(racePaint, 3000);
   } else toast(`Кольцо ${raceIdx}/${RINGS.length} · ${rg.name}`, "var(--magenta)");
   racePaint();
 }
@@ -1566,7 +1585,7 @@ function updateHUD(f) {
   $("htape").hidden = f.crashed; drawTape(hdg);
   updateSound(f);
   atcTick(f, 1 / 60);
-  if (gateTarget && f.onGround && f.speed < 3 && Math.hypot(f.pos.x - gateTarget.x, f.pos.z - gateTarget.z) < 45) { toast("Рейс завершён у гейта " + gateTarget.id + " · +500", "var(--green)"); atc(`Земля: ${callsign}, стоянка ${gateTarget.id}, двигатели выключить. До связи!`); addLog("Гейт " + gateTarget.id); gateTarget = null; }
+  if (gateTarget && f.onGround && f.speed < 3 && Math.hypot(f.pos.x - gateTarget.x, f.pos.z - gateTarget.z) < 45) { toast("Рейс завершён у гейта " + gateTarget.id + " · +500", "var(--green)"); addScore(500, "стоянка " + gateTarget.id); atc(`Земля: ${callsign}, стоянка ${gateTarget.id}, двигатели выключить. До связи!`); addLog("Гейт " + gateTarget.id); gateTarget = null; }
   { const el = $("wx"); el.hidden = f.crashed; const tC = Math.max(-56.5, 15 - 1.98 * f.pos.y * FT / 1000); const [ic, ph] = dayPhase(); el.innerHTML = `${ic} ${ph} · ${String(Math.floor(gameClock)).padStart(2, "0")}:${String(Math.floor(gameClock % 1 * 60)).padStart(2, "0")}<small>за бортом ${tC >= 0 ? "+" : ""}${Math.round(tC)} °C</small>`; }
   if (!f.onGround) parkBrake = false;
   $("park").hidden = !parkBrake || f.crashed;
@@ -1627,7 +1646,7 @@ function frame(t) {
     for (const ev of f.events) {
       if (ev.type === "landing") {
         toast(ev.text, ev.good ? "var(--green)" : "var(--amber)"); addLog(ev.text);
-        { const ap = airportAt(f.pos.x, f.pos.z); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
+        { const ap = airportAt(f.pos.x, f.pos.z); if (ap) scoreLanding(ap, ev.text); if (ap && flightDest && ap.id === flightDest) addScore(1000, "рейс выполнен"); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
         for (const g of planeObj.userData.mainGear) for (let i = 0; i < 5; i++) spawnPuff(g.clone().applyQuaternion(f.att).add(f.pos), 0xdcdcdc, f.cfg.diameter * 0.5, 1.8, f.cfg.diameter * 1.2, new V3(R(-3, 3), R(1, 4), R(-3, 3)).add(f.vel.clone().multiplyScalar(0.3)), 0.7);
       }
       else if (ev.type === "log") { addLog(ev.text); if (ev.text.startsWith("Отрыв")) atc(`${callsign}, взлёт в ${hhmm()}. Набирайте 3000 ft, курс по навигации.`); }
@@ -1705,7 +1724,7 @@ document.querySelectorAll("[data-ph]").forEach((el) => (el.style.backgroundImage
 function openMenu() {
   for (const id of ["hangar", "flow", "crash", "help"]) $(id).hidden = true;
   let best = null; try { best = parseFloat(localStorage.getItem("skypilot.bestRace")); } catch (e) {}
-  $("mBest").textContent = best > 0 ? "Рекорд гонки: " + fmtT(best) : "Пилот: гость";
+  $("mBest").textContent = `Очки: ${SCORE.points.toLocaleString("ru-RU")} · посадок: ${SCORE.landings}` + (SCORE.best ? ` · лучшее касание ${SCORE.best} fpm` : "") + (best > 0 ? " · рекорд гонки " + fmtT(best) : "");
   $("menu").hidden = false;
 }
 function openFlow(mode) { FL.mode = mode; FL.step = "planes"; $("menu").hidden = true; $("flow").hidden = false; renderFlow(); }

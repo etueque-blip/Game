@@ -719,6 +719,40 @@ def add_daynight(s):
     return s
 
 
+SCORE_JS = r"""
+// ===== очки (те же правила, что на сервере Roblox), хранятся в браузере
+const SCORE = { points: 0, landings: 0, best: 0 };
+try { Object.assign(SCORE, JSON.parse(localStorage.getItem("skypilot.score") || "{}")); } catch (e) {}
+let scoreFrom = null, lastScoredLanding = -1e9;
+function addScore(pts, label) {
+  SCORE.points += pts;
+  try { localStorage.setItem("skypilot.score", JSON.stringify(SCORE)); } catch (e) {}
+  setTimeout(() => toast(`+${pts} очков · ${label}`, "var(--green)"), 1200);
+}
+function scoreLanding(ap, text) {
+  const now = performance.now() / 1000; if (now - lastScoredLanding < 8) return;
+  lastScoredLanding = now;
+  const m = /(\d+) fpm/.exec(text); const fpm = m ? parseInt(m[1], 10) : 999;
+  let pts = fpm < 120 ? 400 : fpm < 250 ? 300 : fpm < 600 ? 150 : 50, label = "посадка " + fpm + " fpm";
+  if (scoreFrom && scoreFrom !== ap.id) { pts += 500; label += " · перелёт " + scoreFrom + " → " + ap.id; }
+  scoreFrom = ap.id; SCORE.landings++; if (!SCORE.best || fpm < SCORE.best) SCORE.best = Math.max(1, fpm);
+  addScore(pts, label);
+}
+"""
+
+
+def add_score(s):
+    """Очки в веб-версии: посадки, перелёт, рейс, стоянка, гонка; итог в главном меню."""
+    s = patch(s, "// ============================================================ HUD\n", "// ============================================================ HUD\n" + SCORE_JS)
+    s = patch(s, "{ const ap = airportAt(f.pos.x, f.pos.z); if (ap) atc(", "{ const ap = airportAt(f.pos.x, f.pos.z); if (ap) scoreLanding(ap, ev.text); if (ap && flightDest && ap.id === flightDest) addScore(1000, \"рейс выполнен\"); if (ap) atc(")
+    s = patch(s, 'toast("Рейс завершён у гейта " + gateTarget.id + " · +500", "var(--green)");', 'toast("Рейс завершён у гейта " + gateTarget.id + " · +500", "var(--green)"); addScore(500, "стоянка " + gateTarget.id);')
+    s = patch(s, 'toast(msg, "var(--green)"); addLog(msg); raceIdx = 0;', 'toast(msg, "var(--green)"); addLog(msg); if (t >= 60) addScore(1500, "гонка колец"); raceIdx = 0;')
+    s = patch(s, '$("mBest").textContent = best > 0 ? "Рекорд гонки: " + fmtT(best) : "Пилот: гость";',
+              '$("mBest").textContent = `Очки: ${SCORE.points.toLocaleString("ru-RU")} · посадок: ${SCORE.landings}` + (SCORE.best ? ` · лучшее касание ${SCORE.best} fpm` : "") + (best > 0 ? " · рекорд гонки " + fmtT(best) : "");')
+    s = patch(s, "parkBrake = mode.startsWith(\"runway\");", "parkBrake = mode.startsWith(\"runway\"); { const a0 = AIRPORTS.find((a) => \"runway:\" + a.id === mode); scoreFrom = a0 ? a0.id : null; }")
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -752,6 +786,7 @@ def main():
     s = add_atc(s)
     s = add_ai(s)
     s = add_daynight(s)
+    s = add_score(s)
     s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс
     s = patch(s, "lastCfg = cfg; lastMode = mode; raceReset();", "lastCfg = cfg; lastMode = mode; lastDest = flightDest; raceReset();")
