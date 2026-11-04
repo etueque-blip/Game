@@ -433,6 +433,37 @@ def add_premium(s, patch):
     s = patch(s, '    physicsStep(f, input, dt);\n', '    physicsStep(f, input, dt);\n    achFrame(f);\n')
     s = patch(s, 'if (t >= 60) addScore(1500, "гонка колец");', 'if (t >= 60) { addScore(1500, "гонка колец"); achUnlock("race"); }')
     s = patch(s, '$("loading").hidden = true;', '$("mAch").onclick = () => { achRender(); $("achO").hidden = false; }; $("achClose").onclick = () => ($("achO").hidden = true); achRender();\n$("loading").hidden = true;')
+    # самолёты: лаковая краска, «волна» ливреи к хвосту, стёкла кабины с рамками и бликом, металлическая передняя кромка
+    s = patch(s, """    // хвостовая часть в цвет киля
+    x.fillStyle = hex(cfg.colors.tail);""", """    // «волна»: полоса фирменного цвета поднимается от брюха к хвосту (на обе стороны)
+    for (const side of [0, 1]) {
+      const U = (u) => (side ? 1 - u : u) * W;
+      const g = x.createLinearGradient(0, V(0.5), 0, V(0.12)); g.addColorStop(0, hex(cfg.colors.accent)); g.addColorStop(1, hex(cfg.colors.tail));
+      x.fillStyle = g; x.beginPath();
+      x.moveTo(U(0.47), V(0.52)); x.bezierCurveTo(U(0.42), V(0.36), U(0.3), V(0.22), U(0.08), V(0.12));
+      x.lineTo(U(0.0), V(0.12)); x.lineTo(U(0.0), V(0.16)); x.bezierCurveTo(U(0.22), V(0.25), U(0.36), V(0.38), U(0.4), V(0.53)); x.closePath(); x.fill();
+      x.fillStyle = "rgba(255,255,255,.9)"; x.beginPath();
+      x.moveTo(U(0.4), V(0.53)); x.bezierCurveTo(U(0.36), V(0.38), U(0.22), V(0.25), U(0.0), V(0.16)); x.lineTo(U(0.0), V(0.17));
+      x.bezierCurveTo(U(0.21), V(0.26), U(0.345), V(0.39), U(0.385), V(0.535)); x.closePath(); x.fill();
+    }
+    // хвостовая часть в цвет киля
+    x.fillStyle = hex(cfg.colors.tail);""")
+    s = patch(s, """      x.fillRect(W * 0.08, V(0.968), W * 0.15, 0.022 * H); x.fillRect(W * 0.77, V(0.968), W * 0.15, 0.022 * H);
+      x.fillRect(0, V(0.975), W * 0.06, 0.018 * H); x.fillRect(W * 0.94, V(0.975), W * 0.06, 0.018 * H);""",
+              """      // остекление кабины: 4 панели на сторону с рамками и бликом
+      const pane = (u0, u1, v0, v1, k) => { const gr = x.createLinearGradient(0, V(v1), 0, V(v0)); gr.addColorStop(0, "#2c4a66"); gr.addColorStop(0.45, "#0d1622"); gr.addColorStop(1, "#060a10");
+        x.fillStyle = gr; x.beginPath(); x.moveTo(W * u0, V(v0)); x.lineTo(W * u1, V(v0)); x.lineTo(W * (u1 - k), V(v1)); x.lineTo(W * (u0 + k), V(v1)); x.closePath(); x.fill();
+        x.strokeStyle = "rgba(190,198,208,.9)"; x.lineWidth = 3; x.stroke(); };
+      pane(0.0, 0.055, 0.958, 0.982, 0.004); pane(0.945, 1.0, 0.958, 0.982, 0.004);
+      pane(0.06, 0.13, 0.956, 0.98, 0.006); pane(0.87, 0.94, 0.956, 0.98, 0.006);
+      pane(0.135, 0.2, 0.953, 0.975, 0.008); pane(0.8, 0.865, 0.953, 0.975, 0.008);
+      pane(0.205, 0.245, 0.951, 0.969, 0.006); pane(0.755, 0.795, 0.951, 0.969, 0.006);""")
+    s = patch(s, """  return (liveryCache[cfg.id] = new THREE.MeshStandardMaterial({ map: t, metalness: kind === "fighter" ? 0.35 : 0.2, roughness: kind === "fighter" ? 0.55 : 0.32, envMap, envMapIntensity: 1 }));""",
+              """  return (liveryCache[cfg.id] = kind === "fighter" ? new THREE.MeshStandardMaterial({ map: t, metalness: 0.35, roughness: 0.55, envMap, envMapIntensity: 1 })
+    : new THREE.MeshPhysicalMaterial({ map: t, metalness: 0.15, roughness: 0.36, clearcoat: 1, clearcoatRoughness: 0.12, envMap, envMapIntensity: 1.05 }));""")
+    s = patch(s, """  const tailMat = std(col.tail, { metal: 0.2, rough: 0.35, side: THREE.DoubleSide });""",
+              """  const tailMat = kind === "fighter" ? std(col.tail, { metal: 0.2, rough: 0.35, side: THREE.DoubleSide })
+    : new THREE.MeshPhysicalMaterial({ color: lin(col.tail), metalness: 0.15, roughness: 0.36, clearcoat: 1, clearcoatRoughness: 0.12, envMap, side: THREE.DoubleSide });""")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

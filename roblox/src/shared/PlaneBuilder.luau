@@ -149,9 +149,16 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	local Lt = L * 0.24
 	local cylLen = L - Ln - Lt
 	local cylMid = -L / 2 + Ln + cylLen / 2
-	cylZ(ctx, "Fuselage", cylLen + 0.02, D, Vector3.new(0, 0, cylMid), col.body)
-	ellipsoid(ctx, "Nose", Vector3.new(D / 2, D / 2, Ln), CFrame.new(0, 0, -L / 2 + Ln), col.body)
-	ellipsoid(ctx, "TailCone", Vector3.new(D / 2, D / 2, Lt), CFrame.new(0, 0, L / 2 - Lt), col.body)
+	local glossy = cfg.engines ~= "jet1" and cfg.engines ~= "prop"
+	local fus = cylZ(ctx, "Fuselage", cylLen + 0.02, D, Vector3.new(0, 0, cylMid), col.body)
+	local nose = ellipsoid(ctx, "Nose", Vector3.new(D / 2, D / 2, Ln), CFrame.new(0, 0, -L / 2 + Ln), col.body)
+	local tcone = ellipsoid(ctx, "TailCone", Vector3.new(D / 2, D / 2, Lt), CFrame.new(0, 0, L / 2 - Lt), col.body)
+	if glossy then
+		-- лаковая краска: лёгкое отражение неба
+		for _, part in { fus, nose, tcone } do
+			part.Reflectance = 0.07
+		end
+	end
 	if cfg.hump then
 		ellipsoid(ctx, "Hump", Vector3.new(D * 0.4, D * 0.45, L * 0.2), CFrame.new(0, D * 0.28, -L / 2 + L * 0.24), col.body)
 	end
@@ -171,6 +178,7 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 				local mk = if cfg.mask then 1.45 else 1
 				local pane = block(ctx, "CockpitWindow", Vector3.new(r * 0.42 * mk, 0.08 * D * mk, Ln * 0.11 * mk), CFrame.new(x, y, zc) * CFrame.Angles(math.rad(-38 + i * 8), 0, -s * ang), DARK, Enum.Material.Glass)
 				pane.CastShadow = false
+				pane.Reflectance = 0.25
 			end
 		end
 	end
@@ -202,6 +210,24 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 			end
 		end
 		block(ctx, "Cheatline", Vector3.new(D * 0.04, D * 0.05, cylLen), CFrame.new(s * D * 0.49, -D * 0.06, cylMid), col.accent)
+		-- «волна» ливреи: полоса фирменного цвета поднимается от брюха к хвосту
+		if glossy and L > 50 then
+			local zA, zB = cylMid + cylLen * 0.08, L / 2 - Lt * 0.55
+			local N = 9
+			for i = 0, N - 1 do
+				local t0 = i / N
+				local tm = (i + 0.5) / N
+				local z = zA + (zB - zA) * tm
+				local phi = math.rad(-62 + 92 * tm ^ 1.3) -- угол на окружности: снизу вверх
+				local rad = D / 2 * (if z > L / 2 - Lt then math.max(0.35, (L / 2 - z) / Lt) ^ 0.6 else 1) + 0.03
+				local seg = (zB - zA) / N * 1.08
+				local band = block(ctx, "LiverySwoosh", Vector3.new(D * 0.02, D * (0.2 - 0.08 * t0), seg),
+					CFrame.new(s * rad * math.cos(phi), rad * math.sin(phi), z) * CFrame.Angles(0, 0, if s == 1 then phi else math.pi - phi),
+					if tm < 0.5 then col.accent else col.tail)
+				band.CastShadow = false
+				band.Reflectance = 0.07
+			end
+		end
 	end
 	-- брюхо светло-серое, как у настоящих лайнеров
 	if L > 50 then
