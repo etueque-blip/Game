@@ -7,6 +7,17 @@ local FT = World.FT
 local G = 19
 
 local FlightPhysics = {}
+
+-- Ограничения по перегрузке (G) и самолёты с fly-by-wire (защита от перегрузки, как в реальности)
+local FBW = { A220 = true, A320 = true, A330 = true, A350 = true, A380 = true, B777 = true, B787 = true, G650 = true, GL7500 = true, F16 = true }
+function FlightPhysics.limits(c: any): (number, number, boolean)
+	local gMax = c.gMax or (if c.id == "F16" then 9 elseif c.id == "C172" then 3.8 elseif c.length < 130 then 2.6 else 2.5)
+	local gMin = c.gMin or (if c.id == "F16" then -3 elseif c.id == "C172" then -1.5 else -1)
+	return gMax, gMin, FBW[c.id] == true
+end
+function FlightPhysics.gearMaxKts(c: any): number
+	return c.gearMaxKts or (if c.maxKts > 300 then 270 else 9999)
+end
 FlightPhysics.FT = FT
 FlightPhysics.G = G
 
@@ -26,6 +37,7 @@ export type Flight = {
 	inP: number, inR: number, inY: number,
 	vyExtra: number, lastVelY: number, vel: Vector3,
 	onGround: boolean, airTime: number, crashed: boolean, crashReason: string?,
+	gload: number, damage: number, buffet: number, flapStress: number, gearStress: number, flapsDamaged: boolean, gearStuck: boolean,
 	events: { Event }, dbg: { [string]: number },
 }
 
@@ -44,6 +56,7 @@ function FlightPhysics.new(cfg: any, spawnCF: CFrame, air: boolean): Flight
 		inP = 0, inR = 0, inY = 0,
 		vyExtra = 0, lastVelY = 0, vel = spawnCF.LookVector * speed,
 		onGround = not air, airTime = 0, crashed = false, crashReason = nil,
+		gload = 1, damage = 0, buffet = 0, flapStress = 0, gearStress = 0, flapsDamaged = false, gearStuck = false,
 		events = {}, dbg = { agl = 0, lift = 1, eff = 1, stall = cfg.stallKts, thrust = 0, drag = 0, accel = 0, thrustMul = 1 },
 	}
 end
@@ -54,7 +67,7 @@ local function crash(f: Flight, reason: string)
 	table.insert(f.events, { type = "crash", text = reason })
 end
 
-function FlightPhysics.step(f: Flight, input: Input, dt: number)
+local function stepOnce(f: Flight, input: Input, dt: number)
 	if f.crashed then
 		return
 	end
@@ -161,7 +174,19 @@ function FlightPhysics.step(f: Flight, input: Input, dt: number)
 		end
 		att = CFrame.Angles(0, heading, 0) * CFrame.Angles(pitch, 0, 0)
 	else
-		local pr = c.pitchRate * eff * f.inP
+		-- fly-by-wire: компьютер не даёт выйти за предел перегрузки
+		local gMaxP, gMinP, fbw = FlightPhysics.limits(c)
+		local inP = f.inP
+		-- аэродинамический предел: крыло не даст больше (V/Vs)² — дальше срыв потока
+		local aeroMax = (f.speed / stall) ^ 2
+		local capMax = if fbw then math.min(gMaxP, aeroMax) else aeroMax
+		local capMin = if fbw then math.max(gMinP, -0.6 * aeroMax) else -0.6 * aeroMax
+		if inP > 0 and f.gload > capMax * 0.85 then
+			inP *= clamp((capMax * 0.98 - f.gload) / (capMax * 0.13 + 0.05), 0, 1)
+		elseif inP < 0 and f.gload < capMin * 0.85 then
+			inP *= clamp((f.gload - capMin * 0.98) / (math.abs(capMin) * 0.13 + 0.05), 0, 1)
+		end
+		local pr = c.pitchRate * eff * inP
 		if lift < 1 then
 			pr -= (1 - lift) * 0.9
 		end
@@ -205,6 +230,56 @@ function FlightPhysics.step(f: Flight, input: Input, dt: number)
 		end
 	end
 
+	-- перегрузка: (ускорение + g) в проекции на «пол» самолёта, в единицах g
+	if f.onGround or dt <= 0 then
+		f.gload += (1 - f.gload) * math.min(1, dt * 5)
+	else
+		local acc = (vel - f.vel) / dt + Vector3.new(0, G, 0)
+		local nz = acc:Dot(up) / G
+		f.gload += (clamp(nz, -15, 15) - f.gload) * math.min(1, dt * 8)
+	end
+	local gMax, gMin = FlightPhysics.limits(c)
+	if not f.onGround then
+		if f.gload > gMax * 1.5 or f.gload < gMin * 1.5 then
+			return crash(f, string.format("Разрушение конструкции: перегрузка %.1f G (предел %.1f G)", f.gload, if f.gload > 0 then gMax else gMin))
+		end
+		if f.gload > gMax then
+			f.damage += (f.gload - gMax) / gMax * dt * 1.5
+		elseif f.gload < gMin then
+			f.damage += (gMin - f.gload) / math.abs(gMin) * dt * 1.5
+		end
+	end
+	if f.speed > c.maxKts * 1.1 then
+		f.damage += (f.speed / c.maxKts - 1.1) * dt * 2
+	end
+	if f.damage >= 1 then
+		return crash(f, "Разрушение конструкции: превышены ограничения самолёта")
+	end
+	-- скоростной напор ломает закрылки и шасси
+	if f.flaps > 0 and f.speed > c.flapMaxKts * 1.15 then
+		f.flapStress += dt
+		if f.flapStress > 2 and not f.flapsDamaged then
+			f.flapsDamaged, f.flaps = true, 0
+			table.insert(f.events, { type = "warn", text = "Закрылки повреждены скоростным напором — заблокированы" })
+		end
+	else
+		f.flapStress = math.max(0, f.flapStress - dt)
+	end
+	if f.gear and not c.fixedGear and not f.onGround and f.speed > FlightPhysics.gearMaxKts(c) * 1.15 then
+		f.gearStress += dt
+		if f.gearStress > 3 and not f.gearStuck then
+			f.gearStuck = true
+			table.insert(f.events, { type = "warn", text = "Шасси повреждено на скорости — заклинило в выпущенном положении" })
+		end
+	else
+		f.gearStress = math.max(0, f.gearStress - dt)
+	end
+	-- тряска: у сваливания, при превышении скорости и у предела перегрузки
+	local bStall = if f.onGround then 0 else clamp((1.12 - f.speed / stall) / 0.12, 0, 1)
+	local bSpeed = clamp((f.speed / c.maxKts - 1) / 0.1, 0, 1)
+	local bG = clamp((f.gload - gMax * 0.85) / (gMax * 0.2), 0, 1)
+	f.buffet = math.max(bStall, bSpeed, bG)
+
 	f.vel = vel
 	f.lastVelY = vel.Y
 	f.pos = pos + vel * dt
@@ -218,7 +293,9 @@ function FlightPhysics.action(f: Flight, a: string): (string?, string?)
 	end
 	local c = f.cfg
 	if a == "gear" then
-		if c.fixedGear then
+		if f.gearStuck then
+			return "Шасси заклинило в выпущенном положении", "amber"
+		elseif c.fixedGear then
 			return "У этого самолёта шасси не убирается", nil
 		elseif f.onGround and f.gear then
 			return "Нельзя убрать шасси на земле", "amber"
@@ -228,6 +305,9 @@ function FlightPhysics.action(f: Flight, a: string): (string?, string?)
 	elseif a == "flapDn" or a == "flapUp" then
 		if c.noFlaps then
 			return "У истребителя нет закрылков", nil
+		end
+		if f.flapsDamaged then
+			return "Закрылки повреждены и заблокированы", "amber"
 		end
 		f.flaps = clamp(f.flaps + (if a == "flapDn" then 1 else -1), 0, 3)
 		return "Закрылки: " .. f.flaps, nil
@@ -248,6 +328,18 @@ end
 
 function FlightPhysics.pose(f: Flight): CFrame
 	return CFrame.new(f.pos) * f.att
+end
+
+-- Шаг не больше 1/60 с: при низком FPS перегрузка и защита fly-by-wire работают так же, как при 60 FPS
+function FlightPhysics.step(f: Flight, input: Input, dt: number)
+	local n = math.max(1, math.ceil(dt * 60 - 0.01))
+	local h = dt / n
+	for _ = 1, n do
+		if f.crashed then
+			break
+		end
+		stepOnce(f, input, h)
+	end
 end
 
 return FlightPhysics

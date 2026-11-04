@@ -368,6 +368,9 @@ local function handleEvents(f: FlightPhysics.Flight)
 			if model then
 				tireSmoke(model, f.cfg)
 			end
+		elseif ev.type == "warn" then
+			ui.toast(ev.text, "amber")
+			addLog(ev.text)
 		elseif ev.type == "takeoff" then
 			ui.atc(string.format("%s, взлёт в %s. Набирайте 3000 ft, курс по навигации.", callsign, os.date("%H:%M")))
 			addLog(ev.text)
@@ -567,7 +570,11 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local dAgl = f.dbg.agl or 0
 	local ahead = f.pos + f.vel * 6
 	local terrainAhead = not f.onGround and f.vel.Y < -5 and ahead.Y < World.groundAt(ahead.X, ahead.Z) + 60
-	if not f.onGround and f.speed < stall * 1.05 then
+	local gMax, gMin = FlightPhysics.limits(c)
+	ui.setG(f.gload, gMax, gMin, f.damage)
+	if not f.onGround and (f.gload > gMax * 0.9 or f.gload < gMin * 0.9) then
+		w = string.format("ПЕРЕГРУЗКА %.1f G · ПРЕДЕЛ %.1f", f.gload, if f.gload > 0 then gMax else gMin)
+	elseif not f.onGround and f.speed < stall * 1.05 then
 		w = "STALL · СВАЛИВАНИЕ"
 	elseif not f.onGround and ((dAgl < 400 and f.vel.Y < -25) or terrainAhead) then
 		w = "PULL UP · ТЯНИ ВВЕРХ"
@@ -617,7 +624,7 @@ RunService:BindToRenderStep("SkyPilot", Enum.RenderPriority.Camera.Value + 1, fu
 			cameraRig.update(dt, crashPose or FlightPhysics.pose(f), f.cfg, 0, false, true)
 		else
 			local pose = if root and simulating then root.CFrame else FlightPhysics.pose(f)
-			cameraRig.update(dt, pose, f.cfg, f.speed, f.onGround, false)
+			cameraRig.update(dt, pose, f.cfg, f.speed, f.onGround, false, f.buffet)
 			updateHud(f, dt, now)
 		end
 	elseif ui.hangarVisible() then

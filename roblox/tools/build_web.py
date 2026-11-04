@@ -899,6 +899,53 @@ def add_physics2(s):
     return s
 
 
+GLOAD_PHYS = r"""
+  // перегрузка (как FlightPhysics.luau): (ускорение + g) в проекции на «пол» самолёта
+  if (f.onGround || dt <= 0) f.gload += (1 - f.gload) * Math.min(1, dt * 5);
+  else { const acc = vel.clone().sub(f.vel).multiplyScalar(1 / dt); acc.y += G; f.gload += (clamp(acc.dot(up) / G, -15, 15) - f.gload) * Math.min(1, dt * 8); }
+  const [gMax, gMin] = gLimits(c);
+  if (!f.onGround) {
+    if (f.gload > gMax * 1.5 || f.gload < gMin * 1.5) return crash(f, `Разрушение конструкции: перегрузка ${f.gload.toFixed(1)} G (предел ${(f.gload > 0 ? gMax : gMin).toFixed(1)} G)`);
+    if (f.gload > gMax) f.damage += (f.gload - gMax) / gMax * dt * 1.5; else if (f.gload < gMin) f.damage += (gMin - f.gload) / Math.abs(gMin) * dt * 1.5;
+  }
+  if (f.speed > c.maxKts * 1.1) f.damage += (f.speed / c.maxKts - 1.1) * dt * 2;
+  if (f.damage >= 1) return crash(f, "Разрушение конструкции: превышены ограничения самолёта");
+  if (f.flaps > 0 && f.speed > c.flapMaxKts * 1.15) { f.flapStress += dt; if (f.flapStress > 2 && !f.flapsDamaged) { f.flapsDamaged = true; f.flaps = 0; f.events.push({ type: "warn", text: "Закрылки повреждены скоростным напором — заблокированы" }); } } else f.flapStress = Math.max(0, f.flapStress - dt);
+  if (f.gear && !c.fixedGear && !f.onGround && f.speed > gearMaxKts(c) * 1.15) { f.gearStress += dt; if (f.gearStress > 3 && !f.gearStuck) { f.gearStuck = true; f.events.push({ type: "warn", text: "Шасси повреждено на скорости — заклинило в выпущенном положении" }); } } else f.gearStress = Math.max(0, f.gearStress - dt);
+  f.buffet = Math.max(f.onGround ? 0 : clamp((1.12 - f.speed / stall) / 0.12, 0, 1), clamp((f.speed / c.maxKts - 1) / 0.1, 0, 1), clamp((f.gload - gMax * 0.85) / (gMax * 0.2), 0, 1));
+  f.vel = vel;"""
+
+GLOAD_LIMITS = r"""
+const FBW = { A220: 1, A320: 1, A330: 1, A350: 1, A380: 1, B777: 1, B787: 1, G650: 1, GL7500: 1, F16: 1 };
+function gLimits(c) { return [c.gMax || (c.id === "F16" ? 9 : c.id === "C172" ? 3.8 : c.length < 130 ? 2.6 : 2.5), c.gMin || (c.id === "F16" ? -3 : c.id === "C172" ? -1.5 : -1), !!FBW[c.id]]; }
+function gearMaxKts(c) { return c.gearMaxKts || (c.maxKts > 300 ? 270 : 9999); }
+"""
+
+
+def add_gload(s):
+    """Перегрузка G, пределы, повреждения, fly-by-wire, тряска и «потемнение» — как в Roblox."""
+    s = patch(s, "function newFlight(cfg, mode) {", GLOAD_LIMITS + "function newFlight(cfg, mode) {")
+    s = patch(s, "onGround: !air, airTime: 0, crashed: false, events: [], dbg: {} };", "onGround: !air, airTime: 0, crashed: false, events: [], dbg: {}, gload: 1, damage: 0, buffet: 0, flapStress: 0, gearStress: 0, flapsDamaged: false, gearStuck: false };")
+    s = patch(s, "    let pr = c.pitchRate * eff * f.inP;", "    const [gMaxP, gMinP, fbw] = gLimits(c); let inP = f.inP;\n    const aeroMax = (f.speed / stall) ** 2, capMax = fbw ? Math.min(gMaxP, aeroMax) : aeroMax, capMin = fbw ? Math.max(gMinP, -0.6 * aeroMax) : -0.6 * aeroMax;\n    if (inP > 0 && f.gload > capMax * 0.85) inP *= clamp((capMax * 0.98 - f.gload) / (capMax * 0.13 + 0.05), 0, 1); else if (inP < 0 && f.gload < capMin * 0.85) inP *= clamp((f.gload - capMin * 0.98) / (Math.abs(capMin) * 0.13 + 0.05), 0, 1);\n    let pr = c.pitchRate * eff * inP;")
+    s = patch(s, "  f.vel = vel;", GLOAD_PHYS)
+    s = patch(s, 'if (c.fixedGear) toast("У этого самолёта шасси не убирается");', 'if (f.gearStuck) toast("Шасси заклинило в выпущенном положении", "var(--amber)");\n    else if (c.fixedGear) toast("У этого самолёта шасси не убирается");')
+    s = patch(s, 'if (c.noFlaps) toast("У истребителя нет закрылков");', 'if (c.noFlaps) toast("У истребителя нет закрылков");\n    else if (f.flapsDamaged) toast("Закрылки повреждены и заблокированы", "var(--amber)");')
+    s = patch(s, '  if (!f.onGround && f.speed < f.dbg.stall * 1.05) w = "STALL · СВАЛИВАНИЕ";',
+              '  const [gMx, gMn] = gLimits(c);\n'
+              '  { const el = $("gm"); el.hidden = false; const bad = f.gload > gMx || f.gload < gMn, near = f.gload > gMx * 0.85 || f.gload < gMn * 0.85;\n'
+              '    el.innerHTML = `<b style="color:${bad ? "var(--red)" : near ? "var(--amber)" : "var(--green)"}">${f.gload.toFixed(1)} G</b><small style="color:${f.damage > 0.3 ? "var(--red)" : f.damage > 0.005 ? "var(--amber)" : "var(--dim)"}">${f.damage > 0.005 ? "конструкция " + Math.max(0, Math.round((1 - f.damage) * 100)) + "%" : "+" + gMx + " / " + gMn}</small>`;\n'
+              '    const k = f.gload > 5 ? clamp((f.gload - 5) / 4, 0, 0.85) : f.gload < -2.5 ? clamp((-2.5 - f.gload) / 2, 0, 0.6) : 0; const v = $("gfx"); v.style.opacity = k; v.style.background = f.gload < 0 ? "radial-gradient(circle, rgba(120,0,0,.2) 20%, rgba(120,0,0,1) 75%)" : "radial-gradient(circle, rgba(0,0,0,.1) 15%, rgba(0,0,0,1) 70%)"; }\n'
+              '  if (!f.onGround && (f.gload > gMx * 0.9 || f.gload < gMn * 0.9)) w = `ПЕРЕГРУЗКА ${f.gload.toFixed(1)} G · ПРЕДЕЛ ${f.gload > 0 ? gMx : gMn}`;\n'
+              '  else if (!f.onGround && f.speed < f.dbg.stall * 1.05) w = "STALL · СВАЛИВАНИЕ";')
+    s = patch(s, "      if (f.onGround && f.speed > 30) eye.y += (Math.random() - 0.5) * Math.min(0.6, f.speed / 400);",
+              "      if (f.onGround && f.speed > 30) eye.y += (Math.random() - 0.5) * Math.min(0.6, f.speed / 400);\n      if (f.buffet > 0.02) eye.add(new V3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).multiplyScalar(f.buffet * clamp(c.length / 60, 0.6, 2)));")
+    s = patch(s, "      else if (ev.type === \"crash\")", "      else if (ev.type === \"warn\") { toast(ev.text, \"var(--amber)\"); addLog(ev.text); }\n      else if (ev.type === \"crash\")")
+    s = patch(s, "#warn {", "#gm { position: absolute; right: calc(110px + env(safe-area-inset-right, 0px)); top: calc(170px + env(safe-area-inset-top, 0px)); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; text-align: center; font-family: var(--f-num); min-width: 64px; }\n#gm b { display: block; font-size: 18px; } #gm small { display: block; font-size: 10px; }\n#gfx { position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 4; }\n@media (max-width: 600px) { #gm { right: calc(92px + env(safe-area-inset-right, 0px)); top: calc(270px + env(safe-area-inset-top, 0px)); } }\n#warn {")
+    s = patch(s, '<div id="nav" hidden></div>', '<div id="nav" hidden></div>\n  <div id="gm" hidden></div>\n  <div id="gfx"></div>')
+    s = patch(s, '$("radar").hidden = true; $("ils").hidden = true;', '$("radar").hidden = true; $("gm").hidden = true; $("gfx").style.opacity = 0; $("ils").hidden = true;')
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -939,6 +986,9 @@ def main():
     s = add_ils(s)
     s = add_guide(s)
     s = add_physics2(s)
+    s = add_gload(s)
+    # подшаги физики: при 30/20 FPS перегрузка и защита FBW как при 60 FPS
+    s = patch(s, "function physicsStep(f, input, dt) {", "function physicsStep(f, input, dt) {\n  const n = Math.max(1, Math.ceil(dt * 60 - 0.01)), h = dt / n;\n  for (let i = 0; i < n && !f.crashed; i++) physicsStep1(f, input, h);\n}\nfunction physicsStep1(f, input, dt) {")
     s = add_mobile(s)
     s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс

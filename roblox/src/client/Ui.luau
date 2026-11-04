@@ -783,6 +783,8 @@ function Ui.new(cb: Callbacks)
 			apTag.Visible = false
 			nav.Visible = false
 			tape.Visible = false
+			gBox.Visible = false
+			vignette.BackgroundTransparency = 1
 			wx.Visible = false
 			raceTag.Visible = false
 			ils.Visible = false
@@ -821,6 +823,23 @@ function Ui.new(cb: Callbacks)
 	function self.setCamLabel(name: string)
 		bCam.Text = "Камера: " .. name
 	end
+	-- перегрузка G и состояние конструкции (слева от авиагоризонта)
+	local gBox = glass(root, { Size = UDim2.fromOffset(76, 44), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -104, 0, 168), Visible = false })
+	local gVal = new("TextLabel", { Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 2), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 20, TextColor3 = C.green, Text = "1.0 G" }, gBox)
+	local gSub = new("TextLabel", { Size = UDim2.new(1, -4, 0, 14), Position = UDim2.fromOffset(2, 27), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 10, TextColor3 = C.dim, Text = "" }, gBox)
+	-- «потемнение в глазах» на больших перегрузках
+	local vignette = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 15, Active = false }, gui)
+	function self.setG(g: number, gMax: number, gMin: number, damage: number)
+		gBox.Visible = hud.Visible
+		gVal.Text = string.format("%.1f G", g)
+		gVal.TextColor3 = if g > gMax or g < gMin then C.red elseif g > gMax * 0.85 or g < gMin * 0.85 then C.amber else C.green
+		gSub.Text = if damage > 0.005 then string.format("конструкция %d%%", math.max(0, math.round((1 - damage) * 100))) else string.format("%+.1f / %.1f", gMax, gMin)
+		gSub.TextColor3 = if damage > 0.3 then C.red elseif damage > 0.005 then C.amber else C.dim
+		local k = if not hud.Visible then 0 elseif g > 5 then math.clamp((g - 5) / 4, 0, 0.85) elseif g < -2.5 then math.clamp((-2.5 - g) / 2, 0, 0.6) else 0
+		vignette.BackgroundColor3 = if g < 0 then Color3.fromRGB(120, 0, 0) else Color3.new(0, 0, 0)
+		vignette.BackgroundTransparency = 1 - k
+	end
+
 	-- указатель глиссады (ILS)
 	local ils = new("TextLabel", { Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 226), BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.amber, Text = "", Visible = false }, root)
 	corner(ils, 6)

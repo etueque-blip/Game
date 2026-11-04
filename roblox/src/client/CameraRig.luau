@@ -60,7 +60,7 @@ function CameraRig.new(ui: any)
 	end
 
 	-- pose — фактическое положение модели (то, что рисуется), cfg — конфиг
-	function self.update(dt: number, pose: CFrame, cfg: any, speed: number, onGround: boolean, crashed: boolean)
+	function self.update(dt: number, pose: CFrame, cfg: any, speed: number, onGround: boolean, crashed: boolean, buffet: number?)
 		cam.CameraType = Enum.CameraType.Scriptable
 		cam.FieldOfView = 66 + math.clamp(speed / cfg.maxKts, 0, 1) * 14
 		local base = pose.Position
@@ -71,6 +71,10 @@ function CameraRig.new(ui: any)
 			local upOff = cfg.diameter * 1.25 + cfg.length * 0.09 + 6
 			local eye = base + camRot * Vector3.new(0, upOff, back)
 			local target = base + camRot * Vector3.new(0, upOff * 0.3, -cfg.length * 0.4)
+			if buffet and buffet > 0.02 then
+				local k = buffet * math.clamp(cfg.length / 60, 0.6, 2)
+				eye += Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(-1, 1), rng:NextNumber(-1, 1)) * k
+			end
 			if onGround and speed > 30 then
 				eye += Vector3.new(0, (rng:NextNumber() - 0.5) * math.min(0.6, speed / 400), 0)
 			end

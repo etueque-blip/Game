@@ -51,6 +51,10 @@ button:focus-visible { outline: 2px solid var(--magenta); outline-offset: 2px; }
 #atc { position: absolute; left: 50%; bottom: calc(262px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--panel-solid); border: 1px solid rgba(77,255,149,.4); color: var(--green); border-radius: 8px; padding: 6px 12px; font-family: var(--f-num); font-size: 13px; max-width: calc(100% - 32px); text-align: center; }
 #ils { position: absolute; left: 50%; top: calc(236px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-family: var(--f-num); font-size: 13px; white-space: nowrap; }
 @media (max-width: 600px) { #ils { top: calc(196px + env(safe-area-inset-top, 0px)); font-size: 11px; } }
+#gm { position: absolute; right: calc(110px + env(safe-area-inset-right, 0px)); top: calc(170px + env(safe-area-inset-top, 0px)); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; text-align: center; font-family: var(--f-num); min-width: 64px; }
+#gm b { display: block; font-size: 18px; } #gm small { display: block; font-size: 10px; }
+#gfx { position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 4; }
+@media (max-width: 600px) { #gm { right: calc(92px + env(safe-area-inset-right, 0px)); top: calc(270px + env(safe-area-inset-top, 0px)); } }
 #warn { position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%); font-family: var(--f-display); font-size: clamp(20px, 5vw, 34px); letter-spacing: .06em; text-shadow: 0 2px 12px rgba(0,0,0,.6); pointer-events: none; text-align: center; white-space: nowrap; }
 #toast { position: absolute; top: calc(198px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 140px); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 14px; text-align: center; pointer-events: none; }
 #touch { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px)); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
@@ -195,6 +199,8 @@ kbd { font-family: var(--f-num); font-size: 11px; border: 1px solid var(--line);
   <canvas id="adi" width="184" height="184" hidden></canvas>
   <canvas id="htape" width="880" height="68" hidden></canvas>
   <div id="nav" hidden></div>
+  <div id="gm" hidden></div>
+  <div id="gfx"></div>
   <div id="ils" hidden></div>
   <div id="atc" hidden></div>
   <div id="wx" hidden></div>
@@ -431,16 +437,24 @@ function airportAt(x, z) {
   }
   return null;
 }
+
+const FBW = { A220: 1, A320: 1, A330: 1, A350: 1, A380: 1, B777: 1, B787: 1, G650: 1, GL7500: 1, F16: 1 };
+function gLimits(c) { return [c.gMax || (c.id === "F16" ? 9 : c.id === "C172" ? 3.8 : c.length < 130 ? 2.6 : 2.5), c.gMin || (c.id === "F16" ? -3 : c.id === "C172" ? -1.5 : -1), !!FBW[c.id]]; }
+function gearMaxKts(c) { return c.gearMaxKts || (c.maxKts > 300 ? 270 : 9999); }
 function newFlight(cfg, mode) {
   const sp = spawnFor(cfg, mode), air = sp.air;
   const pos = sp.pos;
   const speed = air ? Math.floor(cfg.maxKts * 0.6) : 0;
   return { cfg, mode, pos, att: new Q().setFromAxisAngle(AY, sp.yaw), speed, throttle: air ? 0.7 : 0, flaps: 0, gear: !!cfg.fixedGear || !air,
     brakes: false, reverse: false, inP: 0, inR: 0, inY: 0, vyExtra: 0, lastVelY: 0, vel: new V3(-Math.sin(sp.yaw), 0, -Math.cos(sp.yaw)).multiplyScalar(speed),
-    onGround: !air, airTime: 0, crashed: false, events: [], dbg: {} };
+    onGround: !air, airTime: 0, crashed: false, events: [], dbg: {}, gload: 1, damage: 0, buffet: 0, flapStress: 0, gearStress: 0, flapsDamaged: false, gearStuck: false };
 }
 
 function physicsStep(f, input, dt) {
+  const n = Math.max(1, Math.ceil(dt * 60 - 0.01)), h = dt / n;
+  for (let i = 0; i < n && !f.crashed; i++) physicsStep1(f, input, h);
+}
+function physicsStep1(f, input, dt) {
   if (f.crashed) return;
   dt = clamp(dt, 1 / 240, 1 / 20);
   const c = f.cfg;
@@ -509,7 +523,10 @@ function physicsStep(f, input, dt) {
     else pitch = Math.max(0, pitch - pitch * Math.min(1, dt * 1.5));
     att = qAxis(AY, heading).multiply(qAxis(AX, pitch));
   } else {
-    let pr = c.pitchRate * eff * f.inP;
+    const [gMaxP, gMinP, fbw] = gLimits(c); let inP = f.inP;
+    const aeroMax = (f.speed / stall) ** 2, capMax = fbw ? Math.min(gMaxP, aeroMax) : aeroMax, capMin = fbw ? Math.max(gMinP, -0.6 * aeroMax) : -0.6 * aeroMax;
+    if (inP > 0 && f.gload > capMax * 0.85) inP *= clamp((capMax * 0.98 - f.gload) / (capMax * 0.13 + 0.05), 0, 1); else if (inP < 0 && f.gload < capMin * 0.85) inP *= clamp((f.gload - capMin * 0.98) / (Math.abs(capMin) * 0.13 + 0.05), 0, 1);
+    let pr = c.pitchRate * eff * inP;
     if (lift < 1) pr -= (1 - lift) * 0.9;
     const rr = -c.rollRate * eff * f.inR;
     const yr = -c.yawRate * eff * f.inY;
@@ -547,6 +564,20 @@ function physicsStep(f, input, dt) {
     }
   }
 
+
+  // перегрузка (как FlightPhysics.luau): (ускорение + g) в проекции на «пол» самолёта
+  if (f.onGround || dt <= 0) f.gload += (1 - f.gload) * Math.min(1, dt * 5);
+  else { const acc = vel.clone().sub(f.vel).multiplyScalar(1 / dt); acc.y += G; f.gload += (clamp(acc.dot(up) / G, -15, 15) - f.gload) * Math.min(1, dt * 8); }
+  const [gMax, gMin] = gLimits(c);
+  if (!f.onGround) {
+    if (f.gload > gMax * 1.5 || f.gload < gMin * 1.5) return crash(f, `Разрушение конструкции: перегрузка ${f.gload.toFixed(1)} G (предел ${(f.gload > 0 ? gMax : gMin).toFixed(1)} G)`);
+    if (f.gload > gMax) f.damage += (f.gload - gMax) / gMax * dt * 1.5; else if (f.gload < gMin) f.damage += (gMin - f.gload) / Math.abs(gMin) * dt * 1.5;
+  }
+  if (f.speed > c.maxKts * 1.1) f.damage += (f.speed / c.maxKts - 1.1) * dt * 2;
+  if (f.damage >= 1) return crash(f, "Разрушение конструкции: превышены ограничения самолёта");
+  if (f.flaps > 0 && f.speed > c.flapMaxKts * 1.15) { f.flapStress += dt; if (f.flapStress > 2 && !f.flapsDamaged) { f.flapsDamaged = true; f.flaps = 0; f.events.push({ type: "warn", text: "Закрылки повреждены скоростным напором — заблокированы" }); } } else f.flapStress = Math.max(0, f.flapStress - dt);
+  if (f.gear && !c.fixedGear && !f.onGround && f.speed > gearMaxKts(c) * 1.15) { f.gearStress += dt; if (f.gearStress > 3 && !f.gearStuck) { f.gearStuck = true; f.events.push({ type: "warn", text: "Шасси повреждено на скорости — заклинило в выпущенном положении" }); } } else f.gearStress = Math.max(0, f.gearStress - dt);
+  f.buffet = Math.max(f.onGround ? 0 : clamp((1.12 - f.speed / stall) / 0.12, 0, 1), clamp((f.speed / c.maxKts - 1) / 0.1, 0, 1), clamp((f.gload - gMax * 0.85) / (gMax * 0.2), 0, 1));
   f.vel = vel;
   f.lastVelY = vel.y;
   pos.addScaledVector(vel, dt);
@@ -1232,7 +1263,7 @@ function doCrash(reason) {
     debris.push({ m, v: flight.vel.clone().multiplyScalar(0.25).add(new V3(R(-1, 1), R(0.3, 1.5), R(-1, 1)).multiplyScalar(R(20, 80))), w: new V3(R(-3, 3), R(-3, 3), R(-3, 3)) }); } });
   const sz = flight.cfg.length;
   for (let i = 0; i < 26; i++) spawnPuff(flight.pos.clone().add(new V3(R(-1, 1), R(0, 1), R(-1, 1)).multiplyScalar(sz * 0.3)), i < 12 ? 0xffa030 : 0x2a2a2a, sz * 0.3, i < 12 ? 1.4 : 6, sz * (i < 12 ? 0.8 : 0.35), new V3(R(-8, 8), R(10, 30), R(-8, 8)), i < 12 ? 1 : 0.8);
-  crashTimer = 1.8; $("crashReason").textContent = reason; $("hud").hidden = true; $("adi").hidden = true; $("radar").hidden = true; $("ils").hidden = true; $("atc").hidden = true; $("htape").hidden = true; $("wx").hidden = true; $("race").hidden = true; $("nav").hidden = true; raceReset(); $("warn").textContent = "";
+  crashTimer = 1.8; $("crashReason").textContent = reason; $("hud").hidden = true; $("adi").hidden = true; $("radar").hidden = true; $("gm").hidden = true; $("gfx").style.opacity = 0; $("ils").hidden = true; $("atc").hidden = true; $("htape").hidden = true; $("wx").hidden = true; $("race").hidden = true; $("nav").hidden = true; raceReset(); $("warn").textContent = "";
 }
 
 // ============================================================ INPUT
@@ -1256,11 +1287,13 @@ function action(a) {
   const f = flight; if (!f || f.crashed) return;
   const c = f.cfg;
   if (a === "gear") {
-    if (c.fixedGear) toast("У этого самолёта шасси не убирается");
+    if (f.gearStuck) toast("Шасси заклинило в выпущенном положении", "var(--amber)");
+    else if (c.fixedGear) toast("У этого самолёта шасси не убирается");
     else if (f.onGround && f.gear) toast("Нельзя убрать шасси на земле", "var(--amber)");
     else { f.gear = !f.gear; toast(f.gear ? "Шасси выпущено" : "Шасси убрано"); addLog(f.gear ? "Шасси вниз" : "Шасси вверх"); }
   } else if (a === "flapDn" || a === "flapUp") {
     if (c.noFlaps) toast("У истребителя нет закрылков");
+    else if (f.flapsDamaged) toast("Закрылки повреждены и заблокированы", "var(--amber)");
     else { f.flaps = clamp(f.flaps + (a === "flapDn" ? 1 : -1), 0, 3); toast("Закрылки: " + f.flaps); }
   } else if (a === "rev") {
     if (f.onGround) { f.reverse = !f.reverse; toast(f.reverse ? "Реверс включён, добавь тягу" : "Реверс выключен", "var(--amber)"); } else toast("Реверс только на земле");
@@ -1679,7 +1712,12 @@ function updateHUD(f) {
   $("park").hidden = !parkBrake || f.crashed;
   { const el = $("race"); if (raceStart !== null) { el.hidden = false; el.textContent = `КОЛЬЦА ${raceIdx}/${RINGS.length} · ${fmtT(performance.now() / 1000 - raceStart)}`; } else el.hidden = true; }
   let w = "", col = "var(--red)";
-  if (!f.onGround && f.speed < f.dbg.stall * 1.05) w = "STALL · СВАЛИВАНИЕ";
+  const [gMx, gMn] = gLimits(c);
+  { const el = $("gm"); el.hidden = false; const bad = f.gload > gMx || f.gload < gMn, near = f.gload > gMx * 0.85 || f.gload < gMn * 0.85;
+    el.innerHTML = `<b style="color:${bad ? "var(--red)" : near ? "var(--amber)" : "var(--green)"}">${f.gload.toFixed(1)} G</b><small style="color:${f.damage > 0.3 ? "var(--red)" : f.damage > 0.005 ? "var(--amber)" : "var(--dim)"}">${f.damage > 0.005 ? "конструкция " + Math.max(0, Math.round((1 - f.damage) * 100)) + "%" : "+" + gMx + " / " + gMn}</small>`;
+    const k = f.gload > 5 ? clamp((f.gload - 5) / 4, 0, 0.85) : f.gload < -2.5 ? clamp((-2.5 - f.gload) / 2, 0, 0.6) : 0; const v = $("gfx"); v.style.opacity = k; v.style.background = f.gload < 0 ? "radial-gradient(circle, rgba(120,0,0,.2) 20%, rgba(120,0,0,1) 75%)" : "radial-gradient(circle, rgba(0,0,0,.1) 15%, rgba(0,0,0,1) 70%)"; }
+  if (!f.onGround && (f.gload > gMx * 0.9 || f.gload < gMn * 0.9)) w = `ПЕРЕГРУЗКА ${f.gload.toFixed(1)} G · ПРЕДЕЛ ${f.gload > 0 ? gMx : gMn}`;
+  else if (!f.onGround && f.speed < f.dbg.stall * 1.05) w = "STALL · СВАЛИВАНИЕ";
   else if (!f.onGround && f.dbg.agl < 400 && f.vel.y < -25) w = "PULL UP · ТЯНИ ВВЕРХ";
   else if (!f.onGround && !f.gear && f.dbg.agl < 250 && f.vel.y < 0) { w = "ВЫПУСТИ ШАССИ"; col = "var(--amber)"; }
   else if (f.flaps > 0 && f.speed > c.flapMaxKts) { w = "ЗАКРЫЛКИ: ПРЕВЫШЕНИЕ"; col = "var(--amber)"; }
@@ -1738,6 +1776,7 @@ function frame(t) {
         for (const g of planeObj.userData.mainGear) for (let i = 0; i < 5; i++) spawnPuff(g.clone().applyQuaternion(f.att).add(f.pos), 0xdcdcdc, f.cfg.diameter * 0.5, 1.8, f.cfg.diameter * 1.2, new V3(R(-3, 3), R(1, 4), R(-3, 3)).add(f.vel.clone().multiplyScalar(0.3)), 0.7);
       }
       else if (ev.type === "log") { addLog(ev.text); if (ev.text.startsWith("Отрыв")) atc(`${callsign}, взлёт в ${hhmm()}. Набирайте 3000 ft, курс по навигации.`); }
+      else if (ev.type === "warn") { toast(ev.text, "var(--amber)"); addLog(ev.text); }
       else if (ev.type === "crash") { toast("💥 " + ev.text, "var(--red)"); doCrash(ev.text); }
     }
     f.events.length = 0;
@@ -1782,6 +1821,7 @@ function frame(t) {
       const eye = new V3(0, upOff, back).applyQuaternion(camRot).add(base);
       const target = new V3(0, upOff * 0.3, -c.length * 0.4).applyQuaternion(camRot).add(base);
       if (f.onGround && f.speed > 30) eye.y += (Math.random() - 0.5) * Math.min(0.6, f.speed / 400);
+      if (f.buffet > 0.02) eye.add(new V3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).multiplyScalar(f.buffet * clamp(c.length / 60, 0.6, 2)));
       const gmin = groundAt(eye.x, eye.z); if (eye.y < gmin + 3) eye.y = gmin + 3;
       camera.up.copy(new V3(0, 1, 0).applyQuaternion(camRot)); camera.position.copy(eye); camera.lookAt(target);
     } else if (camMode === 1) {
