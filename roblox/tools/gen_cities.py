@@ -616,7 +616,8 @@ def riyadh():
     roads(cx, cz, half, 145, 72.5)
     labels.append({"name": "RIYADH", "x": cx, "y": 1100, "z": cz})
     kingdom, faisal = (cx - 150, cz - 150), (cx + 380, cz + 300)
-    zones = [(kingdom[0], kingdom[1], 170), (faisal[0], faisal[1], 140)]
+    masmak, tv = (cx - 520, cz + 460), (cx + 560, cz - 500)
+    zones = [(kingdom[0], kingdom[1], 170), (faisal[0], faisal[1], 140), (masmak[0], masmak[1], 150), (tv[0], tv[1], 80)]
     SAND = [(222, 204, 170), (210, 190, 152), (232, 218, 190), (196, 176, 140)]
     for gx in range(-7, 8):
         for gz in range(-7, 8):
@@ -652,6 +653,43 @@ def riyadh():
         box((fx, 0.45 + H2 * 0.85 / 12 * (i + 0.5), fz), (w_, H2 * 0.85 / 12, w_), math.radians(45), c=(170, 190, 200), m="Glass", refl=0.3)
     ball((fx, 0.45 + H2 * 0.78, fz), 28, c=(220, 180, 70), m="Metal", refl=0.3)
     vcyl(fx, 0.45 + H2 * 0.85, fz, H2 * 0.15, 3, c=(220, 220, 225), m="Metal")
+    # Крепость Масмак (XIX в.): глинобитные стены, круглые сужающиеся башни с зубцами, ворота
+    mx, mz = masmak
+    ADOBE, ADOBE_D = (178, 134, 92), (150, 108, 72)
+    side, wall_h, t = 120, m2s(11), 7
+    for dx, dz, w, d in ((0, -side / 2, side, t), (0, side / 2, side, t), (-side / 2, 0, t, side), (side / 2, 0, t, side)):
+        box((mx + dx, 0.45 + wall_h / 2, mz + dz), (w, wall_h, d), c=ADOBE, m="Sandstone")
+        n = int(max(w, d) // 9)
+        for i in range(n):
+            o = -max(w, d) / 2 + 4.5 + i * 9
+            px, pz = (mx + dx + o, mz + dz) if w > d else (mx + dx, mz + dz + o)
+            box((px, 0.45 + wall_h + 2, pz), (4, 4, 4), c=ADOBE, m="Sandstone", solid=False)
+    for sx_ in (-1, 1):
+        for sz_ in (-1, 1):
+            tx, tz = mx + sx_ * side / 2, mz + sz_ * side / 2
+            th = m2s(18)
+            for i in range(3):
+                vcyl(tx, 0.45 + th / 3 * i, tz, th / 3, 26 - i * 3.5, c=ADOBE if i % 2 == 0 else ADOBE_D, m="Sandstone")
+            for i in range(8):
+                a_ = i / 8 * math.tau
+                box((tx + math.cos(a_) * 8, 0.45 + th + 2, tz + math.sin(a_) * 8), (4, 4, 4), c=ADOBE, m="Sandstone", solid=False)
+    box((mx, 0.45 + 9, mz + side / 2 + 1), (18, 18, 4), c=(96, 66, 40), m="Wood", solid=False)  # ворота
+    keep_h = m2s(20)
+    box((mx + 20, 0.45 + keep_h / 2, mz - 15), (34, keep_h, 34), c=ADOBE_D, m="Sandstone")  # главная башня
+    for i in range(3):
+        box((mx + 20, 0.45 + keep_h * (0.35 + i * 0.22), mz + 2.2), (5, 7, 1), c=(60, 40, 26), solid=False)  # окна-бойницы
+    box((mx, 0.5, mz), (side - t, 0.2, side - t), c=(200, 178, 140), m="Sand", solid=False)  # двор
+    # Телебашня Эр-Рияда (170 м): сужающийся бетонный ствол, «тарелка» и антенна
+    vx, vz = tv
+    H3 = m2s(170)
+    for i in range(8):
+        k = i / 8
+        vcyl(vx, 0.45 + H3 * 0.78 * k, vz, H3 * 0.78 / 8, 34 - k * 16, c=(214, 210, 200), m="Concrete")
+    vcyl(vx, 0.45 + H3 * 0.74, vz, 12, 64, c=(200, 198, 190), m="Concrete")
+    vcyl(vx, 0.45 + H3 * 0.74 + 12, vz, 8, 52, c=(120, 150, 170), m="Glass", refl=0.3)
+    vcyl(vx, 0.45 + H3 * 0.74 + 20, vz, 5, 40, c=(200, 198, 190), m="Concrete")
+    vcyl(vx, 0.45 + H3 * 0.78, vz, H3 * 0.22, 4, c=(225, 225, 230), m="Metal")
+    ball((vx, 0.45 + H3 + 1, vz), 4, c=(255, 70, 60), m="Neon", solid=False)
     street_trees(cx, cz, half, 145, 72.5, "palm", zones)
 
 
