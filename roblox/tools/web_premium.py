@@ -215,6 +215,34 @@ function padPoll() {
 """
 
 
+FACADE_JS = r"""
+    facade: (() => {
+      // окна по этажам из мировых координат: подходят зданиям любого размера, без текстур и UV
+      const m = new THREE.MeshStandardMaterial({ metalness: 0.02, roughness: 0.86, envMap, envMapIntensity: 0.6 });
+      const U = { uNight: { value: 0 } }; window.__facadeU = U;
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.uNight = U.uNight;
+        sh.vertexShader = "varying vec3 vFP; varying vec3 vFN;\n" + sh.vertexShader.replace("#include <project_vertex>", `#include <project_vertex>
+          vec4 fwp = vec4(transformed, 1.0); vec3 fn = objectNormal;
+          #ifdef USE_INSTANCING
+            fwp = instanceMatrix * fwp; fn = mat3(instanceMatrix) * fn;
+          #endif
+          vFP = (modelMatrix * fwp).xyz; vFN = normalize(mat3(modelMatrix) * fn);`);
+        sh.fragmentShader = "uniform float uNight; varying vec3 vFP; varying vec3 vFN;\nfloat fh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n" +
+          sh.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
+            float side = 1.0 - step(0.5, abs(vFN.y));
+            float hc = abs(vFN.x) > abs(vFN.z) ? vFP.z : vFP.x;
+            float fx = fract(hc / 7.0), fy = fract((vFP.y - 0.45) / 6.5);
+            float win = side * step(0.2, fx) * step(fx, 0.8) * step(0.3, fy) * step(fy, 0.82) * step(5.0, vFP.y);
+            float lit = step(0.42, fh(vec2(floor(hc / 7.0), floor((vFP.y - 0.45) / 6.5))));
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.09, 0.13, 0.19), win * 0.82);
+            diffuseColor.rgb *= 1.0 - side * (1.0 - step(0.12, fy)) * 0.18;`).replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+            totalEmissiveRadiance += win * lit * uNight * vec3(1.0, 0.76, 0.42) * 1.1;`);
+      };
+      return m;
+    })(),"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -248,6 +276,31 @@ def add_premium(s, patch):
               '        <div><kbd>X</kbd> интерцепторы, <kbd>I</kbd> инструкция для самолёта</div>\n'
               '        <div style="grid-column: 1 / -1">Геймпад: стик — штурвал, R2/L2 — тяга, R1/L1 — руль, Y — шасси, крестовина — закрылки (↑↓), интерцепторы (←), навигация (→), X — реверс, B — тормоз, L3 — стояночный тормоз</div>')
     s = patch(s, "справа — рычаг тяги.", "справа — рычаг тяги, кнопки ИНТЕРЦ., ШАССИ, ЗАКР.")
+    # фасады с окнами у обычных зданий городов (днём тёмное стекло, ночью часть окон светится)
+    s = patch(s, '    neon: new THREE.MeshBasicMaterial({ color: 0xffffff }),\n  };\n  window.__cityMats = mats;',
+              '    neon: new THREE.MeshBasicMaterial({ color: 0xffffff }),' + FACADE_JS + '\n  };\n  window.__cityMats = mats;')
+    s = patch(s, ': p[11] === "Glass" ? (p[5] < 1 ? "water" : "glass") : "matte";',
+              ': p[11] === "Glass" ? (p[5] < 1 ? "water" : "glass") : (p[0] === "box" && p[12] === 1 && p[5] >= 12 && Math.min(p[4], p[6]) >= 20 && p[2] - p[5] / 2 < 2) ? "facade" : "matte";')
+    # стеклянные небоскрёбы ночью: свет по этажам и окнам, а не сплошной заливкой
+    s = patch(s, "  window.__cityMats = mats;\n", """  window.__cityMats = mats;
+  mats.glass.onBeforeCompile = (sh) => {
+    sh.vertexShader = "varying vec3 vGP; varying vec3 vGN;\\n" + sh.vertexShader.replace("#include <project_vertex>", `#include <project_vertex>
+      vec4 gwp = vec4(transformed, 1.0); vec3 gn = objectNormal;
+      #ifdef USE_INSTANCING
+        gwp = instanceMatrix * gwp; gn = mat3(instanceMatrix) * gn;
+      #endif
+      vGP = (modelMatrix * gwp).xyz; vGN = normalize(mat3(modelMatrix) * gn);`);
+    sh.fragmentShader = "varying vec3 vGP; varying vec3 vGN;\\nfloat gh(vec2 p){ return fract(sin(dot(p, vec2(269.5, 183.3))) * 43758.5453); }\\n" +
+      sh.fragmentShader.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+        float gside = 1.0 - step(0.6, abs(vGN.y));
+        float ghc = abs(vGN.x) > abs(vGN.z) ? vGP.z : vGP.x;
+        float gfx = fract(ghc / 5.0), gfy = fract(vGP.y / 5.5);
+        float gwin = step(0.12, gfx) * step(gfx, 0.88) * step(0.22, gfy) * step(gfy, 0.86);
+        float glit = step(0.35, gh(vec2(floor(ghc / 5.0), floor(vGP.y / 5.5))));
+        totalEmissiveRadiance *= gside * gwin * mix(0.12, 1.0, glit);`);
+  };
+""")
+    s = patch(s, "    if (g) g.emissive.copy(WARM).multiplyScalar(1.1 * n);", "    if (g) g.emissive.copy(WARM).multiplyScalar(1.1 * n);\n    if (window.__facadeU) window.__facadeU.uNight.value = n;")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);
