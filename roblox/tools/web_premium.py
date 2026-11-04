@@ -160,6 +160,25 @@ NEWS_HTML = """      <div class="news">
       </div>"""
 
 
+GAMEPAD_JS = r"""
+// ===== геймпад (как в Roblox): левый стик — штурвал, R2/L2 — тяга, R1/L1 — руль, B — тормоз,
+// Y — шасси, крестовина — закрылки/интерцепторы/навигация, X — реверс, L3 — стояночный тормоз, Back — камера, Start — меню
+const PAD = { p: 0, r: 0, y: 0, up: false, dn: false, brake: false, prev: [], on: false };
+const PAD_ONCE = { 3: "gear", 12: "flapUp", 13: "flapDn", 2: "rev", 10: "park", 14: "spoiler", 15: "nav", 0: "nav", 8: "cam", 9: "hangar" };
+function padPoll() {
+  const gp = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find((g) => g && g.connected);
+  if (!gp) { PAD.p = PAD.r = PAD.y = 0; PAD.up = PAD.dn = PAD.brake = false; return; }
+  if (!PAD.on) { PAD.on = true; toast("Геймпад подключён: левый стик — штурвал, R2/L2 — тяга, L3 — стояночный тормоз"); }
+  const dz = (v, d) => (Math.abs(v) < d ? 0 : Math.sign(v) * (Math.abs(v) - d) / (1 - d));
+  const expo = (v) => v * (0.4 + 0.6 * v * v);
+  const b = (i) => !!(gp.buttons[i] && (gp.buttons[i].pressed || gp.buttons[i].value > 0.25));
+  PAD.p = expo(dz(gp.axes[1] || 0, 0.12)); PAD.r = expo(dz(gp.axes[0] || 0, 0.12));
+  PAD.y = (b(5) ? 1 : 0) - (b(4) ? 1 : 0); PAD.up = b(7); PAD.dn = b(6); PAD.brake = b(1);
+  for (const i in PAD_ONCE) { const now = b(+i); if (now && !PAD.prev[i]) action(PAD_ONCE[i]); PAD.prev[i] = now; }
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -186,4 +205,20 @@ def add_premium(s, patch):
     # подпись карточки самолёта — отдельным элементом поверх затемнения, с классом самолёта
     s = patch(s, 'b.className = "pcard"; b.style.backgroundImage = ph("plane_" + id); b.textContent = c.name;',
               'b.className = "pcard"; b.style.backgroundImage = ph("plane_" + id); b.innerHTML = `<span><small>${c.cls || ""}</small>${c.name}</span>`;')
+    # геймпад в веб-версии (раньше работал только в Roblox)
+    s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
+    s = patch(s, """    const k = (c) => keys.has(c);
+    const input = {
+      p: ((k("KeyS") || k("ArrowDown")) ? 1 : 0) - ((k("KeyW") || k("ArrowUp")) ? 1 : 0) + touch.y,
+      r: ((k("KeyD") || k("ArrowRight")) ? 1 : 0) - ((k("KeyA") || k("ArrowLeft")) ? 1 : 0) + touch.x,
+      y: (k("KeyE") ? 1 : 0) - (k("KeyQ") ? 1 : 0) + touch.rr - touch.rl,
+      thrUp: k("ShiftLeft") || k("ShiftRight"), thrDn: k("ControlLeft") || k("ControlRight"),
+      brakes: k("KeyB") || touch.brake || (parkBrake && f.onGround),""", """    const k = (c) => keys.has(c);
+    padPoll();
+    const input = {
+      p: clamp(((k("KeyS") || k("ArrowDown")) ? 1 : 0) - ((k("KeyW") || k("ArrowUp")) ? 1 : 0) + touch.y + PAD.p, -1, 1),
+      r: clamp(((k("KeyD") || k("ArrowRight")) ? 1 : 0) - ((k("KeyA") || k("ArrowLeft")) ? 1 : 0) + touch.x + PAD.r, -1, 1),
+      y: clamp((k("KeyE") ? 1 : 0) - (k("KeyQ") ? 1 : 0) + touch.rr - touch.rl + PAD.y, -1, 1),
+      thrUp: k("ShiftLeft") || k("ShiftRight") || PAD.up, thrDn: k("ControlLeft") || k("ControlRight") || PAD.dn,
+      brakes: k("KeyB") || touch.brake || PAD.brake || (parkBrake && f.onGround),""")
     return s
