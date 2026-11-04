@@ -668,6 +668,45 @@ def add_ai(s):
     return s
 
 
+DAYNIGHT_JS = r"""
+// ===== смена дня и ночи: сутки за 40 минут (как в Roblox), рассвет/закат, ночные огни города
+let gameClock = 10;
+const DAY_MIN = 40;
+const DN = { top: ZENITH.clone(), hor: HORIZON.clone(), gnd: GROUND_HAZE.clone(),
+  topN: lin(0x060b1c), horN: lin(0x18223a), gndN: lin(0x0b1018), horS: lin(0xf2955a), topS: lin(0x41528a) };
+const WARM = new THREE.Color(0xffc480).convertSRGBToLinear();
+let dnLast = -1;
+function dayNight(dt) {
+  gameClock = (gameClock + dt * 24 / (DAY_MIN * 60)) % 24;
+  const ang = (gameClock - 6) / 24 * Math.PI * 2, elev = Math.sin(ang);
+  SUN_DIR.set(Math.cos(ang) * 0.85, Math.max(elev, -0.2) * 0.95 + 0.04, 0.25).normalize();
+  const day = clamp(elev * 3 + 0.25, 0, 1), dusk = clamp(1 - Math.abs(elev) * 4, 0, 1) * (elev > -0.25 ? 1 : 0);
+  ZENITH.copy(DN.topN).lerp(DN.top, day).lerp(DN.topS, dusk * 0.35);
+  HORIZON.copy(DN.horN).lerp(DN.hor, day).lerp(DN.horS, dusk * 0.6);
+  GROUND_HAZE.copy(DN.gndN).lerp(DN.gnd, day);
+  scene.fog.color.copy(HORIZON);
+  sun.intensity = 2.4 * day; hemi.intensity = 0.14 + 0.61 * day;
+  renderer.toneMappingExposure = 0.42 + 0.63 * day;
+  const g = window.__cityGlass;
+  if (g) { const n = 1 - day; if (Math.abs(n - dnLast) > 0.02) { dnLast = n; g.emissive.copy(WARM).multiplyScalar(1.1 * n); } }
+}
+function dayPhase() {
+  const t = gameClock;
+  return t >= 5 && t < 10 ? ["◐", "Утро"] : t < 14 && t >= 10 ? ["☀", "Полдень"] : t >= 14 && t < 18 ? ["☀", "День"] : t >= 18 && t < 21 ? ["◑", "Вечер"] : ["☾", "Ночь"];
+}
+"""
+
+
+def add_daynight(s):
+    """Смена дня и ночи в веб-версии + время на панели погоды."""
+    s = patch(s, "    glass: new THREE.MeshStandardMaterial({ metalness: 0.75, roughness: 0.12, envMap, envMapIntensity: 1.5 }),",
+              "    glass: (window.__cityGlass = new THREE.MeshStandardMaterial({ metalness: 0.75, roughness: 0.12, envMap, envMapIntensity: 1.5 })),")
+    s = patch(s, "// ============================================================ HUD\n", "// ============================================================ HUD\n" + DAYNIGHT_JS)
+    s = patch(s, "  stepBots(dt);\n", "  stepBots(dt);\n  dayNight(dt);\n")
+    s = patch(s, "el.innerHTML = `☀ Ясно · день<small>", "const [ic, ph] = dayPhase(); el.innerHTML = `${ic} ${ph} · ${String(Math.floor(gameClock)).padStart(2, \"0\")}:${String(Math.floor(gameClock % 1 * 60)).padStart(2, \"0\")}<small>")
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -700,6 +739,7 @@ def main():
     s = add_gates(s)
     s = add_atc(s)
     s = add_ai(s)
+    s = add_daynight(s)
     s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс
     s = patch(s, "lastCfg = cfg; lastMode = mode; raceReset();", "lastCfg = cfg; lastMode = mode; lastDest = flightDest; raceReset();")
