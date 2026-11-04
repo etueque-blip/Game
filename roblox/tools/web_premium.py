@@ -241,6 +241,13 @@ def add_premium(s, patch):
     # подпись карточки самолёта — отдельным элементом поверх затемнения, с классом самолёта
     s = patch(s, 'b.className = "pcard"; b.style.backgroundImage = ph("plane_" + id); b.textContent = c.name;',
               'b.className = "pcard"; b.style.backgroundImage = ph("plane_" + id); b.innerHTML = `<span><small>${c.cls || ""}</small>${c.name}</span>`;')
+    # справка: клавиши, добавленные позже (пробел, X, I) и геймпад
+    s = patch(s, '<div><kbd>N</kbd> навигация: стрелка на аэропорт или город</div>',
+              '<div><kbd>N</kbd> навигация: стрелка на аэропорт или город</div>\n'
+              '        <div><kbd>Пробел</kbd> стояночный тормоз (на старте включён)</div>\n'
+              '        <div><kbd>X</kbd> интерцепторы, <kbd>I</kbd> инструкция для самолёта</div>\n'
+              '        <div style="grid-column: 1 / -1">Геймпад: стик — штурвал, R2/L2 — тяга, R1/L1 — руль, Y — шасси, крестовина — закрылки (↑↓), интерцепторы (←), навигация (→), X — реверс, B — тормоз, L3 — стояночный тормоз</div>')
+    s = patch(s, "справа — рычаг тяги.", "справа — рычаг тяги, кнопки ИНТЕРЦ., ШАССИ, ЗАКР.")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);
