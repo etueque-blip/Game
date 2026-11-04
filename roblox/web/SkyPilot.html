@@ -1785,8 +1785,15 @@ function drawRadar(f, hdg) {
   };
   rctx.textAlign = "center"; rctx.textBaseline = "middle";
   const label = (txt, x, z, col, size) => { const p = put(x, z, true); if (!p) return; rctx.font = `600 ${size}px Inter, sans-serif`; rctx.fillStyle = col; rctx.fillText(txt, p[0], p[1]); };
-  for (const ap of AIRPORTS) label(ap.id, ap.cx, ap.cz, "#e4eeff", 24);
-  label("Дубай", 5500, -7500, "#8ea3c4", 20); label("Лондон", -4000, 12500, "#8ea3c4", 20); label("Ташкент", 10500, 3000, "#8ea3c4", 20); label("Стамбул", -20500, 20500, "#8ea3c4", 20); label("Эр-Рияд", 21000, 20500, "#8ea3c4", 20); label("Самарканд", -21000, -20500, "#8ea3c4", 20);
+  // аэропорт: буква в кружке (на краю, если далеко); город: точка и подпись под ней, только в радиусе — подписи не слипаются
+  const apMark = (txt, x, z, drawn) => { const p = put(x, z, true); if (!p) return;
+    const edge = Math.hypot(p[0] - R, p[1] - R) > RANGE * 0.72 * k - 1; if (edge && drawn.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 28)) return; drawn.push(p);
+    rctx.fillStyle = "rgba(59,167,255,.28)"; rctx.beginPath(); rctx.arc(p[0], p[1], 14, 0, Math.PI * 2); rctx.fill();
+    rctx.strokeStyle = "rgba(255,255,255,.55)"; rctx.lineWidth = 1.5; rctx.stroke(); rctx.font = "700 18px Inter, sans-serif"; rctx.fillStyle = "#fff"; rctx.fillText(txt, p[0], p[1] + 1); };
+  const cityMark = (txt, x, z) => { const p = put(x, z, false); if (!p) return; rctx.fillStyle = "#c9d6ea"; rctx.beginPath(); rctx.arc(p[0], p[1], 3.5, 0, Math.PI * 2); rctx.fill();
+    rctx.font = "600 17px Inter, sans-serif"; rctx.fillStyle = "#9aa7bb"; rctx.fillText(txt, p[0], p[1] + 17); };
+  { const drawn = []; for (const ap of [...AIRPORTS].sort((u, v) => Math.hypot(u.cx - f.pos.x, u.cz - f.pos.z) - Math.hypot(v.cx - f.pos.x, v.cz - f.pos.z))) apMark(ap.id, ap.cx, ap.cz, drawn); }
+  cityMark("Дубай", 5500, -7500); cityMark("Лондон", -4000, 12500); cityMark("Ташкент", 10500, 3000); cityMark("Стамбул", -20500, 20500); cityMark("Эр-Рияд", 21000, 20500); cityMark("Самарканд", -21000, -20500);
   const rt = raceTarget() || RINGS[0]; label("◎", rt.pos.x, rt.pos.z, "#3ba7ff", 26);
   for (const b of BOTS) { const q = put(b.f.pos.x, b.f.pos.z, false); if (q) { rctx.fillStyle = "#ffe678"; rctx.beginPath(); rctx.arc(q[0], q[1], 5, 0, Math.PI * 2); rctx.fill(); } }
   rctx.restore();

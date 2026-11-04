@@ -11733,31 +11733,51 @@ function Radar.new(parent: Instance, colors: any)
 		return t
 	end
 
-	local fixed: { { label: TextLabel, x: number, z: number, edge: boolean } } = {}
+	-- аэропорт: буква в кружке (прижимается к краю, если далеко); город: точка и подпись под ней,
+	-- только в радиусе — подписи города и его аэропорта не слипаются
+	local fixed: { { label: TextLabel, x: number, z: number, edge: boolean, dot: TextLabel?, airport: boolean? } } = {}
 	for _, ap in World.AIRPORTS do
-		table.insert(fixed, { label = blip(ap.id, colors.fg, 13), x = ap.cx, z = ap.cz, edge = true })
+		local b = blip(ap.id, Color3.new(1, 1, 1), 12)
+		b.Size = UDim2.fromOffset(18, 18)
+		b.BackgroundColor3 = colors.magenta
+		b.BackgroundTransparency = 0.6
+		b.ZIndex = 3
+		local bc = Instance.new("UICorner")
+		bc.CornerRadius = UDim.new(0.5, 0)
+		bc.Parent = b
+		local bs = Instance.new("UIStroke")
+		bs.Color = Color3.new(1, 1, 1)
+		bs.Transparency = 0.5
+		bs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		bs.Parent = b
+		table.insert(fixed, { label = b, x = ap.cx, z = ap.cz, edge = true, airport = true })
 	end
 	for _, city in World.CITIES do
 		local RU = { DUBAI = "Дубай", LONDON = "Лондон", TASHKENT = "Ташкент", ISTANBUL = "Стамбул", RIYADH = "Эр-Рияд", SAMARKAND = "Самарканд" }
 		local name = RU[city.name] or city.name
-		table.insert(fixed, { label = blip(name, colors.dim, 11), x = city.x, z = city.z, edge = true })
+		local t = blip(name, colors.dim, 10)
+		t.AnchorPoint = Vector2.new(0.5, -0.35)
+		table.insert(fixed, { label = t, x = city.x, z = city.z, edge = false, dot = blip("•", colors.fg, 12) })
 	end
 	local ringBlip = blip("◎", colors.magenta, 14)
 	local planeBlips: { [Instance]: TextLabel } = {}
 
+	local lastClamped = false
 	local function place(label: TextLabel, pos: Vector3, x: number, z: number, hdg: number, edge: boolean): boolean
+		lastClamped = false
 		local east, north = x - pos.X, -(z - pos.Z)
 		local h = math.rad(hdg)
 		local right = east * math.cos(h) - north * math.sin(h)
 		local up = east * math.sin(h) + north * math.cos(h)
 		local d = math.sqrt(right * right + up * up)
-		local maxR = RANGE * (if #label.Text > 1 then 0.6 else 0.85)
+		local maxR = RANGE * (if #label.Text > 2 then 0.62 else 0.85)
 		if d > maxR then
 			if not edge then
 				label.Visible = false
 				return false
 			end
 			right, up = right / d * maxR, up / d * maxR
+			lastClamped = true
 		end
 		local k = (SIZE / 2) / RANGE
 		label.Position = UDim2.fromOffset(SIZE / 2 + right * k, SIZE / 2 - up * k)
@@ -11770,8 +11790,38 @@ function Radar.new(parent: Instance, colors: any)
 	end
 
 	function self.update(pos: Vector3, hdg: number, ownModel: Instance?, ringPos: Vector3?)
+		-- ближние аэропорты первыми; далёкие (на краю) не рисуем поверх уже показанных
+		table.sort(fixed, function(a, b)
+			if (a.airport == true) ~= (b.airport == true) then
+				return a.airport == true
+			end
+			return (a.x - pos.X) ^ 2 + (a.z - pos.Z) ^ 2 < (b.x - pos.X) ^ 2 + (b.z - pos.Z) ^ 2
+		end)
+		local drawn: { UDim2 } = {}
 		for _, f in fixed do
-			place(f.label, pos, f.x, f.z, hdg, f.edge)
+			local shown = place(f.label, pos, f.x, f.z, hdg, f.edge)
+			if shown and f.airport then
+				local p = f.label.Position
+				if lastClamped then
+					for _, q in drawn do
+						if math.abs(q.X.Offset - p.X.Offset) < 15 and math.abs(q.Y.Offset - p.Y.Offset) < 15 then
+							f.label.Visible = false
+							shown = false
+							break
+						end
+					end
+				end
+				if shown then
+					table.insert(drawn, p)
+				end
+			end
+			if f.dot then
+				if shown then
+					place(f.dot, pos, f.x, f.z, hdg, false)
+				else
+					f.dot.Visible = false
+				end
+			end
 		end
 		if ringPos then
 			place(ringBlip, pos, ringPos.X, ringPos.Z, hdg, true)
