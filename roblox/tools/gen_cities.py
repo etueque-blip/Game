@@ -547,6 +547,172 @@ def tashkent():
         box((hx - 70 + i * 12.7, 0.45 + 45, hz - 16.5), (2, 88, 1), c=(170, 170, 168), m="Concrete", solid=False)
 
 
+# ================================================================ СТАМБУЛ (Турция)
+def istanbul():
+    cx, cz = -20500.0, 20500.0
+    half = 1150
+    pad(cx, cz, half, c=(176, 170, 158))
+    labels.append({"name": "ISTANBUL", "x": cx, "y": 900, "z": cz})
+    # пролив Босфор с севера на юг через город
+    box((cx + 150, 0.48, cz), (230, 0.05, 2 * half), c=(40, 96, 128), m="Glass", solid=False, refl=0.35)
+    roads(cx, cz, half, 130, 65)
+    sofia, blue, galata = (cx - 520, cz + 300), (cx - 520, cz - 260), (cx + 600, cz - 420)
+    zones = [(sofia[0], sofia[1], 190), (blue[0], blue[1], 210), (galata[0], galata[1], 80), (cx + 150, cz, 170)]
+    ROOF = (176, 74, 52)
+    for gx in range(-8, 9):
+        for gz in range(-8, 9):
+            x, z = cx + gx * 130, cz + gz * 130
+            if abs(x - (cx + 150)) < 190 or not free(x, z, zones) or rng.random() > 0.85:
+                continue
+            w, d, h = R(55, 95), R(55, 95), R(18, 45)
+            box((x, 0.45 + h / 2, z), (w, h, d), c=rng.choice([(232, 222, 200), (220, 205, 180), (240, 236, 226), (210, 190, 160)]), m="Plaster")
+            rh = min(w, d) * 0.2
+            wedge((x, 0.45 + h + rh / 2, z - d / 4), (w, rh, d / 2), c=ROOF, m="Brick", solid=False)
+            wedge((x, 0.45 + h + rh / 2, z + d / 4), (w, rh, d / 2), (0, math.pi, 0), c=ROOF, m="Brick", solid=False)
+    # современные башни на восточном берегу
+    for dx, dz, hh in ((520, 520, m2s(180)), (640, 380, m2s(150)), (420, 640, m2s(130))):
+        glass_tower(cx + dx, cz + dz, 60, 55, hh, "setback", rng.choice(GLASS))
+    PINK = (214, 170, 140)
+    def mosque(mx, mz, dome_d, minarets, cascade):
+        box((mx, 0.45 + 22, mz), (dome_d * 2.2, 44, dome_d * 2.2), c=PINK, m="Sandstone")
+        vcyl(mx, 0.45 + 44, mz, 14, dome_d * 1.2, c=PINK, m="Sandstone")
+        ell((mx, 0.45 + 58, mz), (dome_d * 0.6, dome_d * 0.42, dome_d * 0.6), c=(120, 132, 140), m="Slate")
+        vcyl(mx, 0.45 + 58 + dome_d * 0.42, mz, 10, 3, c=(220, 190, 90), m="Metal", solid=False)
+        if cascade:
+            for sx_ in (-1, 1):
+                for sz_ in (-1, 1):
+                    ell((mx + sx_ * dome_d * 0.75, 0.45 + 44, mz + sz_ * dome_d * 0.75), (dome_d * 0.3, dome_d * 0.22, dome_d * 0.3), c=(120, 132, 140), m="Slate", solid=False)
+        for i in range(minarets):
+            a = 2 * math.pi * i / minarets + math.pi / 4
+            px, pz = mx + math.cos(a) * dome_d * 1.45, mz + math.sin(a) * dome_d * 1.45
+            vcyl(px, 0.45, pz, 110, 6, c=(236, 232, 222), m="Marble")
+            vcyl(px, 0.45 + 80, pz, 3, 9, c=(236, 232, 222), m="Marble", solid=False)
+            wedge((px, 0.45 + 110 + 9, pz - 1.5), (6, 18, 3), c=(120, 132, 140), m="Slate", solid=False)
+            wedge((px, 0.45 + 110 + 9, pz + 1.5), (6, 18, 3), (0, math.pi, 0), c=(120, 132, 140), m="Slate", solid=False)
+    mosque(sofia[0], sofia[1], 64, 4, False)   # Айя-София: огромный купол, 4 минарета
+    mosque(blue[0], blue[1], 52, 6, True)      # Голубая мечеть: каскад куполов, 6 минаретов
+    # Галатская башня (67 м): каменный цилиндр с коническим верхом
+    gx_, gz_ = galata
+    vcyl(gx_, 0.45, gz_, m2s(52), 30, c=(196, 178, 150), m="Cobblestone")
+    vcyl(gx_, 0.45 + m2s(52), gz_, 6, 34, c=(196, 178, 150), m="Cobblestone")
+    for k, (w_, h_) in enumerate(((28, 10), (20, 10), (12, 10), (4, 8))):
+        box((gx_, 0.45 + m2s(52) + 6 + k * 10 + h_ / 2, gz_), (w_, h_, w_), math.radians(45), c=(80, 90, 100), m="Slate", solid=False)
+    # Босфорский мост: два пилона, настил, тросы
+    bz = cz + 900
+    for sx_ in (-1, 1):
+        box((cx + 150 + sx_ * 170, 0.45 + m2s(82), bz), (8, m2s(165), 22), c=(200, 205, 210), m="Metal")
+    box((cx + 150, 30, bz), (520, 4, 26), c=(150, 155, 160), m="Concrete")
+    for sz_ in (-11, 11):
+        tilted_cyl((cx + 150 - 170, m2s(165), bz + sz_), (cx + 150, 40, bz + sz_), 1.2, c=(230, 230, 235), m="Metal", solid=False)
+        tilted_cyl((cx + 150 + 170, m2s(165), bz + sz_), (cx + 150, 40, bz + sz_), 1.2, c=(230, 230, 235), m="Metal", solid=False)
+    street_trees(cx, cz, half, 130, 65, "leaf", zones, skip=lambda x, z: abs(x - (cx + 150)) < 140, avenues=2)
+
+
+# ================================================================ ЭР-РИЯД (Саудовская Аравия)
+def riyadh():
+    cx, cz = 21000.0, 20500.0
+    half = 1150
+    pad(cx, cz, half, c=(214, 196, 160))
+    roads(cx, cz, half, 145, 72.5)
+    labels.append({"name": "RIYADH", "x": cx, "y": 1100, "z": cz})
+    kingdom, faisal = (cx - 150, cz - 150), (cx + 380, cz + 300)
+    zones = [(kingdom[0], kingdom[1], 170), (faisal[0], faisal[1], 140)]
+    SAND = [(222, 204, 170), (210, 190, 152), (232, 218, 190), (196, 176, 140)]
+    for gx in range(-7, 8):
+        for gz in range(-7, 8):
+            x, z = cx + gx * 145, cz + gz * 145
+            if not free(x, z, zones) or rng.random() > 0.8:
+                continue
+            dist = math.hypot(gx, gz)
+            if dist < 3 and rng.random() < 0.5:
+                glass_tower(x, z, R(50, 80), R(50, 80), R(150, 380), rng.choice(["box", "setback", "cyl"]), rng.choice(GLASS))
+            else:
+                h = R(20, 60)
+                box((x, 0.45 + h / 2, z), (R(70, 110), h, R(70, 110)), c=rng.choice(SAND), m="Sandstone")
+    # Kingdom Centre (302 м): два сужающихся крыла и «мост» под проёмом
+    kx, kz = kingdom
+    H = m2s(302)
+    for i in range(14):
+        k = i / 14
+        y0, hh = 0.45 + H * 0.78 * k, H * 0.78 / 14
+        w_ = 95 * (1 - k * 0.55)
+        box((kx, y0 + hh / 2, kz), (w_, hh, 52 * (1 - k * 0.3)), c=(150, 175, 195), m="Glass", refl=0.35)
+    for sx_ in (-1, 1):
+        for i in range(6):
+            k = i / 6
+            hh = H * 0.22 / 6
+            box((kx + sx_ * (22 + k * 10), 0.45 + H * 0.78 + hh * (i + 0.5), kz), (14 * (1 - k * 0.6), hh, 34), math.radians(sx_ * 8), c=(150, 175, 195), m="Glass", refl=0.35)
+    box((kx, 0.45 + H * 0.86, kz), (70, 5, 18), c=(200, 205, 215), m="Metal")
+    # Al Faisaliah (267 м): четырёхгранная «игла» с золотым шаром
+    fx, fz = faisal
+    H2 = m2s(267)
+    for i in range(12):
+        k = i / 12
+        w_ = 70 * (1 - k) + 6
+        box((fx, 0.45 + H2 * 0.85 / 12 * (i + 0.5), fz), (w_, H2 * 0.85 / 12, w_), math.radians(45), c=(170, 190, 200), m="Glass", refl=0.3)
+    ball((fx, 0.45 + H2 * 0.78, fz), 28, c=(220, 180, 70), m="Metal", refl=0.3)
+    vcyl(fx, 0.45 + H2 * 0.85, fz, H2 * 0.15, 3, c=(220, 220, 225), m="Metal")
+    street_trees(cx, cz, half, 145, 72.5, "palm", zones)
+
+
+# ================================================================ САМАРКАНД (Узбекистан)
+def samarkand():
+    cx, cz = -21000.0, -20500.0
+    half = 1050
+    pad(cx, cz, half, c=(196, 180, 150))
+    roads(cx, cz, half, 135, 67.5)
+    labels.append({"name": "SAMARKAND", "x": cx, "y": 800, "z": cz})
+    registan, gur = (cx, cz), (cx + 520, cz + 420)
+    zones = [(registan[0], registan[1], 330), (gur[0], gur[1], 120)]
+    for gx in range(-7, 8):
+        for gz in range(-7, 8):
+            x, z = cx + gx * 135, cz + gz * 135
+            if not free(x, z, zones) or rng.random() > 0.82:
+                continue
+            h = R(14, 34)
+            box((x, 0.45 + h / 2, z), (R(60, 100), h, R(60, 100)), c=rng.choice([(214, 196, 160), (200, 180, 146), (226, 212, 186)]), m="Sandstone")
+    SAND = (206, 178, 132)
+    TURQ = (32, 165, 185)
+    BLUE = (30, 70, 140)
+    # Регистан: три медресе вокруг площади (запад, север, восток), у каждого портал, купола, минареты
+    rx, rz = registan
+    box((rx, 0.47, rz), (260, 0.1, 260), c=(190, 170, 130), m="Cobblestone", solid=False)
+    for name, ox, oz, face in (("Улугбек", -200, 0, 0), ("Тилля-Кари", 0, -200, 1), ("Шердор", 200, 0, 2)):
+        mx, mz = rx + ox, rz + oz
+        along_x = face == 1
+        w, dpt = (220, 90) if along_x else (90, 220)
+        box((mx, 0.45 + 22, mz), (w, 44, dpt), c=SAND, m="Sandstone")
+        # портал (пештак) к площади
+        px = mx + (0 if along_x else (40 if face == 0 else -40))
+        pz = mz + (40 if along_x else 0)
+        ps = (70, 70, 22) if along_x else (22, 70, 70)
+        box((px, 0.45 + 35, pz), ps, c=SAND, m="Sandstone")
+        arch = (34, 50, 1) if along_x else (1, 50, 34)
+        apos = (px, 0.45 + 28, pz + 11.5) if along_x else (px + (11.5 if face == 0 else -11.5), 0.45 + 28, pz)
+        box(apos, arch, c=BLUE, m="SmoothPlastic", solid=False)
+        # бирюзовые купола и угловые минареты
+        for k in (-1, 1):
+            dxx, dzz = (k * 70, -20) if along_x else ((20 if face == 2 else -20), k * 70)
+            vcyl(mx + dxx, 0.45 + 44, mz + dzz, 12, 34, c=SAND, m="Sandstone")
+            ell((mx + dxx, 0.45 + 56, mz + dzz), (18, 22, 18), c=TURQ, m="SmoothPlastic", refl=0.15)
+            mx2, mz2 = (mx + k * 108, mz + 42) if along_x else (mx + (42 if face == 0 else -42), mz + k * 108)
+            vcyl(mx2, 0.45, mz2, 88, 12, c=SAND, m="Sandstone")
+            vcyl(mx2, 0.45 + 60, mz2, 6, 14, c=TURQ, m="SmoothPlastic", solid=False)
+            ball((mx2, 0.45 + 92, mz2), 12, c=TURQ, m="SmoothPlastic", solid=False)
+    # Гур-Эмир: восьмигранный барабан и ребристый бирюзовый купол
+    gx_, gz_ = gur
+    box((gx_, 0.45 + 20, gz_), (90, 40, 90), c=SAND, m="Sandstone")
+    vcyl(gx_, 0.45 + 40, gz_, 28, 52, c=SAND, m="Sandstone")
+    ell((gx_, 0.45 + 70, gz_), (32, 38, 32), c=TURQ, m="SmoothPlastic", refl=0.15)
+    for i in range(16):
+        a = 2 * math.pi * i / 16
+        add("box", (gx_ + math.cos(a) * 30.5, 0.45 + 82, gz_ + math.sin(a) * 30.5), (1.6, 30, 1.6), (0, -a, 0), c=(20, 120, 150), m="SmoothPlastic", solid=False)
+    vcyl(gx_, 0.45 + 108, gz_, 10, 3, c=(220, 190, 90), m="Metal", solid=False)
+    for sx_ in (-1, 1):
+        vcyl(gx_ + sx_ * 60, 0.45, gz_ - 50, 70, 10, c=SAND, m="Sandstone")
+    street_trees(cx, cz, half, 135, 67.5, "plane", zones, avenues=2)
+
+
 # ================================================================ ГОНКА ЧЕРЕЗ КОЛЬЦА
 RING_PATH = [
     (0, 300, -3500, 90, "Старт · Skyport"),
@@ -582,6 +748,9 @@ def main():
     dubai()
     london()
     tashkent()
+    istanbul()
+    riyadh()
+    samarkand()
     data = {"props": props, "obstacles": obstacles, "pads": pads, "labels": labels, "rings": rings()}
     with open(os.path.join(ROOT, "tools", "cities.json"), "w") as f:
         json.dump(data, f, separators=(",", ":"))

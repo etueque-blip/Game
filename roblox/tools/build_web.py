@@ -68,7 +68,7 @@ CITY_RENDER = r"""// города: Дубай, Лондон, Ташкент (д�
 
 
 NAV_JS = r"""
-const NAV = [["SKP · SKYPORT INTERNATIONAL", 0, 0], ["MTV · MOUNTAIN VIEW AIRPORT", 14000, -16000], ["LNW · LONDON WEST", -9000, 15500], ["DXC · DUBAI COAST", 11500, -9000], ["TSE · TASHKENT EAST", 14500, 6500], ["ДУБАЙ", 5500, -7500], ["ЛОНДОН", -4000, 12500], ["ТАШКЕНТ", 10500, 3000]];
+const NAV = [["SKP · SKYPORT INTERNATIONAL", 0, 0], ["MTV · MOUNTAIN VIEW AIRPORT", 14000, -16000], ["LNW · LONDON WEST", -9000, 15500], ["DXC · DUBAI COAST", 11500, -9000], ["TSE · TASHKENT EAST", 14500, 6500], ["ДУБАЙ", 5500, -7500], ["ЛОНДОН", -4000, 12500], ["ТАШКЕНТ", 10500, 3000], ["СТАМБУЛ", -20500, 20500], ["ЭР-РИЯД", 21000, 20500], ["САМАРКАНД", -21000, -20500]];
 let navIdx = 0;
 function cycleNav() { navIdx = (navIdx + 1) % (NAV.length + 1); const n = NAV[navIdx - 1]; toast(n ? "Навигация: " + n[0] : "Навигация выключена", "var(--magenta)"); if (!n) $("nav").hidden = true; }
 function updateNav(f, hdg) {
@@ -150,7 +150,7 @@ function drawRadar(f, hdg) {
   rctx.textAlign = "center"; rctx.textBaseline = "middle";
   const label = (txt, x, z, col, size) => { const p = put(x, z, true); if (!p) return; rctx.font = `600 ${size}px IBM Plex Sans, sans-serif`; rctx.fillStyle = col; rctx.fillText(txt, p[0], p[1]); };
   for (const ap of AIRPORTS) label(ap.id, ap.cx, ap.cz, "#e4eeff", 24);
-  label("Дубай", 5500, -7500, "#8ea3c4", 20); label("Лондон", -4000, 12500, "#8ea3c4", 20); label("Ташкент", 10500, 3000, "#8ea3c4", 20);
+  label("Дубай", 5500, -7500, "#8ea3c4", 20); label("Лондон", -4000, 12500, "#8ea3c4", 20); label("Ташкент", 10500, 3000, "#8ea3c4", 20); label("Стамбул", -20500, 20500, "#8ea3c4", 20); label("Эр-Рияд", 21000, 20500, "#8ea3c4", 20); label("Самарканд", -21000, -20500, "#8ea3c4", 20);
   const rt = raceTarget() || RINGS[0]; label("◎", rt.pos.x, rt.pos.z, "#ff4fd8", 26);
   rctx.restore();
   rctx.fillStyle = "#ffbf3c"; rctx.beginPath(); rctx.moveTo(R, R - 10); rctx.lineTo(R + 7, R + 8); rctx.lineTo(R, R + 4); rctx.lineTo(R - 7, R + 8); rctx.closePath(); rctx.fill();
@@ -181,6 +181,12 @@ NEW_AIRPORTS = """
   { id: "D", code: "DXC", cx: 11500, cz: -9000, rot: 0, L: 4500, W: 200, south: "36", north: "18", title: "DUBAI COAST",
     parked: [["A380", 450], ["B787", -420], ["G650", -700]] },
   { id: "E", code: "TSE", cx: 14500, cz: 6500, rot: 0, L: 4500, W: 200, south: "36", north: "18", title: "TASHKENT EAST",
+    parked: [["A320", -400], ["B787", 420], ["C172", -700]] },
+  { id: "F", code: "ISB", cx: -18800, cz: 20500, rot: 0, L: 4500, W: 200, south: "36", north: "18", title: "ISTANBUL BOSPHORUS",
+    parked: [["A330", -400], ["B777", 450], ["A320", -700]] },
+  { id: "G", code: "RYD", cx: 18000, cz: 20500, rot: 0, L: 4500, W: 200, south: "36", north: "18", title: "RIYADH KING",
+    parked: [["B787", -420], ["A350", 450], ["G650", -700]] },
+  { id: "H", code: "SKD", cx: -19300, cz: -20500, rot: 0, L: 4500, W: 200, south: "36", north: "18", title: "SAMARKAND",
     parked: [["A320", -400], ["B787", 420], ["C172", -700]] },
 """
 
@@ -875,6 +881,24 @@ def add_guide(s):
     return s
 
 
+def add_physics2(s):
+    """Интерцепторы (X) и эффект земли — те же формулы, что FlightPhysics.luau."""
+    s = patch(s, "  const induced = f.onGround ? 0 : 1.2 * (c.stallKts / Math.max(f.speed, 30)) ** 2 * lift;\n  const drag = dragK * dragMul * f.speed * f.speed + extra + induced;",
+              "  const ge = f.onGround || agl === Infinity ? 0 : clamp(1 - agl / (c.span * 0.5), 0, 1);\n"
+              "  const induced = f.onGround ? 0 : 1.2 * (c.stallKts / Math.max(f.speed, 30)) ** 2 * lift * (1 - 0.5 * ge);\n"
+              "  const spoilerDrag = f.spoilers ? Math.min(c.thrust * 0.6, c.thrust * 0.35 * (f.speed / c.vrKts) ** 2) : 0;\n"
+              "  const drag = dragK * dragMul * f.speed * f.speed + extra + induced + spoilerDrag;")
+    s = patch(s, "if (f.onGround && f.speed > 0) { accel -= 0.6; if (f.brakes) accel -= c.brakeDecel; }", "if (f.onGround && f.speed > 0) { accel -= 0.6; if (f.brakes) accel -= c.brakeDecel * (f.spoilers ? 1.25 : 1); }")
+    s = patch(s, "    const sinkTarget = -(1 - lift) * c.stallSink - (1 - Math.abs(up.y)) * 12 * lift;", "    const sinkTarget = (-(1 - lift) * c.stallSink - (1 - Math.abs(up.y)) * 12 * lift) * (1 - 0.4 * ge) - (f.spoilers ? 4 * lift : 0);")
+    s = patch(s, 'KeyI: "guide" };', 'KeyI: "guide", KeyX: "spoiler" };')
+    s = patch(s, '  } else if (a === "idle") {', '  } else if (a === "spoiler") { f.spoilers = !f.spoilers; toast(f.spoilers ? "Интерцепторы выпущены" : "Интерцепторы убраны", f.spoilers ? "var(--amber)" : ""); addLog(f.spoilers ? "Интерцепторы" : "Интерцепторы убраны");\n  } else if (a === "idle") {')
+    s = patch(s, '<button class="rb" id="tIdle">МАЛ.ГАЗ</button>', '<button class="rb" id="tIdle">МАЛ.ГАЗ</button>\n      <button class="rb" id="tSpl">ИНТЕРЦ.</button>')
+    s = patch(s, '$("tRev").onclick = () => action("rev");', '$("tRev").onclick = () => action("rev"); $("tSpl").onclick = () => action("spoiler");')
+    s = patch(s, '"За 30–40 км до аэропорта снижайся 1500–2000 ft/min, уменьши тягу (Ctrl). Набери 2000–3000 ft к 12 км."', '"За 30–40 км до аэропорта снижайся 1500–2000 ft/min, уменьши тягу (Ctrl). Слишком быстро — интерцепторы (X). Набери 2000–3000 ft к 12 км."')
+    s = patch(s, "После касания — малый газ (Z), реверс (T), тормоз (B).", "После касания — малый газ (Z), интерцепторы (X), реверс (T), тормоз (B). У земли «держит» эффект земли — плавно выравнивай.")
+    return s
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -894,7 +918,7 @@ def main():
             "for (const o of CITYDATA.obstacles) obstacles.push({ min: { x: o[0], y: o[1], z: o[2] }, max: { x: o[3], y: o[4], z: o[5] } });\n"
             "for (const p of CITYDATA.pads) flatRects.push({ x0: p[0], x1: p[1], z0: p[2], z1: p[3], h: p[4] });\n")
     s = cut(s, "// город\n{", "// вода, поля, лес, облака", CITY_RENDER)
-    s = patch(s, "[CITY.x, CITY.z, 1500]", "[5500, -7500, 1700], [-4000, 12500, 1300], [10500, 3000, 1200], [5500, -9800, 3300], [-8500, 15500, 3700], [12000, -9000, 3700], [15000, 6500, 3700]")
+    s = patch(s, "[CITY.x, CITY.z, 1500]", "[5500, -7500, 1700], [-4000, 12500, 1300], [10500, 3000, 1200], [5500, -9800, 3300], [-8500, 15500, 3700], [12000, -9000, 3700], [15000, 6500, 3700], [-20500, 20500, 1700], [21000, 20500, 1700], [-21000, -20500, 1600], [-18300, 20500, 3600], [18500, 20500, 3600], [-18800, -20500, 3600]")
     s = patch(s, "Тестовая копия механики Roblox-игры: та же физика, посадки и крушения.",
               "Веб-версия Roblox-игры: та же физика, посадки и крушения. Города: Дубай (к северо-востоку от полосы), Лондон (к югу), Ташкент (к востоку).")
     s = add_nav(s)
@@ -914,6 +938,7 @@ def main():
     s = add_score(s)
     s = add_ils(s)
     s = add_guide(s)
+    s = add_physics2(s)
     s = add_mobile(s)
     s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс

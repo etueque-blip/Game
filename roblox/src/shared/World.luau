@@ -29,6 +29,12 @@ World.AIRPORTS = {
 		parked = { { "A380", 450 }, { "B787", -420 }, { "G650", -700 } } },
 	{ id = "E", code = "TSE", region = "ТАШКЕНТ", cx = 14500, cz = 6500, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "TASHKENT EAST",
 		parked = { { "A320", -400 }, { "B787", 420 }, { "C172", -700 } } },
+	{ id = "F", code = "ISB", region = "СТАМБУЛ", cx = -18800, cz = 20500, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "ISTANBUL BOSPHORUS",
+		parked = { { "A330", -400 }, { "B777", 450 }, { "A320", -700 } } },
+	{ id = "G", code = "RYD", region = "ЭР-РИЯД", cx = 18000, cz = 20500, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "RIYADH KING",
+		parked = { { "B787", -420 }, { "A350", 450 }, { "G650", -700 } } },
+	{ id = "H", code = "SKD", region = "САМАРКАНД", cx = -19300, cz = -20500, rot = 0, L = 4500, W = 200, south = "36", north = "18", title = "SAMARKAND",
+		parked = { { "A320", -400 }, { "B787", 420 }, { "C172", -700 } } },
 } :: { Airport }
 
 -- Локальные координаты аэропорта (полоса вдоль локальной Z) -> мир
@@ -78,6 +84,9 @@ World.CITIES = {
 	{ name = "DUBAI", x = 5500, z = -7500, r = 1700 },
 	{ name = "LONDON", x = -4000, z = 12500, r = 1300 },
 	{ name = "TASHKENT", x = 10500, z = 3000, r = 1200 },
+	{ name = "ISTANBUL", x = -20500, z = 20500, r = 1300 },
+	{ name = "RIYADH", x = 21000, z = 20500, r = 1300 },
+	{ name = "SAMARKAND", x = -21000, z = -20500, r = 1200 },
 }
 for _, p in CityData.pads do
 	table.insert(World.flatRects, { x0 = p[1], x1 = p[2], z0 = p[3], z1 = p[4], h = p[5], kind = "city" })
@@ -266,6 +275,9 @@ for _, c in {
 	{ name = "ДУБАЙ", x = 5500, z = -7500 },
 	{ name = "ЛОНДОН", x = -4000, z = 12500 },
 	{ name = "ТАШКЕНТ", x = 10500, z = 3000 },
+	{ name = "СТАМБУЛ", x = -20500, z = 20500 },
+	{ name = "ЭР-РИЯД", x = 21000, z = 20500 },
+	{ name = "САМАРКАНД", x = -21000, z = -20500 },
 } do
 	table.insert(World.NAV, c)
 end

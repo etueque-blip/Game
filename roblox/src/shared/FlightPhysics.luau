@@ -22,7 +22,7 @@ export type Flight = {
 	cfg: any, mode: string,
 	pos: Vector3, att: CFrame,
 	speed: number, throttle: number, flaps: number, gear: boolean,
-	brakes: boolean, reverse: boolean,
+	brakes: boolean, reverse: boolean, spoilers: boolean,
 	inP: number, inR: number, inY: number,
 	vyExtra: number, lastVelY: number, vel: Vector3,
 	onGround: boolean, airTime: number, crashed: boolean, crashReason: string?,
@@ -40,7 +40,7 @@ function FlightPhysics.new(cfg: any, spawnCF: CFrame, air: boolean): Flight
 		cfg = cfg, mode = air and "air" or "runway",
 		pos = spawnCF.Position, att = spawnCF.Rotation,
 		speed = speed, throttle = air and 0.7 or 0, flaps = 0, gear = (cfg.fixedGear == true) or not air,
-		brakes = false, reverse = false,
+		brakes = false, reverse = false, spoilers = false,
 		inP = 0, inR = 0, inY = 0,
 		vyExtra = 0, lastVelY = 0, vel = spawnCF.LookVector * speed,
 		onGround = not air, airTime = 0, crashed = false, crashReason = nil,
@@ -133,13 +133,17 @@ function FlightPhysics.step(f: Flight, input: Input, dt: number)
 	local dragMul = 1 + 0.12 * f.flaps + (if retractGear then 0.15 else 0)
 	local vr = c.vrKts * (1 - 0.04 * f.flaps)
 	local extra = (0.3 * f.flaps + (if retractGear then 0.4 else 0)) * (f.speed / c.vrKts) ^ 2
-	local induced = if f.onGround then 0 else 1.2 * (c.stallKts / math.max(f.speed, 30)) ^ 2 * lift
-	local drag = dragK * dragMul * f.speed * f.speed + extra + induced
+	-- эффект земли: ниже половины размаха индуктивное сопротивление и просадка меньше
+	local ge = if f.onGround or agl == math.huge then 0 else clamp(1 - agl / (c.span * 0.5), 0, 1)
+	local induced = if f.onGround then 0 else 1.2 * (c.stallKts / math.max(f.speed, 30)) ^ 2 * lift * (1 - 0.5 * ge)
+	-- интерцепторы: сопротивление растёт с квадратом скорости (в воздухе и на пробеге)
+	local spoilerDrag = if f.spoilers then math.min(c.thrust * 0.6, c.thrust * 0.35 * (f.speed / c.vrKts) ^ 2) else 0
+	local drag = dragK * dragMul * f.speed * f.speed + extra + induced + spoilerDrag
 	local accel = thrust - drag - G * look.Y
 	if f.onGround and f.speed > 0 then
 		accel -= 0.6
 		if f.brakes then
-			accel -= c.brakeDecel
+			accel -= c.brakeDecel * (if f.spoilers then 1.25 else 1)
 		end
 	end
 	f.speed = math.max(0, f.speed + accel * dt)
@@ -179,7 +183,7 @@ function FlightPhysics.step(f: Flight, input: Input, dt: number)
 		vel += Vector3.new(0, glue, 0)
 		f.vyExtra = 0
 	else
-		local sinkTarget = -(1 - lift) * c.stallSink - (1 - math.abs(up.Y)) * 12 * lift
+		local sinkTarget = (-(1 - lift) * c.stallSink - (1 - math.abs(up.Y)) * 12 * lift) * (1 - 0.4 * ge) - (if f.spoilers then 4 * lift else 0)
 		f.vyExtra += (sinkTarget - f.vyExtra) * math.min(1, dt * 1.5)
 		vel = look * f.speed + Vector3.new(0, f.vyExtra, 0)
 	end
@@ -233,6 +237,9 @@ function FlightPhysics.action(f: Flight, a: string): (string?, string?)
 			return if f.reverse then "Реверс включён, добавь тягу" else "Реверс выключен", "amber"
 		end
 		return "Реверс только на земле", nil
+	elseif a == "spoiler" then
+		f.spoilers = not f.spoilers
+		return if f.spoilers then "Интерцепторы выпущены" else "Интерцепторы убраны", if f.spoilers then "amber" else nil
 	elseif a == "idle" then
 		f.throttle = 0
 	end
