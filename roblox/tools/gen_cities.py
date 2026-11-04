@@ -725,8 +725,8 @@ def samarkand():
     pad(cx, cz, half, c=(196, 180, 150))
     roads(cx, cz, half, 135, 67.5)
     labels.append({"name": "SAMARKAND", "x": cx, "y": 800, "z": cz})
-    registan, gur = (cx, cz), (cx + 520, cz + 420)
-    zones = [(registan[0], registan[1], 330), (gur[0], gur[1], 120)]
+    registan, gur, bibi = (cx, cz), (cx + 520, cz + 420), (cx - 500, cz + 470)
+    zones = [(registan[0], registan[1], 330), (gur[0], gur[1], 120), (bibi[0], bibi[1], 230)]
     for gx in range(-7, 8):
         for gz in range(-7, 8):
             x, z = cx + gx * 135, cz + gz * 135
@@ -773,6 +773,45 @@ def samarkand():
     vcyl(gx_, 0.45 + 108, gz_, 10, 3, c=(220, 190, 90), m="Metal", solid=False)
     for sx_ in (-1, 1):
         vcyl(gx_ + sx_ * 60, 0.45, gz_ - 50, 70, 10, c=SAND, m="Sandstone")
+    # Мечеть Биби-Ханым (XV в.): огромный бирюзовый ребристый купол, высокий портал, двор,
+    # две малые мечети по бокам, входной портал и минареты по углам двора
+    bx, bz = bibi
+    box((bx, 0.47, bz), (300, 0.1, 210), c=(188, 168, 128), m="Cobblestone", solid=False)  # двор
+    mx, mz = bx - 120, bz
+    body_h = m2s(22)
+    box((mx, 0.45 + body_h / 2, mz), (80, body_h, 96), c=SAND, m="Sandstone")
+    vcyl(mx, 0.45 + body_h, mz, 26, 72, c=SAND, m="Sandstone")
+    vcyl(mx, 0.45 + body_h + 10, mz, 3, 74, c=BLUE, m="SmoothPlastic", solid=False)  # изразцовый пояс
+    ell((mx, 0.45 + body_h + 26, mz), (38, 44, 38), c=TURQ, m="SmoothPlastic", refl=0.15)
+    for i in range(20):
+        a_ = 2 * math.pi * i / 20
+        add("box", (mx + math.cos(a_) * 36, 0.45 + body_h + 40, mz + math.sin(a_) * 36), (1.8, 34, 1.8), (0, -a_, 0), c=(20, 120, 150), m="SmoothPlastic", solid=False)
+    vcyl(mx, 0.45 + body_h + 70, mz, 10, 3, c=(220, 190, 90), m="Metal", solid=False)
+    # главный портал (пештак) к двору и две башни-пилона
+    ph = m2s(35)
+    box((mx + 52, 0.45 + ph / 2, mz), (24, ph, 104), c=SAND, m="Sandstone")
+    box((mx + 64.5, 0.45 + ph * 0.42, mz), (1, ph * 0.7, 46), c=BLUE, m="SmoothPlastic", solid=False)
+    box((mx + 64.6, 0.45 + ph * 0.82, mz), (1, 6, 104), c=TURQ, m="SmoothPlastic", solid=False)
+    for sz_ in (-1, 1):
+        vcyl(mx + 58, 0.45, mz + sz_ * 56, ph + 14, 16, c=SAND, m="Sandstone")
+        vcyl(mx + 58, 0.45 + ph + 4, mz + sz_ * 56, 6, 18, c=TURQ, m="SmoothPlastic", solid=False)
+    # малые мечети с куполами на север и юг двора
+    for sz_ in (-1, 1):
+        sx, sz = bx + 10, bz + sz_ * 82
+        box((sx, 0.45 + 16, sz), (56, 32, 40), c=SAND, m="Sandstone")
+        vcyl(sx, 0.45 + 32, sz, 10, 34, c=SAND, m="Sandstone")
+        ell((sx, 0.45 + 42, sz), (18, 20, 18), c=TURQ, m="SmoothPlastic", refl=0.15)
+        box((sx, 0.45 + 22, sz - sz_ * 20.5), (30, 34, 1), c=BLUE, m="SmoothPlastic", solid=False)
+    # входной портал с востока
+    box((bx + 140, 0.45 + 26, bz), (22, 52, 70), c=SAND, m="Sandstone")
+    box((bx + 128.5, 0.45 + 20, bz), (1, 36, 28), c=BLUE, m="SmoothPlastic", solid=False)
+    # минареты по углам двора
+    for sx_ in (-1, 1):
+        for sz_ in (-1, 1):
+            tx, tz = bx + sx_ * 145, bz + sz_ * 100
+            vcyl(tx, 0.45, tz, 76, 12, c=SAND, m="Sandstone")
+            vcyl(tx, 0.45 + 52, tz, 5, 14, c=TURQ, m="SmoothPlastic", solid=False)
+            ball((tx, 0.45 + 79, tz), 11, c=TURQ, m="SmoothPlastic", solid=False)
     street_trees(cx, cz, half, 135, 67.5, "plane", zones, avenues=2)
 
 
