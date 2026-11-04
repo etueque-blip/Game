@@ -37,6 +37,9 @@ local function neon(parent: Instance, size: Vector3, cf: CFrame, color: Color3)
 	return p
 end
 
+-- ссылки для смены цвета неба по времени суток (updateSky)
+local skyFx: { atm: Atmosphere?, cc: ColorCorrectionEffect?, clouds: Clouds? } = {}
+
 local function setupLighting()
 	Lighting.ClockTime = 14.5
 	Lighting.Brightness = 2.5
@@ -52,10 +55,19 @@ local function setupLighting()
 	atm.Glare = 0.3
 	atm.Haze = 1.2
 	atm.Parent = Lighting
+	skyFx.atm = atm
+	-- звёздное небо, солнце и луна
+	local sky = Instance.new("Sky")
+	sky.StarCount = 3000
+	sky.CelestialBodiesShown = true
+	sky.SunAngularSize = 16
+	sky.MoonAngularSize = 10
+	sky.Parent = Lighting
 	local cc = Instance.new("ColorCorrectionEffect")
 	cc.Saturation = 0.08
 	cc.Contrast = 0.05
 	cc.Parent = Lighting
+	skyFx.cc = cc
 	local bloom = Instance.new("BloomEffect")
 	bloom.Intensity = 0.5
 	bloom.Threshold = 1.6
@@ -68,6 +80,31 @@ local function setupLighting()
 	clouds.Cover = 0.55
 	clouds.Density = 0.6
 	clouds.Parent = workspace.Terrain
+	skyFx.clouds = clouds
+end
+
+local function mix(a: Color3, b: Color3, t: number): Color3
+	return a:Lerp(b, math.clamp(t, 0, 1))
+end
+
+-- цвет атмосферы, облаков и общий оттенок по времени суток: голубой день, тёплый закат, синяя ночь
+function WorldBuilder.updateSky(clock: number)
+	local elev = math.sin((clock - 6) / 24 * math.pi * 2)
+	local day = math.clamp(elev * 3 + 0.25, 0, 1)
+	local dusk = if elev > -0.25 then math.clamp(1 - math.abs(elev) * 4, 0, 1) else 0
+	local atm, cc, clouds = skyFx.atm, skyFx.cc, skyFx.clouds
+	if atm then
+		atm.Color = mix(mix(Color3.fromRGB(28, 36, 64), Color3.fromRGB(199, 215, 235), day), Color3.fromRGB(255, 168, 120), dusk * 0.55)
+		atm.Decay = mix(mix(Color3.fromRGB(16, 20, 40), Color3.fromRGB(106, 130, 160), day), Color3.fromRGB(196, 104, 78), dusk * 0.6)
+		atm.Glare = 0.3 + dusk * 0.9
+		atm.Haze = 1.2 + dusk * 0.8
+	end
+	if clouds then
+		clouds.Color = mix(mix(Color3.fromRGB(60, 66, 88), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 186, 150), dusk * 0.6)
+	end
+	if cc then
+		cc.TintColor = mix(mix(Color3.fromRGB(196, 206, 255), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 222, 196), dusk * 0.7)
+	end
 end
 
 local function buildGround(folder: Folder)

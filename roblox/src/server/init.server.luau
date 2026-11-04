@@ -492,6 +492,7 @@ if DAY_LENGTH_MIN > 0 then
 			local now = os.clock()
 			Lighting.ClockTime = (Lighting.ClockTime + (now - last) * 24 / (DAY_LENGTH_MIN * 60)) % 24
 			last = now
+			WorldBuilder.updateSky(Lighting.ClockTime)
 		end
 	end)
 end
