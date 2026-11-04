@@ -138,6 +138,24 @@ kbd { font-family: var(--f-num); font-size: 11px; border: 1px solid var(--line);
 #crash h2 { color: var(--red); }
 #loading { position: absolute; inset: 0; display: grid; place-items: center; background: var(--bg); font-family: var(--f-display); letter-spacing: .1em; color: var(--dim); z-index: 40; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* узкий экран (телефон): панель в одну строку, приборы не налезают друг на друга */
+@media (max-width: 600px) {
+  #top { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  #top::-webkit-scrollbar { display: none; }
+  #bGfx, #bDebug, #bHelp, #planeName { display: none !important; }
+  #top .tb { padding: 6px 9px; font-size: 12px; flex: 0 0 auto; }
+  #hud { top: calc(48px + env(safe-area-inset-top, 0px)); }
+  #htape { top: calc(112px + env(safe-area-inset-top, 0px)); width: calc(100% - 24px); }
+  #nav { top: calc(152px + env(safe-area-inset-top, 0px)); max-width: calc(100% - 24px); font-size: 12px; }
+  #toast { top: calc(190px + env(safe-area-inset-top, 0px)); max-width: calc(100% - 24px); }
+  #radar { top: calc(236px + env(safe-area-inset-top, 0px)); width: 96px; height: 96px; }
+  #adi { top: calc(236px + env(safe-area-inset-top, 0px)) !important; width: 76px !important; height: 76px !important; }
+  #wx { top: calc(320px + env(safe-area-inset-top, 0px)); font-size: 12px; }
+  #race { top: calc(340px + env(safe-area-inset-top, 0px)); }
+  #park { white-space: normal; max-width: calc(100% - 24px); font-size: 12px; text-align: center; bottom: calc(222px + env(safe-area-inset-bottom, 0px)); }
+  #atc { bottom: calc(300px + env(safe-area-inset-bottom, 0px)); font-size: 12px; }
+}
 </style>
 
 <div id="app">

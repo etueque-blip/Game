@@ -753,6 +753,32 @@ def add_score(s):
     return s
 
 
+MOBILE_CSS = """
+/* узкий экран (телефон): панель в одну строку, приборы не налезают друг на друга */
+@media (max-width: 600px) {
+  #top { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  #top::-webkit-scrollbar { display: none; }
+  #bGfx, #bDebug, #bHelp, #planeName { display: none !important; }
+  #top .tb { padding: 6px 9px; font-size: 12px; flex: 0 0 auto; }
+  #hud { top: calc(48px + env(safe-area-inset-top, 0px)); }
+  #htape { top: calc(112px + env(safe-area-inset-top, 0px)); width: calc(100% - 24px); }
+  #nav { top: calc(152px + env(safe-area-inset-top, 0px)); max-width: calc(100% - 24px); font-size: 12px; }
+  #toast { top: calc(190px + env(safe-area-inset-top, 0px)); max-width: calc(100% - 24px); }
+  #radar { top: calc(236px + env(safe-area-inset-top, 0px)); width: 96px; height: 96px; }
+  #adi { top: calc(236px + env(safe-area-inset-top, 0px)) !important; width: 76px !important; height: 76px !important; }
+  #wx { top: calc(320px + env(safe-area-inset-top, 0px)); font-size: 12px; }
+  #race { top: calc(340px + env(safe-area-inset-top, 0px)); }
+  #park { white-space: normal; max-width: calc(100% - 24px); font-size: 12px; text-align: center; bottom: calc(222px + env(safe-area-inset-bottom, 0px)); }
+  #atc { bottom: calc(300px + env(safe-area-inset-bottom, 0px)); font-size: 12px; }
+}
+"""
+
+
+def add_mobile(s):
+    """Раскладка интерфейса для телефона."""
+    return patch(s, "</style>\n\n<div id=\"app\">", MOBILE_CSS + "</style>\n\n<div id=\"app\">")
+
+
 def main():
     import json
     with open(os.path.join(ROOT, "tools", "cities.json")) as f:
@@ -787,6 +813,7 @@ def main():
     s = add_ai(s)
     s = add_daynight(s)
     s = add_score(s)
+    s = add_mobile(s)
     s = patch(s, '$("again").onclick = () => lastCfg && startFlight(lastCfg, lastMode);',
               '$("again").onclick = () => { if (!lastCfg) return; flightDest = lastDest; startFlight(lastCfg, lastMode); };')  # «Снова» сохраняет рейс
     s = patch(s, "lastCfg = cfg; lastMode = mode; raceReset();", "lastCfg = cfg; lastMode = mode; lastDest = flightDest; raceReset();")
