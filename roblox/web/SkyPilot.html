@@ -1289,8 +1289,10 @@ function glideslope(ap, p) {
   return { dev, lat: THREE.MathUtils.radToDeg(Math.atan2(lx * s, dist)), rwy: lz > 0 ? ap.south : ap.north };
 }
 function updateIls(f) {
-  const el = $("ils"), dest = flightDest || lastDest, ap = dest && AIRPORTS.find((a) => a.id === dest);
-  const g = ap && !f.onGround && !f.crashed ? glideslope(ap, f.pos) : null;
+  const el = $("ils"), dest = flightDest || lastDest;
+  let ap = dest && AIRPORTS.find((a) => a.id === dest), g = ap && !f.onGround && !f.crashed ? glideslope(ap, f.pos) : null;
+  if (!dest && !f.onGround && !f.crashed && lastMode !== "race") { let best = Infinity;
+    for (const a of AIRPORTS) { const q = glideslope(a, f.pos), d = Math.hypot(f.pos.x - a.cx, f.pos.z - a.cz); if (q && Math.abs(q.lat) < 12 && Math.abs(q.dev) < 2500 && d < best) { best = d; ap = a; g = q; } } }
   if (!g) { el.hidden = true; return; }
   const good = Math.abs(g.dev) < 80 && Math.abs(g.lat) < 1.5;
   const v = Math.abs(g.dev) < 80 ? "на глиссаде" : g.dev > 0 ? `выше ${Math.round(g.dev)} ft` : `ниже ${Math.round(-g.dev)} ft`;

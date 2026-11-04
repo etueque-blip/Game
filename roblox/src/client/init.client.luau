@@ -510,10 +510,23 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	ui.setRace(race.status(now))
 	-- глиссада к аэропорту назначения
 	do
+		-- в рейсе — аэропорт назначения, в свободном полёте — первый аэропорт, на чью глиссаду мы попали
 		local dst = lastDest and World.airportById(lastDest)
 		local dev, lat, rwy
-		if dst and not f.onGround then
-			dev, lat, rwy = World.glideslope(dst, f.pos)
+		if not f.onGround then
+			if dst then
+				dev, lat, rwy = World.glideslope(dst, f.pos)
+			elseif lastMode ~= "race" then
+				-- выровнены на ось (< 12°) и ближе всех
+				local bestD = math.huge
+				for _, ap in World.AIRPORTS do
+					local d1, l1, r1 = World.glideslope(ap, f.pos)
+					local dist = Vector3.new(f.pos.X - ap.cx, 0, f.pos.Z - ap.cz).Magnitude
+					if d1 and l1 and math.abs(l1) < 12 and math.abs(d1) < 2500 and dist < bestD then
+						bestD, dst, dev, lat, rwy = dist, ap, d1, l1, r1
+					end
+				end
+			end
 		end
 		if dev and lat then
 			local good = math.abs(dev) < 80 and math.abs(lat) < 1.5
