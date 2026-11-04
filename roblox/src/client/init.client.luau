@@ -29,6 +29,21 @@ local RequestFlight, FlightStarted, ClientReady = R("RequestFlight"), R("FlightS
 local PlaneState, Landing, CrashEvent, EndFlight, Notify = R("PlaneState"), R("Landing"), R("Crash"), R("EndFlight"), R("Notify")
 local RaceFinished = R("RaceFinished")
 local GateParked = R("GateParked")
+local AchievementR = R("Achievement")
+-- достижения, которые видит только клиент: отправляем один раз, сервер проверяет и награждает
+local achSent: { [string]: boolean } = {}
+local function claimAch(id: string)
+	if achSent[id] then
+		return
+	end
+	local have = tostring(Players.LocalPlayer:GetAttribute("Ach") or "")
+	if string.find("," .. have .. ",", "," .. id .. ",", 1, true) then
+		achSent[id] = true
+		return
+	end
+	achSent[id] = true
+	AchievementR:FireServer(id)
+end
 
 local FT = FlightPhysics.FT
 local clamp = FlightPhysics.clamp
@@ -355,6 +370,9 @@ local function handleEvents(f: FlightPhysics.Flight)
 					offM = math.abs(if ap.rot == 1 then -dz else dx) * World.METERS_PER_STUD
 				end
 				local fpmV = ev.fpm or 0
+				if offM and offM < 2 then
+					claimAch("center")
+				end
 				ui.landingReport({
 					grade = ev.grade or "hard", fpm = fpmV, kts = f.speed, g = f.gload, offM = offM,
 					pts = if ap then (if fpmV < 120 then 400 elseif fpmV < 250 then 300 elseif fpmV < 600 then 150 else 50) else 0,
@@ -387,6 +405,7 @@ local function handleEvents(f: FlightPhysics.Flight)
 			ui.toast(ev.text, "amber")
 			addLog(ev.text)
 		elseif ev.type == "takeoff" then
+			claimAch("first_flight")
 			ui.atc(string.format("%s, взлёт в %s. Набирайте 3000 ft, курс по навигации.", callsign, os.date("%H:%M")))
 			addLog(ev.text)
 		elseif ev.type == "crash" then
@@ -485,6 +504,12 @@ end
 
 local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local c = f.cfg
+	if f.pos.Y * FT > 35000 then
+		claimAch("high")
+	end
+	if c.id == "F16" and f.gload >= 8 and f.damage < 0.05 then
+		claimAch("ace")
+	end
 	local att = f.att
 	local look, right, up = att.LookVector, att.RightVector, att.UpVector
 	local agl = (f.dbg.agl or 0) * FT

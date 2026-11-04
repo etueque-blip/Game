@@ -49,6 +49,7 @@ local EndFlight = remote("EndFlight")
 local Notify = remote("Notify")
 local RaceFinished = remote("RaceFinished")
 local GateParked = remote("GateParked")
+local AchievementRemote = remote("Achievement")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -274,6 +275,31 @@ local function startFlight(p: Player, planeId: any, mode: any, destination: any,
 	FlightStarted:FireClient(p, model, planeId, a.mode, spawnCF)
 end
 
+-- достижения: открыть один раз, начислить награду, сообщить игроку
+local Achievements = require(Shared:WaitForChild("Achievements"))
+local function award(p: Player, id: string)
+	local ach = Achievements.BY_ID[id]
+	if ach and Scores.unlock(p, id) then
+		Scores.add(p, ach.reward, false)
+		Notify:FireClient(p, string.format("🏆 Достижение «%s» · +%d", ach.title, ach.reward), "green")
+	end
+end
+-- то, что видит только клиент (высота, перегрузка, ось полосы, отрыв): принимаем только из белого списка во время полёта
+AchievementRemote.OnServerEvent:Connect(function(p, id)
+	local a = active[p]
+	if type(id) ~= "string" or not a or a.crashed then
+		return
+	end
+	local ach = Achievements.BY_ID[id]
+	if not ach or not ach.client then
+		return
+	end
+	if id == "ace" and a.cfgId ~= "F16" then
+		return
+	end
+	award(p, id)
+end)
+
 RequestFlight.OnServerEvent:Connect(function(p, planeId, mode, destination, liveryId)
 	startFlight(p, planeId, mode, destination, liveryId)
 end)
@@ -339,9 +365,33 @@ Landing.OnServerEvent:Connect(function(p, fpm)
 		msg ..= string.format("  ·  РЕЙС ВЫПОЛНЕН +1000 (%s)", if dst then dst.code else apId)
 		a.destination = nil
 	end
+	local routeDone = a.destination == nil and msg:find("РЕЙС ВЫПОЛНЕН", 1, true) ~= nil
 	a.fromAirport = apId
 	Scores.add(p, pts, true, fpm)
 	Notify:FireClient(p, msg, "green")
+	-- достижения за посадку
+	if fpm < 250 then
+		award(p, "soft")
+	end
+	if fpm < 80 then
+		award(p, "butter")
+	end
+	if routeDone then
+		award(p, "route")
+	end
+	if Scores.visit(p, apId) >= #World.AIRPORTS then
+		award(p, "airports")
+	end
+	if Scores.get(p).landings >= 10 then
+		award(p, "ten")
+	end
+	local clock = game:GetService("Lighting").ClockTime
+	if clock < 5.5 or clock > 19.5 then
+		award(p, "night")
+	end
+	if a.cfgId == "A380" or a.cfgId == "B747" then
+		award(p, "heavy")
+	end
 end)
 
 CrashEvent.OnServerEvent:Connect(function(p, reason)
@@ -408,6 +458,7 @@ RaceFinished.OnServerEvent:Connect(function(p, t)
 		msg ..= " · новый рекорд!"
 	end
 	Notify:FireClient(p, msg, "green")
+	award(p, "race")
 end)
 
 EndFlight.OnServerEvent:Connect(function(p)

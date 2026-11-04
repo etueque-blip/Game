@@ -10,7 +10,7 @@ pcall(function()
 	store = DataStoreService:GetDataStore("SkyPilot_v1")
 end)
 
-type Data = { score: number, landings: number, best: number, flights: number }
+type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean } }
 local cache: { [Player]: Data } = {}
 
 local function key(p: Player): string
@@ -26,7 +26,7 @@ local function stat(p: Player, name: string, value: number)
 end
 
 function Scores.get(p: Player): Data
-	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0 }
+	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {} }
 end
 
 local function refresh(p: Player)
@@ -34,6 +34,13 @@ local function refresh(p: Player)
 	stat(p, "Очки", d.score)
 	stat(p, "Посадки", d.landings)
 	p:SetAttribute("BestFpm", d.best)
+	-- открытые достижения — атрибутом (клиент показывает экран и уведомление о новом)
+	local ids = {}
+	for id in d.ach do
+		table.insert(ids, id)
+	end
+	table.sort(ids)
+	p:SetAttribute("Ach", table.concat(ids, ","))
 end
 
 function Scores.load(p: Player)
@@ -45,7 +52,7 @@ function Scores.load(p: Player)
 		v.Parent = ls
 	end
 	ls.Parent = p
-	local data: Data = { score = 0, landings = 0, best = 0, flights = 0 }
+	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {} }
 	if store then
 		local ok, res = pcall(function()
 			return (store :: DataStore):GetAsync(key(p))
@@ -55,6 +62,15 @@ function Scores.load(p: Player)
 			data.landings = tonumber(res.landings) or 0
 			data.best = tonumber(res.best) or 0
 			data.flights = tonumber(res.flights) or 0
+			for _, field in { "ach", "visited" } do
+				if type(res[field]) == "table" then
+					for k, v in res[field] do
+						if type(k) == "string" and v == true then
+							(data :: any)[field][k] = true
+						end
+					end
+				end
+			end
 		end
 	end
 	cache[p] = data
@@ -84,6 +100,31 @@ function Scores.add(p: Player, points: number, landing: boolean, fpm: number?)
 		end
 	end
 	refresh(p)
+end
+
+-- true, если достижение открыто впервые
+function Scores.unlock(p: Player, id: string): boolean
+	local d = cache[p]
+	if not d or d.ach[id] then
+		return false
+	end
+	d.ach[id] = true
+	refresh(p)
+	return true
+end
+
+-- отмечает аэропорт посадки, возвращает число разных аэропортов
+function Scores.visit(p: Player, apId: string): number
+	local d = cache[p]
+	if not d then
+		return 0
+	end
+	d.visited[apId] = true
+	local n = 0
+	for _ in d.visited do
+		n += 1
+	end
+	return n
 end
 
 function Scores.flight(p: Player)

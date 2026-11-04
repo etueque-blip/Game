@@ -189,7 +189,8 @@ BRAND_HTML = """<div class="mwrap">
       <div class="tiles">"""
 
 NEWS_HTML = """      <div class="news">
-        <div class="ncard" data-ph="mode_career"><span class="tag">Новое</span><b>Перегрузка G и fly-by-wire</b><i>Пределы конструкции, тряска, поломки закрылков и шасси</i></div>
+        <div class="ncard" data-ph="mode_race"><span class="tag">Новое</span><b>🏆 Достижения</b><i>12 целей: мягкая посадка, все аэропорты, Ас на F-16…</i></div>
+        <div class="ncard" data-ph="mode_career"><b>Перегрузка G и fly-by-wire</b><i>Пределы конструкции, тряска, поломки закрылков и шасси</i></div>
         <div class="ncard" data-ph="plane_A380"><b>Boeing, Airbus, Gulfstream</b><i>14 настоящих моделей и 6 ливрей</i></div>
         <div class="ncard" data-ph="news_airports"><b>8 аэропортов</b><i>Стамбул, Эр-Рияд, Самарканд и другие</i></div>
         <div class="ncard" data-ph="mode_race"><b>Гонка колец</b><i>Под Тауэрским мостом</i></div>
@@ -283,6 +284,79 @@ function showLandingReport(f, ap, text, pts) {
 """
 
 
+ACH_CSS = """
+/* достижения */
+#achO { z-index: 40; }
+.achg { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.achc { display: grid; grid-template-columns: 44px 1fr; gap: 2px 10px; align-items: center; background: rgba(255,255,255,.04); border: 1px solid var(--line);
+  border-radius: 14px; padding: 10px 12px; }
+.achc .ai { grid-row: span 3; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 24px; background: rgba(255,255,255,.06); }
+.achc b { font-size: 14px; } .achc small { color: var(--dim); font-size: 11.5px; line-height: 1.3; } .achc em { font-style: normal; color: var(--gold); font-weight: 700; font-size: 12px; }
+.achc.on { border: 2px solid var(--gold); background: linear-gradient(180deg, rgba(244,193,82,.12), rgba(244,193,82,.03)); }
+.achc:not(.on) .ai { filter: grayscale(1); opacity: .45; } .achc:not(.on) b { color: var(--dim); }
+.achbar { height: 8px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+.achbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), #ffe29a); }
+"""
+
+ACH_HTML = """  <div class="overlay" id="achO" hidden>
+    <div class="sheet">
+      <h2>🏆 Достижения</h2>
+      <p id="achSub"></p>
+      <div class="achbar"><i id="achBar"></i></div>
+      <div class="achg" id="achG"></div>
+      <div class="row"><button class="tb primary" id="achClose">Понятно</button></div>
+    </div>
+  </div>
+"""
+
+ACH_JS = r"""
+// ===== достижения (тот же список, что src/shared/Achievements.luau); хранятся в браузере
+const ACH = [
+  ["first_flight", "✈", "Первый полёт", "Оторвись от полосы", 100], ["soft", "🪶", "Мягкая посадка", "Сядь мягче 250 ft/min", 200],
+  ["butter", "🧈", "Как по маслу", "Сядь мягче 80 ft/min", 500], ["center", "🎯", "Точно по оси", "Сядь не дальше 2 м от оси полосы", 300],
+  ["route", "🧳", "Рейс выполнен", "Долети до аэропорта назначения в режиме рейсов", 500], ["ten", "🔟", "Десять посадок", "Соверши 10 посадок", 500],
+  ["airports", "🌍", "Все аэропорты", "Сядь во всех 8 аэропортах", 2000], ["high", "🛰", "Стратосфера", "Поднимись выше 35 000 ft", 300],
+  ["night", "🌙", "Ночной пилот", "Посади самолёт ночью", 400], ["race", "🏁", "Гонщик", "Пройди все кольца гонки", 500],
+  ["ace", "⚡", "Ас", "Выдержи 8 G на F-16", 400], ["heavy", "🐘", "Тяжеловес", "Посади Airbus A380 или Boeing 747", 300],
+];
+const ACHS = (() => { try { const d = JSON.parse(localStorage.getItem("skypilot.ach") || "{}"); return { ids: d.ids || [], visited: d.visited || [] }; } catch (e) { return { ids: [], visited: [] }; } })();
+function achSave() { try { localStorage.setItem("skypilot.ach", JSON.stringify(ACHS)); } catch (e) {} }
+function achUnlock(id) {
+  if (ACHS.ids.includes(id)) return;
+  const a = ACH.find((x) => x[0] === id); if (!a) return;
+  ACHS.ids.push(id); achSave();
+  setTimeout(() => { toast(`🏆 Достижение «${a[2]}» · +${a[4]}`, "var(--gold)"); addScore(a[4], "достижение"); }, 900);
+  achRender();
+}
+function achLanding(f, ap, text) {
+  if (!ap) return;
+  const fpm = (/(\d+) fpm/.exec(text) || [0, 999])[1] | 0;
+  if (fpm < 250) achUnlock("soft");
+  if (fpm < 80) achUnlock("butter");
+  const dx = f.pos.x - ap.cx, dz = f.pos.z - ap.cz; if (Math.abs(ap.rot ? -dz : dx) * 0.515 < 2) achUnlock("center");
+  if (flightDest && ap.id === flightDest) achUnlock("route");
+  if (!ACHS.visited.includes(ap.id)) { ACHS.visited.push(ap.id); achSave(); }
+  if (ACHS.visited.length >= AIRPORTS.length) achUnlock("airports");
+  if (SCORE.landings >= 10) achUnlock("ten");
+  if (gameClock < 5.5 || gameClock > 19.5) achUnlock("night");
+  if (f.cfg.id === "A380" || f.cfg.id === "B747") achUnlock("heavy");
+}
+function achFrame(f) {
+  if (f.pos.y * FT > 35000) achUnlock("high");
+  if (f.cfg.id === "F16" && f.gload >= 8 && (f.damage || 0) < 0.05) achUnlock("ace");
+}
+function achRender() {
+  const n = ACHS.ids.length, total = ACH.reduce((s, a) => s + a[4], 0);
+  const b = document.getElementById("mAch"); if (b) b.textContent = `🏆 Достижения ${n}/${ACH.length}`;
+  const g = document.getElementById("achG"); if (!g) return;
+  g.innerHTML = ACH.map(([id, ic, t, d, r]) => { const on = ACHS.ids.includes(id);
+    return `<div class="achc${on ? " on" : ""}"><span class="ai">${on ? ic : "🔒"}</span><b>${t}</b><small>${d}</small><em>+${r}</em></div>`; }).join("");
+  $("achSub").textContent = `Открыто ${n} из ${ACH.length} · награды до +${total.toLocaleString("ru-RU")} очков · аэропортов посещено: ${ACHS.visited.length}/${AIRPORTS.length}`;
+  $("achBar").style.width = (n / ACH.length * 100).toFixed(1) + "%";
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -349,6 +423,16 @@ def add_premium(s, patch):
     s = patch(s, 'toast(ev.text, ev.good ? "var(--green)" : "var(--amber)"); addLog(ev.text);', 'addLog(ev.text);')
     s = patch(s, "if (ap) scoreLanding(ap, ev.text);", "{ const __pts = ap ? scoreLanding(ap, ev.text) : 0; showLandingReport(f, ap, ev.text, __pts || 0); }")
     s = patch(s, '$("radar").hidden = true; $("gm").hidden = true;', '$("radar").hidden = true; $("gm").hidden = true; $("lrep").hidden = true;')
+    # достижения: 12 целей, награда очками, экран в меню
+    s = patch(s, "</style>\n\n<div id=\"app\">", ACH_CSS + "</style>\n\n<div id=\"app\">")
+    s = patch(s, '  <div class="overlay" id="help" hidden>', ACH_HTML + '  <div class="overlay" id="help" hidden>')
+    s = patch(s, '<button class="tb" id="mHelp2">Клавиши</button>', '<button class="tb" id="mHelp2">Клавиши</button><button class="tb" id="mAch">🏆 Достижения</button>')
+    s = patch(s, "function scoreLanding(ap, text) {", ACH_JS + "function scoreLanding(ap, text) {")
+    s = patch(s, "showLandingReport(f, ap, ev.text, __pts || 0); }", "showLandingReport(f, ap, ev.text, __pts || 0); achLanding(f, ap, ev.text); }")
+    s = patch(s, 'if (ev.text.startsWith("Отрыв"))', 'if (ev.text.startsWith("Отрыв")) achUnlock("first_flight"); if (ev.text.startsWith("Отрыв"))')
+    s = patch(s, '    physicsStep(f, input, dt);\n', '    physicsStep(f, input, dt);\n    achFrame(f);\n')
+    s = patch(s, 'if (t >= 60) addScore(1500, "гонка колец");', 'if (t >= 60) { addScore(1500, "гонка колец"); achUnlock("race"); }')
+    s = patch(s, '$("loading").hidden = true;', '$("mAch").onclick = () => { achRender(); $("achO").hidden = false; }; $("achClose").onclick = () => ($("achO").hidden = true); achRender();\n$("loading").hidden = true;')
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

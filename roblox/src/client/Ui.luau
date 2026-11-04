@@ -427,6 +427,7 @@ function Ui.new(cb: Callbacks)
 		hangar.Visible = false
 	end)
 	local bExit = button(navRow, "Выйти из самолёта", { ZIndex = 23, Visible = false, LayoutOrder = 1 })
+	local bAch = button(navRow, "🏆 Достижения", { ZIndex = 23, LayoutOrder = -1 })
 	local bBack = button(navRow, "Назад", { ZIndex = 23, LayoutOrder = 2 })
 	local bNext = button(navRow, "Далее →", { ZIndex = 23, LayoutOrder = 3 })
 	primary(bNext)
@@ -736,6 +737,60 @@ function Ui.new(cb: Callbacks)
 		end
 		guide.Visible = true
 	end
+
+	-- достижения: сетка карточек, открытые — с золотой рамкой (данные — атрибут Ach от сервера)
+	local Achievements = require(Shared:WaitForChild("Achievements"))
+	local achO, achS = overlay("Achievements", 760)
+	h2(achS, "🏆 Достижения", nil, 1)
+	local achSub = para(achS, "", 2)
+	local achGrid = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, achS)
+	new("UIGridLayout", { CellSize = UDim2.new(1 / 3, -6, 0, 84), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, achGrid)
+	local achCards: { [string]: { frame: Frame, icon: TextLabel, title: TextLabel, st: UIStroke } } = {}
+	for i, a in Achievements.LIST do
+		local fr = new("Frame", { BackgroundColor3 = Color3.fromRGB(24, 32, 50), LayoutOrder = i, ZIndex = 23 }, achGrid)
+		corner(fr, 14)
+		local st = new("UIStroke", { Color = C.line, Transparency = 0.86, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, fr)
+		local ic = new("TextLabel", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(10, 10), BackgroundTransparency = 1, Font = FONT, TextSize = 26, TextColor3 = C.fg, Text = a.icon, ZIndex = 24 }, fr)
+		local tl = new("TextLabel", { Size = UDim2.new(1, -64, 0, 18), Position = UDim2.fromOffset(56, 10), BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = a.title, ZIndex = 24 }, fr)
+		new("TextLabel", { Size = UDim2.new(1, -64, 0, 32), Position = UDim2.fromOffset(56, 29), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 11, TextColor3 = C.dim, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Text = a.desc, ZIndex = 24 }, fr)
+		new("TextLabel", { Size = UDim2.new(1, -64, 0, 16), Position = UDim2.fromOffset(56, 62), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 12, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Left, Text = "+" .. a.reward, ZIndex = 24 }, fr)
+		achCards[a.id] = { frame = fr, icon = ic, title = tl, st = st }
+	end
+	local achRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, achS)
+	local achClose = button(achRow, "Понятно", { ZIndex = 23 })
+	primary(achClose)
+	achClose.Activated:Connect(function()
+		achO.Visible = false
+	end)
+	local function renderAch()
+		local have: { [string]: boolean } = {}
+		for id in string.gmatch(tostring(player:GetAttribute("Ach") or ""), "[^,]+") do
+			have[id] = true
+		end
+		local n, total = 0, 0
+		for _, a in Achievements.LIST do
+			local on = have[a.id] == true
+			if on then
+				n += 1
+			end
+			total += a.reward
+			local cd = achCards[a.id]
+			cd.st.Color = if on then C.gold else C.line
+			cd.st.Transparency = if on then 0 else 0.86
+			cd.st.Thickness = if on then 2 else 1
+			cd.icon.Text = if on then a.icon else "🔒"
+			cd.icon.TextTransparency = if on then 0 else 0.35
+			cd.title.TextColor3 = if on then C.fg else C.dim
+		end
+		achSub.Text = string.format("Открыто %d из %d · награды до +%d очков. Достижения сохраняются вместе с очками.", n, #Achievements.LIST, total)
+		bAch.Text = string.format("🏆 %d/%d", n, #Achievements.LIST)
+	end
+	renderAch()
+	player:GetAttributeChangedSignal("Ach"):Connect(renderAch)
+	bAch.Activated:Connect(function()
+		renderAch()
+		achO.Visible = true
+	end)
 
 	-- крушение
 	local crash, cs = overlay("Crash", 440)
