@@ -11,6 +11,8 @@ local ONCE: { [Enum.KeyCode]: string } = {
 	-- геймпад
 	[Enum.KeyCode.ButtonY] = "gear", [Enum.KeyCode.DPadUp] = "flapUp", [Enum.KeyCode.DPadDown] = "flapDn",
 	[Enum.KeyCode.ButtonX] = "rev", [Enum.KeyCode.ButtonA] = "autopilot", [Enum.KeyCode.ButtonSelect] = "cam",
+	-- без них с геймпада нельзя было снять стояночный тормоз на старте и выпустить интерцепторы
+	[Enum.KeyCode.ButtonL3] = "park", [Enum.KeyCode.DPadLeft] = "spoiler",
 }
 
 -- экспонента: точность около центра, полный ход на краю

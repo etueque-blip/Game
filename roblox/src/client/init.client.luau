@@ -5,6 +5,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("SkyPilot")
@@ -515,7 +516,7 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	if not ringPos and lastMode == "race" then
 		ringPos, ringName = race.firstRing(), "Старт гонки"
 	end
-	ui.setBanner(if parkBrake then "Ⓟ  Стояночный тормоз · пробел или нажми, чтобы отключить" else nil)
+	ui.setBanner(if parkBrake then (if UserInputService.GamepadEnabled then "Ⓟ  Стояночный тормоз · L3 (нажми левый стик) или пробел" else "Ⓟ  Стояночный тормоз · пробел или нажми, чтобы отключить") else nil)
 	radar.update(f.pos, hdg, model, ringPos or race.firstRing())
 	ui.setRace(race.status(now))
 	-- глиссада к аэропорту назначения
