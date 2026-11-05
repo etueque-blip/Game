@@ -496,6 +496,7 @@ function Ui.new(cb: Callbacks)
 	-- уровень сложности: «Обычный» — без перегрузки и поломок, «Сложный» — перегрузка G, повреждения, поломки
 	local hard = player:GetAttribute("HardMode") == true
 	local bHard = button(navRow, "", { ZIndex = 23, LayoutOrder = -3 })
+	local bSet = button(navRow, "⚙", { ZIndex = 23, LayoutOrder = -4 })
 	local function hardLabel()
 		bHard.Text = if hard then "⚠ Сложно" else "Обычно"
 		bHard.TextColor3 = if hard then C.amber else C.fg
@@ -510,6 +511,73 @@ function Ui.new(cb: Callbacks)
 	function self.isHard(): boolean
 		return hard
 	end
+	-- ⚙ настройки: единицы, чувствительность, сложность (сохраняются атрибутами игрока на время сессии)
+	local metric = player:GetAttribute("Metric") == true
+	local sens = tonumber(player:GetAttribute("Sens")) or 1
+	function self.metric(): boolean
+		return metric
+	end
+	function self.sens(): number
+		return sens
+	end
+	local sO, sS = overlay("Settings", 520)
+	h2(sS, "⚙ Настройки", nil, 1)
+	local function settingRow(order: number, label: string, opts: { string }, get: () -> number, set: (number) -> ())
+		local row = new("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 22 }, sS)
+		new("TextLabel", { Size = UDim2.new(0, 170, 1, 0), BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = label, ZIndex = 23 }, row)
+		local seg = new("Frame", { Size = UDim2.new(1, -176, 1, -4), Position = UDim2.fromOffset(176, 2), BackgroundTransparency = 1, ZIndex = 23 }, row)
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }, seg)
+		local btns: { TextButton } = {}
+		local function paint()
+			for i, b in btns do
+				local on = get() == i
+				b.TextColor3 = if on then C.gold else C.fg
+				local st = b:FindFirstChildOfClass("UIStroke")
+				if st then
+					st.Color = if on then C.gold else C.line
+					st.Transparency = if on then 0 else 0.86
+				end
+			end
+		end
+		for i, o in opts do
+			local b = button(seg, o, { ZIndex = 24, TextSize = 13 })
+			btns[i] = b
+			b.Activated:Connect(function()
+				set(i)
+				paint()
+			end)
+		end
+		paint()
+	end
+	settingRow(2, "Единицы", { "kt · ft", "км/ч · м" }, function()
+		return if metric then 2 else 1
+	end, function(i)
+		metric = i == 2
+		player:SetAttribute("Metric", metric)
+	end)
+	settingRow(3, "Чувствительность", { "Низкая", "Обычная", "Высокая" }, function()
+		return if sens < 0.9 then 1 elseif sens > 1.1 then 3 else 2
+	end, function(i)
+		sens = ({ 0.7, 1, 1.3 })[i]
+		player:SetAttribute("Sens", sens)
+	end)
+	settingRow(4, "Сложность", { "Обычная", "Сложная (G)" }, function()
+		return if hard then 2 else 1
+	end, function(i)
+		hard = i == 2
+		player:SetAttribute("HardMode", hard)
+		hardLabel()
+	end)
+	para(sS, "Сложная: перегрузка G, повреждения, поломки закрылков и шасси, удар хвостом. Применяется со следующего полёта.", 5)
+	local sRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 6, ZIndex = 22 }, sS)
+	local sClose = button(sRow, "Готово", { ZIndex = 23 })
+	primary(sClose)
+	sClose.Activated:Connect(function()
+		sO.Visible = false
+	end)
+	bSet.Activated:Connect(function()
+		sO.Visible = true
+	end)
 	local bBack = button(navRow, "Назад", { ZIndex = 23, LayoutOrder = 2 })
 	local bNext = button(navRow, "Далее →", { ZIndex = 23, LayoutOrder = 3 })
 	primary(bNext)

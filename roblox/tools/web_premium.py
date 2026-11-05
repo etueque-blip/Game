@@ -879,6 +879,33 @@ AP_EXTRA_JS = r"""  { const obs = (lx, lz, w, d, h) => { const a = apToWorld(ap,
 """
 
 
+SET_HTML = """  <div class="overlay" id="setO" style="z-index:40" hidden>
+    <div class="sheet">
+      <h2>⚙ Настройки</h2>
+      <div class="setrows" id="setRows"></div>
+      <p>Сложная: перегрузка G, повреждения, поломки закрылков и шасси, удар хвостом.</p>
+      <div class="row"><button class="tb primary" id="setClose">Готово</button></div>
+    </div>
+  </div>
+  <style>.setrows { display: grid; gap: 10px; } .setrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; } .setrow b { width: 170px; font-size: 14px; }
+  .setrow .tb[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }</style>
+"""
+
+SET_JS = r"""function renderSettings() {
+  const rows = [["Единицы", ["kt · ft", "км/ч · м"], () => (METRIC ? 1 : 0), (i) => { METRIC = i === 1; try { localStorage.setItem("skypilot.metric", METRIC ? "1" : "0"); } catch (e) {} }],
+    ["Чувствительность", ["Низкая", "Обычная", "Высокая"], () => (SENS < 0.9 ? 0 : SENS > 1.1 ? 2 : 1), (i) => { SENS = [0.7, 1, 1.3][i]; try { localStorage.setItem("skypilot.sens", String(SENS)); } catch (e) {} }],
+    ["Сложность", ["Обычная", "Сложная (G)"], () => (HARD ? 1 : 0), (i) => { HARD = i === 1; try { localStorage.setItem("skypilot.hard", HARD ? "1" : "0"); } catch (e) {} if (typeof hardLbl === "function") hardLbl(); }]];
+  const box = $("setRows"); box.innerHTML = "";
+  for (const [label, opts, get, set] of rows) {
+    const r = document.createElement("div"); r.className = "setrow"; r.innerHTML = `<b>${label}</b>`;
+    opts.forEach((o, i) => { const b = document.createElement("button"); b.className = "tb"; b.textContent = o; b.setAttribute("aria-pressed", get() === i); b.onclick = () => { set(i); renderSettings(); }; r.appendChild(b); });
+    box.appendChild(r);
+  }
+}
+$("mSet").onclick = () => { renderSettings(); $("setO").hidden = false; }; $("setClose").onclick = () => ($("setO").hidden = true);
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -1150,6 +1177,16 @@ def add_premium(s, patch):
     s = patch(s, "  // вышка\n", AP_EXTRA_JS + "  // вышка\n")
     s = patch(s, "function dayNight(dt) {\n", "function dayNight(dt) {\n  socksStep();\n")
     s = patch(s, "function buildAirport(ap) {", SOCKS_JS + "function buildAirport(ap) {")
+    # ⚙ настройки: единицы (kt/ft или км/ч/м), чувствительность, сложность; хранятся в браузере
+    s = patch(s, '<button class="tb" id="mHard"></button>', '<button class="tb" id="mSet">⚙ Настройки</button><button class="tb" id="mHard"></button>')
+    s = patch(s, '  <div class="overlay" id="help" hidden>', SET_HTML + '  <div class="overlay" id="help" hidden>')
+    s = patch(s, "<script>window.__flightSeq = 0; var HARD = false;", "<script>window.__flightSeq = 0; var METRIC = false, SENS = 1; try { METRIC = localStorage.getItem('skypilot.metric') === '1'; SENS = parseFloat(localStorage.getItem('skypilot.sens')) || 1; } catch (e) {} var HARD = false;")
+    s = patch(s, '  $("vSpd").textContent = Math.round(f.speed);\n  $("vAlt").textContent = fmt(f.pos.y * FT);',
+              '  const MU = METRIC ? 0.3048 : 1; $("vSpd").textContent = Math.round(f.speed * (METRIC ? 1.852 : 1)); $("vSpd").nextElementSibling.textContent = METRIC ? "км/ч" : "kt";\n  $("vAlt").textContent = fmt(f.pos.y * FT * MU);')
+    s = patch(s, '  $("uAlt").textContent = agl < 2500 ? "над землёй " + fmt(Math.max(0, agl)) : "ft";', '  $("uAlt").textContent = agl < 2500 ? "над землёй " + fmt(Math.max(0, agl) * MU) : (METRIC ? "м" : "ft");')
+    s = patch(s, '  const vs = Math.round(vsSmooth / 10) * 10; $("vVs").textContent = (vs > 0 ? "+" : "") + fmt(vs);',
+              '  const vs = Math.round(vsSmooth / 10) * 10; if (METRIC) { const ms = Math.round(vsSmooth * 0.0508) / 10; $("vVs").textContent = (ms > 0 ? "+" : "") + ms.toFixed(1); } else $("vVs").textContent = (vs > 0 ? "+" : "") + fmt(vs); $("vVs").nextElementSibling.textContent = METRIC ? "м/с" : "ft/min";')
+    s = patch(s, '$("loading").hidden = true;', SET_JS + '$("loading").hidden = true;')
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);
@@ -1166,4 +1203,9 @@ def add_premium(s, patch):
       y: clamp((k("KeyE") ? 1 : 0) - (k("KeyQ") ? 1 : 0) + touch.rr - touch.rl + PAD.y, -1, 1),
       thrUp: k("ShiftLeft") || k("ShiftRight") || PAD.up, thrDn: k("ControlLeft") || k("ControlRight") || PAD.dn,
       brakes: k("KeyB") || touch.brake || PAD.brake || (parkBrake && f.onGround),""")
+    # чувствительность из настроек (после патча геймпада)
+    s = patch(s, "      p: clamp(((k(\"KeyS\")", "      p: clamp(SENS * (((k(\"KeyS\")")
+    s = patch(s, "+ touch.y + PAD.p, -1, 1),", "+ touch.y + PAD.p), -1, 1),")
+    s = patch(s, "      r: clamp(((k(\"KeyD\")", "      r: clamp(SENS * (((k(\"KeyD\")")
+    s = patch(s, "+ touch.x + PAD.r, -1, 1),", "+ touch.x + PAD.r), -1, 1),")
     return s

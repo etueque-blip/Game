@@ -537,6 +537,13 @@ RunService.PreSimulation:Connect(function(dt)
 		local gust = 1 + 0.25 * math.sin(t * 0.9) * math.sin(t * 0.37 + 1)
 		f.wind = FlightPhysics.windVector(wd, wk * gust)
 	end
+	-- чувствительность из настроек
+	local sens = ui.sens()
+	if sens ~= 1 then
+		input.p = math.clamp(input.p * sens, -1, 1)
+		input.r = math.clamp(input.r * sens, -1, 1)
+		input.y = math.clamp(input.y * sens, -1, 1)
+	end
 	FlightPhysics.step(f, input, dt)
 	if not f.crashed then
 		race.step(prevPos, f.pos, os.clock())
@@ -604,10 +611,13 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	end
 	ui.setPax(pax, comfort)
 	local hdg = World.headingDeg(look)
+	local metric = ui.metric()
+	local altU = if metric then 0.3048 else 1
+	local vsShow = if metric then math.round(vsSmooth * 0.00508 * 10) / 10 else vs
 	ui.setCells({
-		spd = { tostring(math.round(f.speed)) },
-		alt = { fmt(f.pos.Y * FT), if agl < 2500 then "над землёй " .. fmt(math.max(0, agl)) else "ft" },
-		vs = { (if vs > 0 then "+" else "") .. fmt(vs) },
+		spd = { tostring(math.round(f.speed * (if metric then 1.852 else 1))), if metric then "км/ч" else "kt" },
+		alt = { fmt(f.pos.Y * FT * altU), if agl < 2500 then "над землёй " .. fmt(math.max(0, agl) * altU) else (if metric then "м" else "ft") },
+		vs = { (if vsShow > 0 then "+" else "") .. (if metric then string.format("%.1f", vsShow) else fmt(vsShow)), if metric then "м/с" else "ft/min" },
 		hdg = { string.format("%03d", math.round(hdg) % 360) },
 		thr = { if f.reverse then "REV" else tostring(math.round(f.throttle * 100)), nil :: any, if f.reverse then "amber" else "green" },
 		flaps = { if c.noFlaps then "—" else tostring(f.flaps), if f.gear then "шасси ▼" else "шасси ▲", "green", if f.gear then "green" else "dim" },
