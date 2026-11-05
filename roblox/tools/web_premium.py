@@ -660,6 +660,29 @@ function rainSky(dt) {
 """
 
 
+TERMINAL_JS = r"""  // терминал: крыша-волна со световыми фонарями, навес над подъездом, дорога, парковка с машинами
+  { const roofM = std(0xd6dae0, { metal: 0.7, rough: 0.3 }), skyM = new THREE.MeshStandardMaterial({ color: lin(0x78aad2), metalness: 0.8, roughness: 0.1, envMap, transparent: true, opacity: 0.7 });
+    for (let k = -4; k <= 4; k++) {
+      const r = box(172, 1.6, 101, roofM, tx + 4, 45, k * 100, true); r.rotation.x = k % 2 === 0 ? 0.1 : -0.1;
+      if (k < 4) box(150, 0.8, 6, skyM, tx + 4, 49.6, k * 100 + 50);
+    }
+    box(26, 1.4, 760, std(0xc8ccd4, { metal: 0.6, rough: 0.35 }), tx + 84, 21, 0, true);
+    for (let z = -360; z <= 360; z += 80) box(2, 20, 2, std(0x969ca4, { metal: 0.7 }), tx + 94, 10.5, z, true);
+    const road = std(0x34363a, { rough: 0.9 });
+    box(34, 0.1, 1240, road, tx + 114, 0.52, 0);
+    for (let z = -600; z <= 600; z += 36) box(0.8, 0.05, 14, paint, tx + 114, 0.58, z);
+    box(170, 0.1, 620, std(0x3c3e42, { rough: 0.9 }), tx + 220, 0.52, 0);
+    const cars = [], CARC = [0xebecee, 0x1c1e22, 0x969ca4, 0xa01e24, 0x1e468c, 0xd2d2c8];
+    let seed = ap.id.charCodeAt(0) * 97; const rr = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (const rx of [165, 215, 265]) for (let z = -288; z <= 288; z += 16) {
+      box(16, 0.05, 0.5, paint, tx + rx, 0.58, z - 8);
+      if (rr() < 0.55) cars.push({ x: tx + rx + (rr() - 0.5) * 1.2, y: 2.2, z, sx: 8, sy: 3.2, sz: 4.4, color: CARC[Math.floor(rr() * CARC.length)] });
+    }
+    instanced(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ metalness: 0.5, roughness: 0.3, envMap }), cars.map((it) => { const w = apToWorld(ap, it.x, it.z); return { ...it, x: w.x, z: w.z, ry: ap.rot ? Math.PI / 2 : 0 }; }), { shadow: true });
+  }
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -888,6 +911,9 @@ def add_premium(s, patch):
     s = patch(s, "  renderer.toneMappingExposure = 0.42 + 0.63 * day;\n", "  renderer.toneMappingExposure = 0.42 + 0.63 * day;\n  rainSky(dt);\n  scene.fog.color.copy(HORIZON);\n")
     s = patch(s, 'el.innerHTML = `${ic} ${ph} · ', 'el.innerHTML = `${RAIN.v > 0.15 ? "🌧" : ic} ${ph} · ')
     s = patch(s, " + \" kt\"}</small>`; }", " + \" kt\"}${RAIN.v > 0.6 ? \" · ливень\" : RAIN.v > 0.15 ? \" · дождь\" : \"\"}</small>`; }")
+    # терминал: крыша-волна, навес, дорога и парковка с машинами (как в WorldBuilder.luau)
+    s = patch(s, "  addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1500, -1000, 0.49);\n", "  addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1500, -1000, 0.49);\n  addLocalRect(ap, W / 2 + 880, W / 2 + 1320, -700, 700, 0.49);\n")
+    s = patch(s, "  // вышка\n", TERMINAL_JS + "  // вышка\n")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

@@ -293,6 +293,37 @@ local function buildAirport(folder: Folder, ap: any)
 	part(f, Vector3.new(160, 3, 930), cf(tx + 5, 41.5, 0), Color3.fromRGB(61, 67, 76), Enum.Material.Metal, true)
 	local sign = part(f, Vector3.new(2, 30, 500), cf(tx - 74.5, 58, 0), FRAME)
 	textDecal(sign, Enum.NormalId.Left, ap.title, Color3.fromRGB(20, 60, 120), FRAME)
+	-- терминал: крыша-волна со световыми фонарями, навес над подъездом, дорога и парковка с машинами
+	for k = -4, 4 do
+		local roof = part(f, Vector3.new(172, 1.6, 101), cf(tx + 4, 45, k * 100) * CFrame.Angles(if k % 2 == 0 then 0.1 else -0.1, 0, 0), Color3.fromRGB(214, 218, 224), Enum.Material.Metal)
+		roof.CastShadow = true
+		if k < 4 then
+			local sky = part(f, Vector3.new(150, 0.8, 6), cf(tx + 4, 49.6 + (if k % 2 == 0 then 0 else -0.1), k * 100 + 50), Color3.fromRGB(120, 170, 210), Enum.Material.Glass)
+			sky.Transparency = 0.3
+			sky.CastShadow = false
+		end
+	end
+	part(f, Vector3.new(26, 1.4, 760), cf(tx + 84, 21, 0), Color3.fromRGB(200, 204, 212), Enum.Material.Metal).CastShadow = true
+	for z = -360, 360, 80 do
+		part(f, Vector3.new(2, 20, 2), cf(tx + 94, 10.5, z), Color3.fromRGB(150, 156, 164), Enum.Material.Metal)
+	end
+	part(f, Vector3.new(34, 0.1, 1240), cf(tx + 114, 0.52, 0), Color3.fromRGB(52, 54, 58), Enum.Material.Asphalt)
+	for z = -600, 600, 36 do
+		part(f, Vector3.new(0.8, 0.05, 14), cf(tx + 114, 0.58, z), PAINT).CastShadow = false
+	end
+	part(f, Vector3.new(170, 0.1, 620), cf(tx + 220, 0.52, 0), Color3.fromRGB(60, 62, 66), Enum.Material.Asphalt)
+	local CAR = { Color3.fromRGB(235, 236, 238), Color3.fromRGB(28, 30, 34), Color3.fromRGB(150, 156, 164), Color3.fromRGB(160, 30, 36), Color3.fromRGB(30, 70, 140), Color3.fromRGB(210, 210, 200) }
+	local rnd = Random.new(#ap.id * 97 + string.byte(ap.id))
+	for _, rx in { 165, 215, 265 } do
+		for z = -288, 288, 16 do
+			part(f, Vector3.new(16, 0.05, 0.5), cf(tx + rx, 0.58, z - 8), PAINT).CastShadow = false
+			if rnd:NextNumber() < 0.55 then
+				local car = part(f, Vector3.new(8, 3.2, 4.4), cf(tx + rx + rnd:NextNumber(-0.6, 0.6), 2.2, z), CAR[rnd:NextInteger(1, #CAR)], Enum.Material.SmoothPlastic)
+				car.Reflectance = 0.12
+			end
+		end
+	end
+
 	-- телетрапы: ротонда на колонне у терминала, телескопические секции, кабина с окном, гармошка к двери, опора на колёсах
 	local JW = Color3.fromRGB(196, 201, 208)
 	local JD = Color3.fromRGB(70, 76, 86)

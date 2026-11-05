@@ -74,6 +74,7 @@ for _, ap in World.AIRPORTS do
 	end
 	addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1000, 1000, 0.49, "apron")
 	addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1500, -1000, 0.49, "apron")
+	addLocalRect(ap, W / 2 + 880, W / 2 + 1320, -700, 700, 0.49, "landside") -- терминал, дорога, парковка
 end
 
 -- Города (Дубай, Лондон, Ташкент) — данные из tools/gen_cities.py, общие с веб-версией
