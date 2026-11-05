@@ -9277,6 +9277,27 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 			leg(s * D * 0.3, mainZ + chord * 0.15, 2, true)
 		end
 	end
+	-- створки шасси: открытые у стоек (в папке шасси), закрытые панели — в папке GearDoorsUp (видны, когда шасси убрано)
+	if not cfg.fixedGear and cfg.engines ~= "jet1" and cfg.engines ~= "prop" then
+		local doorsUp = Instance.new("Folder")
+		doorsUp.Name = "GearDoorsUp"
+		doorsUp.Parent = model
+		local SEAM = col.body:Lerp(Color3.new(0, 0, 0), 0.12)
+		local bayY = if mainX > D * 0.5 then wy - wingThick * 0.6 else -D * 0.46
+		for _, s in { -1, 1 } do
+			block(ctx, "GearDoor", Vector3.new(0.16, gearLen * 0.6, wheelR * 2.4), CFrame.new(s * (mainX + wheelW * 1.5), bayY - gearLen * 0.32, mainZ), col.body, Enum.Material.SmoothPlastic, gearFolder)
+			block(ctx, "GearDoor", Vector3.new(0.12, D * 0.17, wheelR * 2.2), CFrame.new(s * wheelW * 0.9, -D * 0.43, noseZ), col.body, Enum.Material.SmoothPlastic, gearFolder)
+			local pnl = block(ctx, "BayPanel", Vector3.new(wheelR * 2.6, 0.12, wheelR * 3.2), CFrame.new(s * mainX, bayY - 0.08, mainZ), SEAM, Enum.Material.SmoothPlastic, doorsUp)
+			pnl.CastShadow = false
+		end
+		local np = block(ctx, "BayPanel", Vector3.new(wheelR * 1.5, 0.1, wheelR * 2.6), CFrame.new(0, -D * 0.485, noseZ), SEAM, Enum.Material.SmoothPlastic, doorsUp)
+		np.CastShadow = false
+		for _, p in doorsUp:GetChildren() do
+			if p:IsA("BasePart") then
+				p.Transparency = 1 -- по умолчанию шасси выпущено; при уборке панели показывает setGearVisible
+			end
+		end
+	end
 	if not static then
 		for i, p in mainGear do
 			local a = Instance.new("Attachment")
@@ -9354,6 +9375,14 @@ function PlaneBuilder.setFlaps(model: Model, flaps: number)
 end
 
 function PlaneBuilder.setGearVisible(model: Model, visible: boolean)
+	local du = model:FindFirstChild("GearDoorsUp")
+	if du then
+		for _, p in du:GetChildren() do
+			if p:IsA("BasePart") then
+				p.Transparency = if visible then 1 else 0
+			end
+		end
+	end
 	local g = model:FindFirstChild("Gear")
 	if not g then
 		return

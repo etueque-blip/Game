@@ -616,6 +616,21 @@ function paxStars(v) { const n = v >= 90 ? 5 : v >= 70 ? 4 : v >= 50 ? 3 : v >= 
 """
 
 
+DOORS_JS = r"""  if (kind === "jet" && !cfg.fixedGear) {
+    const doorM = std(col.body, { metal: 0.25, rough: 0.4 }), seamM = std(new THREE.Color(lin(col.body)).multiplyScalar(0.86).getHex(), { metal: 0.25, rough: 0.45 });
+    const noseZ = -L / 2 + L * 0.12, mainY = Math.abs(mainX) > Rr * 0.6 ? wingY - rootC * 0.05 : -Rr * 0.6, bayY = Math.abs(mainX) > Rr * 0.6 ? wingY - rootC * 0.085 : -Rr * 0.62;
+    for (const s of [-1, 1]) {
+      const md = add(gear, new THREE.BoxGeometry(0.16, gh * 0.6, wD * 2.4), doorM, true); md.position.set(s * (mainX + wD * 1.0), mainY - gh * 0.32, mainZ);
+      const nd = add(gear, new THREE.BoxGeometry(0.12, Rr * 0.34, wD * 2.2), doorM, true); nd.position.set(s * wD * 0.75, -Rr * 0.86, noseZ);
+    }
+    const doorsUp = new THREE.Group(); body.add(doorsUp); doorsUp.visible = false;
+    for (const s of [-1, 1]) { const pnl = new THREE.Mesh(new THREE.BoxGeometry(wD * 2.6, 0.12, wD * 3.2), seamM); pnl.position.set(s * mainX, bayY, mainZ); doorsUp.add(pnl); }
+    const np = new THREE.Mesh(new THREE.BoxGeometry(wD * 1.5, 0.1, wD * 2.6), seamM); np.position.set(0, -Rr * 0.97, noseZ); doorsUp.add(np);
+    root.userData.doorsUp = doorsUp;
+  }
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -835,6 +850,10 @@ def add_premium(s, patch):
     s = patch(s, "function fstatsFrame(f, dt) {", "function fstatsFrame(f, dt) { paxFrame(f, dt);")
     s = patch(s, "showLandingReport(f, ap, ev.text, __pts || 0);", "paxTouchdown(ev.text); showLandingReport(f, ap, ev.text, __pts || 0);")
     s = patch(s, '$("radar").hidden = true; $("gm").hidden = true;', '$("radar").hidden = true; $("gm").hidden = true; $("pax").hidden = true;')
+    # створки шасси: открытые у стоек (в группе шасси), закрытые панели под фюзеляжем и крылом — когда шасси убрано
+    s = patch(s, '  leg(0, -L / 2 + L * 0.12, kind === "light" ? 1 : 2, 1);\n', '  leg(0, -L / 2 + L * 0.12, kind === "light" ? 1 : 2, 1);\n' + DOORS_JS)
+    s = patch(s, "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02;",
+              "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02; if (u.doorsUp) u.doorsUp.visible = gearAnim < 0.05;")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

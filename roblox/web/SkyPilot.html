@@ -1253,6 +1253,18 @@ function buildPlane(cfg, isStatic) {
   mainGear.push(leg(-mainX, mainZ, 2, big ? 2 : 1), leg(mainX, mainZ, 2, big ? 2 : 1));
   if (cfg.hump) { mainGear.push(leg(-Rr * 0.32, mainZ + ch * 0.45, 2, 2), leg(Rr * 0.32, mainZ + ch * 0.45, 2, 2)); }
   leg(0, -L / 2 + L * 0.12, kind === "light" ? 1 : 2, 1);
+  if (kind === "jet" && !cfg.fixedGear) {
+    const doorM = std(col.body, { metal: 0.25, rough: 0.4 }), seamM = std(new THREE.Color(lin(col.body)).multiplyScalar(0.86).getHex(), { metal: 0.25, rough: 0.45 });
+    const noseZ = -L / 2 + L * 0.12, mainY = Math.abs(mainX) > Rr * 0.6 ? wingY - rootC * 0.05 : -Rr * 0.6, bayY = Math.abs(mainX) > Rr * 0.6 ? wingY - rootC * 0.085 : -Rr * 0.62;
+    for (const s of [-1, 1]) {
+      const md = add(gear, new THREE.BoxGeometry(0.16, gh * 0.6, wD * 2.4), doorM, true); md.position.set(s * (mainX + wD * 1.0), mainY - gh * 0.32, mainZ);
+      const nd = add(gear, new THREE.BoxGeometry(0.12, Rr * 0.34, wD * 2.2), doorM, true); nd.position.set(s * wD * 0.75, -Rr * 0.86, noseZ);
+    }
+    const doorsUp = new THREE.Group(); body.add(doorsUp); doorsUp.visible = false;
+    for (const s of [-1, 1]) { const pnl = new THREE.Mesh(new THREE.BoxGeometry(wD * 2.6, 0.12, wD * 3.2), seamM); pnl.position.set(s * mainX, bayY, mainZ); doorsUp.add(pnl); }
+    const np = new THREE.Mesh(new THREE.BoxGeometry(wD * 1.5, 0.1, wD * 2.6), seamM); np.position.set(0, -Rr * 0.97, noseZ); doorsUp.add(np);
+    root.userData.doorsUp = doorsUp;
+  }
   root.userData.gear = gear; root.userData.mainGear = mainGear;
 
   // огни
@@ -2386,7 +2398,7 @@ function frame(t) {
       if (u.fans) for (const r of u.fans) r.rotation.z += dt * (5 + f.throttle * 38);
       if (u.prop) { u.prop.rotation.z += dt * (8 + f.throttle * 70); u.disc.material.opacity = Math.min(0.18, f.throttle * 0.25); }
       gearAnim = clamp(gearAnim + (f.gear ? 1 : -1) * dt * 0.5, 0, 1);
-      u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02;
+      u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02; if (u.doorsUp) u.doorsUp.visible = gearAnim < 0.05;
       // огни: навигация горит, строб/маяк мигают
       const tt = performance.now() / 1000;
       for (const l of u.lights) {
