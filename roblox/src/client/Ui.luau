@@ -420,7 +420,68 @@ function Ui.new(cb: Callbacks)
 	local title = h2(hs, "✈  SKY PILOT", nil, 1)
 	local scoreLine = para(hs, "", 2)
 	local pages = new("Frame", { Size = UDim2.new(1, 0, 0, 380), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22, ClipsDescendants = true }, hs)
-	local navRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, hs)
+	-- характеристики выбранного самолёта (шаг «самолёт»): полосы относительно лучшего в игре и ключевые цифры
+	local FP = require(Shared:WaitForChild("FlightPhysics"))
+	local spec = new("Frame", { Size = UDim2.new(1, 0, 0, 92), BackgroundColor3 = Color3.fromRGB(10, 15, 26), BackgroundTransparency = 0.2, LayoutOrder = 4, ZIndex = 22, Visible = false }, hs)
+	corner(spec, 14)
+	stroke(spec)
+	local spName = new("TextLabel", { Size = UDim2.new(0, 230, 0, 24), Position = UDim2.fromOffset(14, 10), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 18, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = "", ZIndex = 23 }, spec)
+	local spCls = new("TextLabel", { Size = UDim2.new(0, 230, 0, 16), Position = UDim2.fromOffset(14, 36), BackgroundTransparency = 1, Font = FONT, TextSize = 12, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = "", ZIndex = 23 }, spec)
+	local spFbw = new("TextLabel", { Size = UDim2.fromOffset(96, 20), Position = UDim2.fromOffset(14, 60), BackgroundColor3 = C.magenta, BackgroundTransparency = 0.6, Font = FONT, TextSize = 11, TextColor3 = C.fg, Text = "FLY-BY-WIRE", ZIndex = 23 }, spec)
+	corner(spFbw, 10)
+	local spBars: { { fill: Frame, val: TextLabel } } = {}
+	for i, label in { "Скорость", "Потолок", "Манёвренность", "Размер" } do
+		local y = 10 + (i - 1) * 19
+		new("TextLabel", { Size = UDim2.fromOffset(96, 16), Position = UDim2.fromOffset(250, y), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = label, ZIndex = 23 }, spec)
+		local track = new("Frame", { Size = UDim2.fromOffset(150, 6), Position = UDim2.fromOffset(348, y + 5), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.88, ZIndex = 23 }, spec)
+		corner(track, 3)
+		local fill = new("Frame", { Size = UDim2.fromScale(0.5, 1), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 24 }, track)
+		corner(fill, 3)
+		new("UIGradient", { Color = ColorSequence.new(C.magenta, Color3.fromRGB(143, 211, 255)) }, fill)
+		local val = new("TextLabel", { Size = UDim2.fromOffset(70, 16), Position = UDim2.fromOffset(502, y), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Right, Text = "", ZIndex = 23 }, spec)
+		spBars[i] = { fill = fill, val = val }
+	end
+	local spNums: { TextLabel } = {}
+	for i, label in { "ОТРЫВ, KT", "ЗАХОД, KT", "СВАЛИВАНИЕ", "ПРЕДЕЛ G" } do
+		local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+		local cell = new("Frame", { Size = UDim2.fromOffset(84, 34), Position = UDim2.new(1, -184 + col * 90, 0, 10 + row * 38), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.94, ZIndex = 23 }, spec)
+		corner(cell, 8)
+		spNums[i] = new("TextLabel", { Size = UDim2.new(1, 0, 0, 18), Position = UDim2.fromOffset(0, 2), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 15, TextColor3 = C.fg, Text = "", ZIndex = 24 }, cell)
+		new("TextLabel", { Size = UDim2.new(1, 0, 0, 12), Position = UDim2.fromOffset(0, 20), BackgroundTransparency = 1, Font = FONT, TextSize = 8, TextColor3 = C.dim, Text = label, ZIndex = 24 }, cell)
+	end
+	local maxOf: { [string]: number } = {}
+	for _, pc in PlaneConfigs.PLANES do
+		for _, k in { "maxKts", "ceilingFt", "rollRate", "length" } do
+			maxOf[k] = math.max(maxOf[k] or 0, pc[k] or 0)
+		end
+	end
+	local function renderSpec(id: string)
+		local c = PlaneConfigs.PLANES[id]
+		if not c then
+			return
+		end
+		local gMax, _, fbw = FP.limits(c)
+		spName.Text = c.name
+		spCls.Text = string.upper(c.cls or "")
+		spFbw.Visible = fbw
+		local vals = {
+			{ c.maxKts / maxOf.maxKts, string.format("%d kt", c.maxKts) },
+			{ c.ceilingFt / maxOf.ceilingFt, string.format("%d тыс. ft", math.round(c.ceilingFt / 1000)) },
+			{ math.sqrt(c.rollRate / maxOf.rollRate), string.format("%.1f/10", math.sqrt(c.rollRate / maxOf.rollRate) * 10) },
+			{ c.length / maxOf.length, string.format("%d м", math.round(c.length * World.METERS_PER_STUD)) },
+		}
+		for i, v in vals do
+			spBars[i].fill.Size = UDim2.fromScale(math.clamp(v[1], 0.06, 1), 1)
+			spBars[i].val.Text = v[2]
+		end
+		local vapp = math.round(c.stallKts * (if c.noFlaps then 1 else 0.79) * 1.3 / 5) * 5
+		spNums[1].Text = tostring(c.vrKts)
+		spNums[2].Text = tostring(vapp)
+		spNums[3].Text = tostring(c.stallKts)
+		spNums[4].Text = string.format("+%.1f", gMax)
+		spec.Visible = true -- вызывается только с карточек самолётов на шаге «самолёт»
+	end
+	local navRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 5, ZIndex = 22 }, hs)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, navRow)
 	local bClose = button(navRow, "Закрыть", { ZIndex = 23, LayoutOrder = 0 })
 	bClose.Activated:Connect(function()
@@ -571,6 +632,7 @@ function Ui.new(cb: Callbacks)
 				cd.Activated:Connect(function()
 					flow.plane = id
 					selectCard("plane", cd)
+					renderSpec(id)
 				end)
 			end
 		end
@@ -615,6 +677,7 @@ function Ui.new(cb: Callbacks)
 			v.Visible = k == st
 		end
 		title.Text = titles[st]
+		spec.Visible = st == "planes" and flow.plane ~= nil
 		bBack.Visible = st ~= "menu"
 		bNext.Text = if (st == "to") or (st == "from" and flow.mode ~= "career") or (st == "planes" and flow.mode == "race") then "Полёт ✈" else "Далее →"
 		-- в рейсе нельзя выбрать аэропорт назначения, совпадающий с аэропортом вылета

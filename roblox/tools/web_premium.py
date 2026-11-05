@@ -406,6 +406,39 @@ APRON_JS = r"""  // телетрапы: ротонда на колонне, те
 """
 
 
+SPEC_CSS = """
+/* ангар: характеристики */
+.spec { display: grid; gap: 10px; margin-top: 8px; max-width: 520px; text-shadow: none; }
+.spec .sc { display: flex; gap: 6px; flex-wrap: wrap; }
+.spec .chip { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #fff; backdrop-filter: blur(6px); }
+.spec .chip.fbw { background: rgba(59,167,255,.25); border-color: rgba(59,167,255,.6); }
+.spec .bars { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; align-items: center; font-size: 12px; color: #dfe8f7;
+  background: rgba(6,10,18,.55); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 10px 12px; backdrop-filter: blur(8px); }
+.spec .bar { height: 7px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; }
+.spec .bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3ba7ff, #8fd3ff); }
+.spec .bars b { font-family: var(--f-num); font-weight: 600; color: #fff; font-size: 12px; text-align: right; }
+.spec .nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.spec .nums div { background: rgba(6,10,18,.55); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 6px 4px; text-align: center; backdrop-filter: blur(8px); }
+.spec .nums b { display: block; font-family: var(--f-num); font-size: 16px; color: #fff; }
+.spec .nums small { display: block; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+@media (max-height: 500px) { .spec .bars { padding: 6px 10px; gap: 3px 8px; } .spec .nums b { font-size: 13px; } }
+"""
+
+SPEC_JS = r"""
+// ===== характеристики самолёта для ангара (полосы относительно лучшего в игре)
+function specHTML(c) {
+  const all = Object.values(PLANES), mx = (k) => Math.max(...all.map((p) => p[k] || 0));
+  const [gx, , fbw] = gLimits(c), vapp = Math.round(c.stallKts * (c.noFlaps ? 1 : 0.79) * 1.3 / 5) * 5;
+  const bar = (label, v, m, txt) => `<span>${label}</span><span class="bar"><i style="width:${Math.max(6, Math.min(100, v / m * 100)).toFixed(0)}%"></i></span><b>${txt}</b>`;
+  return `<div class="spec"><div class="sc"><span class="chip">${c.cls}</span>${fbw ? '<span class="chip fbw">Fly-by-wire</span>' : ""}${c.engines === "wing4" ? '<span class="chip">4 двигателя</span>' : ""}</div>` +
+    `<div class="bars">${bar("Скорость", c.maxKts, mx("maxKts"), c.maxKts + " kt")}${bar("Потолок", c.ceilingFt, mx("ceilingFt"), (c.ceilingFt / 1000).toFixed(0) + " тыс. ft")}` +
+    `${bar("Манёвренность", Math.sqrt(c.rollRate), Math.sqrt(mx("rollRate")), (Math.sqrt(c.rollRate / mx("rollRate")) * 10).toFixed(1) + "/10")}${bar("Размер", c.length, mx("length"), Math.round(c.length * 0.515) + " м")}</div>` +
+    `<div class="nums"><div><b>${c.vrKts}</b><small>отрыв, kt</small></div><div><b>${vapp}</b><small>заход, kt</small></div>` +
+    `<div><b>${c.stallKts}</b><small>сваливание</small></div><div><b>+${gx.toFixed(1)}</b><small>предел G</small></div></div></div>`;
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -568,6 +601,11 @@ def add_premium(s, patch):
   }""", APRON_JS)
     s = patch(s, "    if (window.__facadeU) window.__facadeU.uNight.value = n;",
               "    if (window.__facadeU) window.__facadeU.uNight.value = n;\n    if (window.__lampMat) window.__lampMat.emissiveIntensity = 2.6 * n;\n    if (window.__poolMat) window.__poolMat.opacity = 0.55 * n;")
+    # ангар: карточка характеристик самолёта (полосы относительно лучшего в игре, ключевые цифры, fly-by-wire)
+    s = patch(s, "</style>\n\n<div id=\"app\">", SPEC_CSS + "</style>\n\n<div id=\"app\">")
+    s = patch(s, '    $("fText").textContent = c ? PLANE_TEXT(c) : "Выберите самолёт слева.";',
+              '    if (c) $("fText").innerHTML = specHTML(c); else $("fText").textContent = "Выберите самолёт слева.";')
+    s = patch(s, "const PLANE_TEXT = (c) =>", SPEC_JS + "const PLANE_TEXT = (c) =>")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);
