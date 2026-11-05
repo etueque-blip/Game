@@ -13161,6 +13161,8 @@ function Comfort.passengers(c: any): number
 		return 0
 	elseif c.engines == "prop" then
 		return 3
+	elseif c.engines == "turboprop2" then
+		return 70
 	elseif c.length < 130 and c.diameter < 11 then
 		return math.max(6, math.round(c.length * 0.12))
 	end
@@ -14194,6 +14196,51 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 		end
 		-- воздухозаборник под фюзеляжем
 		block(ctx, "Intake", Vector3.new(D * 0.6, D * 0.4, L * 0.12), CFrame.new(0, -D * 0.45, wz - chord * 0.6), DARK, Enum.Material.Metal, engines)
+	elseif cfg.engines == "turboprop2" then
+		-- турбовинтовые: гондолы под высоким крылом, шестилопастные винты (вращает Animator), выхлоп сбоку
+		for _, s in { -1, 1 } do
+			local le = wingPoint(s, 0.3)
+			local p = Vector3.new(le.X, le.Y - eD * 0.45, le.Z + eL * 0.1)
+			ellipsoid(ctx, "Nacelle", Vector3.new(eD * 0.5, eD * 0.6, eL * 0.55), CFrame.new(p), col.engine, Enum.Material.SmoothPlastic, engines)
+			cylZ(ctx, "Exhaust", eD * 0.5, eD * 0.28, p + Vector3.new(s * eD * 0.45, -eD * 0.1, eL * 0.05), DARK, Enum.Material.Metal, engines)
+			local pc0 = CFrame.new(p + Vector3.new(0, 0, -eL * 0.55 - 0.25))
+			local hub = basePart(ctx, "Part", "Prop", Color3.fromRGB(230, 232, 236), Enum.Material.Metal)
+			hub.Size = Vector3.new(eD * 0.6, eD * 0.6, eD * 0.75)
+			local hm = Instance.new("SpecialMesh")
+			hm.MeshType = Enum.MeshType.Sphere
+			hm.Parent = hub
+			hub.CFrame = root.CFrame * pc0
+			hub.Parent = engines
+			if not static then
+				local w = Instance.new("Weld")
+				w.Name = "PropWeld"
+				w.Part0 = root
+				w.Part1 = hub
+				w.C0 = pc0
+				w:SetAttribute("Base", pc0)
+				w.Parent = hub
+			end
+			for i = 0, 5 do
+				local a = i / 6 * math.pi * 2
+				local bl = basePart(ctx, "Part", "Blade", DARK, Enum.Material.Metal)
+				bl.Size = Vector3.new(eD * 0.16, eD * 1.55, 0.2)
+				bl.CFrame = hub.CFrame * CFrame.Angles(0, 0, a - math.pi / 2) * CFrame.new(0, eD * 0.82, 0) * CFrame.Angles(0, 0.35, 0)
+				bl.Parent = engines
+				if not static then
+					local wc = Instance.new("WeldConstraint")
+					wc.Part0 = hub
+					wc.Part1 = bl
+					wc.Parent = bl
+				end
+			end
+			local disc = basePart(ctx, "Part", "PropDisc", Color3.fromRGB(200, 200, 200), Enum.Material.Glass)
+			disc.Shape = Enum.PartType.Cylinder
+			disc.Size = Vector3.new(0.05, eD * 3.3, eD * 3.3)
+			disc.CFrame = root.CFrame * pc0 * CFrame.Angles(0, math.pi / 2, 0)
+			disc.Transparency = 1
+			disc.CastShadow = false
+			attach(ctx, disc, engines)
+		end
 	elseif cfg.engines == "prop" then
 		ellipsoid(ctx, "Spinner", Vector3.new(D * 0.16, D * 0.16, D * 0.22), CFrame.new(0, 0, -L / 2 - D * 0.05), Color3.fromRGB(230, 230, 230), Enum.Material.Metal, engines)
 		local prop = basePart(ctx, "Part", "Prop", DARK, Enum.Material.Metal)
@@ -14281,9 +14328,14 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 		end
 	end
 	local mainZ = wz + chord * 0.25
-	local mainX = if cfg.wing == "high" then D * 0.75 else math.max(D * 0.55, span * 0.08)
+	local turboprop = cfg.engines == "turboprop2"
+	local mainX = if turboprop then D * 0.42 elseif cfg.wing == "high" then D * 0.75 else math.max(D * 0.55, span * 0.08)
 	for _, s in { -1, 1 } do
-		leg(s * mainX, mainZ, if big then 2 else 1, L > 130)
+		leg(s * mainX, mainZ, if big then 2 else 1, L > 130 or turboprop)
+		if turboprop then
+			-- обтекатель ниши основной стойки сбоку фюзеляжа
+			ellipsoid(ctx, "Sponson", Vector3.new(D * 0.2, D * 0.17, L * 0.09), CFrame.new(s * D * 0.44, -D * 0.36, mainZ), col.body)
+		end
 		table.insert(mainGear, Vector3.new(s * mainX, -cfg.gearHeight, mainZ))
 		if cfg.id == "B747" then
 			leg(s * D * 0.3, mainZ + chord * 0.15, 2, true)
@@ -14479,11 +14531,14 @@ local PLANES: { [string]: any } = {
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1f6f8b"), tail = Color3.fromHex("13485a"), engine = Color3.fromHex("c4c8ce") } },
 	B777 = { name = "Boeing 777-300ER", cls = "Широкофюзеляжный лайнер", length = 270, diameter = 23, span = 240, chord = 38, wing = "low", wingPos = 0.46, sweep = 31, dihedral = 6, engines = "wing2", engineD = 14, engineLen = 24, tail = "conventional", hstabSpan = 82, finHeight = 46, finSweep = 40, gearLen = 8, windows = true, thrust = 5.5, maxKts = 490, stallKts = 132, vrKts = 155, flapMaxKts = 230, pitchRate = 0.32, rollRate = 0.7, yawRate = 0.19, turnBoost = 2, groundSteer = 0.42, brakeDecel = 8, stallSink = 62, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("c0392b"), tail = Color3.fromHex("1c2f5e"), engine = Color3.fromHex("c4c8ce") } },
+	-- турбовинтовой региональный: высокоплан, Т-оперение, два мотора с шестилопастными винтами (как в веб-версии, tools/web_atr.py)
+	ATR72 = { name = "ATR 72-600", cls = "Турбовинтовой региональный", length = 97, diameter = 9.5, span = 97, chord = 8.5, wing = "high", wingPos = 0.47, sweep = 0, dihedral = 1.5, engines = "turboprop2", engineD = 4.2, engineLen = 15, tail = "T", hstabSpan = 27, finHeight = 16, finSweep = 32, gearLen = 3, windows = true, thrust = 5.4, maxKts = 280, stallKts = 85, vrKts = 102, flapMaxKts = 180, pitchRate = 0.55, rollRate = 1.1, yawRate = 0.3, turnBoost = 2.2, groundSteer = 0.6, brakeDecel = 7, stallSink = 40, maxRotate = 12, ceilingFt = 25000, maxTouchdownFpm = 1150,
+		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1f5fbf"), tail = Color3.fromHex("1f5fbf"), engine = Color3.fromHex("f3f5f8") } },
 	F16 = { name = "F-16 Fighting Falcon", cls = "Истребитель", length = 54, diameter = 5.5, span = 35, chord = 14, wing = "mid", wingPos = 0.6, sweep = 40, dihedral = 0, engines = "jet1", engineD = 4, tail = "conventional", hstabSpan = 20, finHeight = 12, finSweep = 45, gearLen = 2.5, canopy = true, noFlaps = true, thrust = 22, maxKts = 800, stallKts = 115, vrKts = 140, flapMaxKts = 9999, pitchRate = 1.5, rollRate = 4, yawRate = 0.5, turnBoost = 6, groundSteer = 0.6, brakeDecel = 10, stallSink = 40, maxRotate = 15, ceilingFt = 50000, maxTouchdownFpm = 1500,
 		colors = { body = Color3.fromHex("8e98a3"), accent = Color3.fromHex("6b737d"), tail = Color3.fromHex("78808a"), engine = Color3.fromHex("3c3c41") } },
 }
 
-local ORDER = { "C172", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "F16" }
+local ORDER = { "C172", "ATR72", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "F16" }
 
 for id, c in PLANES do
 	c.id = id
@@ -14514,6 +14569,7 @@ return {
 		news_airports = "",
 		news_tashkent = "",
 		plane_C172 = "",
+		plane_ATR72 = "",
 		plane_A220 = "",
 		plane_B777 = "",
 		plane_LEAR75 = "",
@@ -17571,7 +17627,7 @@ local World = require(Shared:WaitForChild("World"))
 local Animator = {}
 
 type Cache = {
-	lights: { BasePart }, trails: { Trail }, prop: Weld?, fans: { Weld }, fanAngle: number, propBase: CFrame?, disc: BasePart?, ab: BasePart?,
+	lights: { BasePart }, trails: { Trail }, props: { Weld }, discs: { BasePart }, fans: { Weld }, fanAngle: number, ab: BasePart?,
 	angle: number, gear: boolean?, flaps: number?,
 }
 local caches: { [Model]: Cache } = {}
@@ -17618,12 +17674,20 @@ local function cacheFor(m: Model): Cache
 			end
 		end
 	end
-	local propPart = engines and engines:FindFirstChild("Prop")
-	local prop = propPart and propPart:FindFirstChild("PropWeld") :: Weld?
+	-- винты (у Cessna один, у ATR 72 — два) и их «диски» размытия
+	local props: { Weld } = {}
+	local discs: { BasePart } = {}
+	if engines then
+		for _, d in engines:GetDescendants() do
+			if d:IsA("Weld") and d.Name == "PropWeld" then
+				table.insert(props, d)
+			elseif d:IsA("BasePart") and d.Name == "PropDisc" then
+				table.insert(discs, d)
+			end
+		end
+	end
 	c = {
-		lights = lights, trails = trails, prop = prop, fans = fans, fanAngle = 0,
-		propBase = prop and prop:GetAttribute("Base") :: CFrame?,
-		disc = engines and engines:FindFirstChild("PropDisc") :: BasePart?,
+		lights = lights, trails = trails, props = props, discs = discs, fans = fans, fanAngle = 0,
 		ab = engines and engines:FindFirstChild("Afterburner") :: BasePart?,
 		angle = 0, gear = nil, flaps = nil,
 	}
@@ -17678,11 +17742,16 @@ function Animator.step(dt: number, now: number)
 			end
 		end
 		-- винт
-		if c.prop and c.propBase then
+		if #c.props > 0 then
 			c.angle = (c.angle + dt * (8 + thr * 70)) % (math.pi * 2)
-			c.prop.C0 = c.propBase * CFrame.Angles(0, 0, c.angle)
-			if c.disc then
-				c.disc.Transparency = 1 - math.min(0.18, thr * 0.25)
+			for _, w in c.props do
+				local base = w:GetAttribute("Base")
+				if typeof(base) == "CFrame" then
+					w.C0 = base * CFrame.Angles(0, 0, c.angle)
+				end
+			end
+			for _, d in c.discs do
+				d.Transparency = 1 - math.min(0.18, thr * 0.25)
 			end
 		end
 		if c.ab then
@@ -18951,6 +19020,7 @@ function Ui.new(cb: Callbacks)
 		{ "BOEING", { "B737", "B787", "B777", "B747" } },
 		{ "AIRBUS", { "A220", "A320", "A330", "A350", "A380" } },
 		{ "GULFSTREAM · BOMBARDIER · LEARJET", { "G650", "GL7500", "LEAR75" } },
+		{ "ATR · ТУРБОВИНТОВЫЕ", { "ATR72" } },
 		{ "CESSNA", { "C172" } },
 		{ "ВОЕННЫЕ", { "F16" } },
 	}

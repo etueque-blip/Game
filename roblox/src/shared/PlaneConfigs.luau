@@ -45,11 +45,14 @@ local PLANES: { [string]: any } = {
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1f6f8b"), tail = Color3.fromHex("13485a"), engine = Color3.fromHex("c4c8ce") } },
 	B777 = { name = "Boeing 777-300ER", cls = "Широкофюзеляжный лайнер", length = 270, diameter = 23, span = 240, chord = 38, wing = "low", wingPos = 0.46, sweep = 31, dihedral = 6, engines = "wing2", engineD = 14, engineLen = 24, tail = "conventional", hstabSpan = 82, finHeight = 46, finSweep = 40, gearLen = 8, windows = true, thrust = 5.5, maxKts = 490, stallKts = 132, vrKts = 155, flapMaxKts = 230, pitchRate = 0.32, rollRate = 0.7, yawRate = 0.19, turnBoost = 2, groundSteer = 0.42, brakeDecel = 8, stallSink = 62, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("c0392b"), tail = Color3.fromHex("1c2f5e"), engine = Color3.fromHex("c4c8ce") } },
+	-- турбовинтовой региональный: высокоплан, Т-оперение, два мотора с шестилопастными винтами (как в веб-версии, tools/web_atr.py)
+	ATR72 = { name = "ATR 72-600", cls = "Турбовинтовой региональный", length = 97, diameter = 9.5, span = 97, chord = 8.5, wing = "high", wingPos = 0.47, sweep = 0, dihedral = 1.5, engines = "turboprop2", engineD = 4.2, engineLen = 15, tail = "T", hstabSpan = 27, finHeight = 16, finSweep = 32, gearLen = 3, windows = true, thrust = 5.4, maxKts = 280, stallKts = 85, vrKts = 102, flapMaxKts = 180, pitchRate = 0.55, rollRate = 1.1, yawRate = 0.3, turnBoost = 2.2, groundSteer = 0.6, brakeDecel = 7, stallSink = 40, maxRotate = 12, ceilingFt = 25000, maxTouchdownFpm = 1150,
+		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1f5fbf"), tail = Color3.fromHex("1f5fbf"), engine = Color3.fromHex("f3f5f8") } },
 	F16 = { name = "F-16 Fighting Falcon", cls = "Истребитель", length = 54, diameter = 5.5, span = 35, chord = 14, wing = "mid", wingPos = 0.6, sweep = 40, dihedral = 0, engines = "jet1", engineD = 4, tail = "conventional", hstabSpan = 20, finHeight = 12, finSweep = 45, gearLen = 2.5, canopy = true, noFlaps = true, thrust = 22, maxKts = 800, stallKts = 115, vrKts = 140, flapMaxKts = 9999, pitchRate = 1.5, rollRate = 4, yawRate = 0.5, turnBoost = 6, groundSteer = 0.6, brakeDecel = 10, stallSink = 40, maxRotate = 15, ceilingFt = 50000, maxTouchdownFpm = 1500,
 		colors = { body = Color3.fromHex("8e98a3"), accent = Color3.fromHex("6b737d"), tail = Color3.fromHex("78808a"), engine = Color3.fromHex("3c3c41") } },
 }
 
-local ORDER = { "C172", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "F16" }
+local ORDER = { "C172", "ATR72", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "F16" }
 
 for id, c in PLANES do
 	c.id = id
@@ -80,6 +83,7 @@ return {
 		news_airports = "",
 		news_tashkent = "",
 		plane_C172 = "",
+		plane_ATR72 = "",
 		plane_A220 = "",
 		plane_B777 = "",
 		plane_LEAR75 = "",

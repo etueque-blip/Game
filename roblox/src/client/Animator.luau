@@ -11,7 +11,7 @@ local World = require(Shared:WaitForChild("World"))
 local Animator = {}
 
 type Cache = {
-	lights: { BasePart }, trails: { Trail }, prop: Weld?, fans: { Weld }, fanAngle: number, propBase: CFrame?, disc: BasePart?, ab: BasePart?,
+	lights: { BasePart }, trails: { Trail }, props: { Weld }, discs: { BasePart }, fans: { Weld }, fanAngle: number, ab: BasePart?,
 	angle: number, gear: boolean?, flaps: number?,
 }
 local caches: { [Model]: Cache } = {}
@@ -58,12 +58,20 @@ local function cacheFor(m: Model): Cache
 			end
 		end
 	end
-	local propPart = engines and engines:FindFirstChild("Prop")
-	local prop = propPart and propPart:FindFirstChild("PropWeld") :: Weld?
+	-- винты (у Cessna один, у ATR 72 — два) и их «диски» размытия
+	local props: { Weld } = {}
+	local discs: { BasePart } = {}
+	if engines then
+		for _, d in engines:GetDescendants() do
+			if d:IsA("Weld") and d.Name == "PropWeld" then
+				table.insert(props, d)
+			elseif d:IsA("BasePart") and d.Name == "PropDisc" then
+				table.insert(discs, d)
+			end
+		end
+	end
 	c = {
-		lights = lights, trails = trails, prop = prop, fans = fans, fanAngle = 0,
-		propBase = prop and prop:GetAttribute("Base") :: CFrame?,
-		disc = engines and engines:FindFirstChild("PropDisc") :: BasePart?,
+		lights = lights, trails = trails, props = props, discs = discs, fans = fans, fanAngle = 0,
 		ab = engines and engines:FindFirstChild("Afterburner") :: BasePart?,
 		angle = 0, gear = nil, flaps = nil,
 	}
@@ -118,11 +126,16 @@ function Animator.step(dt: number, now: number)
 			end
 		end
 		-- винт
-		if c.prop and c.propBase then
+		if #c.props > 0 then
 			c.angle = (c.angle + dt * (8 + thr * 70)) % (math.pi * 2)
-			c.prop.C0 = c.propBase * CFrame.Angles(0, 0, c.angle)
-			if c.disc then
-				c.disc.Transparency = 1 - math.min(0.18, thr * 0.25)
+			for _, w in c.props do
+				local base = w:GetAttribute("Base")
+				if typeof(base) == "CFrame" then
+					w.C0 = base * CFrame.Angles(0, 0, c.angle)
+				end
+			end
+			for _, d in c.discs do
+				d.Transparency = 1 - math.min(0.18, thr * 0.25)
 			end
 		end
 		if c.ab then

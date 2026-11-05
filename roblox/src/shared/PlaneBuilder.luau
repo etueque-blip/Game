@@ -517,6 +517,51 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 		end
 		-- воздухозаборник под фюзеляжем
 		block(ctx, "Intake", Vector3.new(D * 0.6, D * 0.4, L * 0.12), CFrame.new(0, -D * 0.45, wz - chord * 0.6), DARK, Enum.Material.Metal, engines)
+	elseif cfg.engines == "turboprop2" then
+		-- турбовинтовые: гондолы под высоким крылом, шестилопастные винты (вращает Animator), выхлоп сбоку
+		for _, s in { -1, 1 } do
+			local le = wingPoint(s, 0.3)
+			local p = Vector3.new(le.X, le.Y - eD * 0.45, le.Z + eL * 0.1)
+			ellipsoid(ctx, "Nacelle", Vector3.new(eD * 0.5, eD * 0.6, eL * 0.55), CFrame.new(p), col.engine, Enum.Material.SmoothPlastic, engines)
+			cylZ(ctx, "Exhaust", eD * 0.5, eD * 0.28, p + Vector3.new(s * eD * 0.45, -eD * 0.1, eL * 0.05), DARK, Enum.Material.Metal, engines)
+			local pc0 = CFrame.new(p + Vector3.new(0, 0, -eL * 0.55 - 0.25))
+			local hub = basePart(ctx, "Part", "Prop", Color3.fromRGB(230, 232, 236), Enum.Material.Metal)
+			hub.Size = Vector3.new(eD * 0.6, eD * 0.6, eD * 0.75)
+			local hm = Instance.new("SpecialMesh")
+			hm.MeshType = Enum.MeshType.Sphere
+			hm.Parent = hub
+			hub.CFrame = root.CFrame * pc0
+			hub.Parent = engines
+			if not static then
+				local w = Instance.new("Weld")
+				w.Name = "PropWeld"
+				w.Part0 = root
+				w.Part1 = hub
+				w.C0 = pc0
+				w:SetAttribute("Base", pc0)
+				w.Parent = hub
+			end
+			for i = 0, 5 do
+				local a = i / 6 * math.pi * 2
+				local bl = basePart(ctx, "Part", "Blade", DARK, Enum.Material.Metal)
+				bl.Size = Vector3.new(eD * 0.16, eD * 1.55, 0.2)
+				bl.CFrame = hub.CFrame * CFrame.Angles(0, 0, a - math.pi / 2) * CFrame.new(0, eD * 0.82, 0) * CFrame.Angles(0, 0.35, 0)
+				bl.Parent = engines
+				if not static then
+					local wc = Instance.new("WeldConstraint")
+					wc.Part0 = hub
+					wc.Part1 = bl
+					wc.Parent = bl
+				end
+			end
+			local disc = basePart(ctx, "Part", "PropDisc", Color3.fromRGB(200, 200, 200), Enum.Material.Glass)
+			disc.Shape = Enum.PartType.Cylinder
+			disc.Size = Vector3.new(0.05, eD * 3.3, eD * 3.3)
+			disc.CFrame = root.CFrame * pc0 * CFrame.Angles(0, math.pi / 2, 0)
+			disc.Transparency = 1
+			disc.CastShadow = false
+			attach(ctx, disc, engines)
+		end
 	elseif cfg.engines == "prop" then
 		ellipsoid(ctx, "Spinner", Vector3.new(D * 0.16, D * 0.16, D * 0.22), CFrame.new(0, 0, -L / 2 - D * 0.05), Color3.fromRGB(230, 230, 230), Enum.Material.Metal, engines)
 		local prop = basePart(ctx, "Part", "Prop", DARK, Enum.Material.Metal)
@@ -604,9 +649,14 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 		end
 	end
 	local mainZ = wz + chord * 0.25
-	local mainX = if cfg.wing == "high" then D * 0.75 else math.max(D * 0.55, span * 0.08)
+	local turboprop = cfg.engines == "turboprop2"
+	local mainX = if turboprop then D * 0.42 elseif cfg.wing == "high" then D * 0.75 else math.max(D * 0.55, span * 0.08)
 	for _, s in { -1, 1 } do
-		leg(s * mainX, mainZ, if big then 2 else 1, L > 130)
+		leg(s * mainX, mainZ, if big then 2 else 1, L > 130 or turboprop)
+		if turboprop then
+			-- обтекатель ниши основной стойки сбоку фюзеляжа
+			ellipsoid(ctx, "Sponson", Vector3.new(D * 0.2, D * 0.17, L * 0.09), CFrame.new(s * D * 0.44, -D * 0.36, mainZ), col.body)
+		end
 		table.insert(mainGear, Vector3.new(s * mainX, -cfg.gearHeight, mainZ))
 		if cfg.id == "B747" then
 			leg(s * D * 0.3, mainZ + chord * 0.15, 2, true)

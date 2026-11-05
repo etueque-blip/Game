@@ -10,6 +10,8 @@ function Comfort.passengers(c: any): number
 		return 0
 	elseif c.engines == "prop" then
 		return 3
+	elseif c.engines == "turboprop2" then
+		return 70
 	elseif c.length < 130 and c.diameter < 11 then
 		return math.max(6, math.round(c.length * 0.12))
 	end
