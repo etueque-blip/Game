@@ -2191,11 +2191,23 @@ function togglePhoto(on) {
   if (PHOTO) { photoPrevCam = camMode; camMode = 2; orbit.dist = Math.max(orbit.dist, flight.cfg.length * 1.6); }
   else { camMode = photoPrevCam; $("bCam").textContent = "Камера: " + CAMS[camMode]; }
 }
+// в артефакте claude.ai — через capability «downloads» (зритель подтверждает сохранение); в обычном браузере — ссылкой
+let photoDl = null;
+if (window.claude && window.claude.use) window.claude.use("downloads").then((d) => (photoDl = d)).catch(() => {});
+function photoNote(t) { const b = $("photoBar").querySelector("span"); if (b) b.textContent = t; }
 function savePhoto() {
   renderer.render(scene, camera);
-  const url = renderer.domElement.toDataURL("image/png"), a = document.createElement("a");
-  a.href = url; a.download = "skypilot-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".png"; document.body.appendChild(a); a.click(); a.remove();
-  toast("Фото сохранено");
+  const name = "skypilot-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".png";
+  renderer.domElement.toBlob((blob) => {
+    if (!blob) return photoNote("Не удалось снять кадр");
+    if (photoDl) {
+      photoDl.save({ filename: name, data: blob }).then(() => photoNote("Фото сохранено ✓")).catch((e) => photoNote(e && e.code === "declined" ? "Сохранение отменено" : "Сохранение недоступно здесь"));
+    } else if (window.claude) {
+      photoNote("Сохранение недоступно в этом окне");
+    } else {
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); photoNote("Фото сохранено ✓");
+    }
+  }, "image/png");
 }
 function scoreLanding(ap, text) {
   const now = performance.now() / 1000; if (now - lastScoredLanding < 8) return;
