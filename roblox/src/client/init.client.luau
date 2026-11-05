@@ -30,6 +30,21 @@ local PlaneState, Landing, CrashEvent, EndFlight, Notify = R("PlaneState"), R("L
 local RaceFinished = R("RaceFinished")
 local GateParked = R("GateParked")
 local AchievementR = R("Achievement")
+local DailyR = R("DailyTask")
+local Daily = require(Shared:WaitForChild("Daily"))
+local dailySent: { [string]: boolean } = {}
+local function dailyHave(id: string): boolean
+	local a = tostring(Players.LocalPlayer:GetAttribute("Daily") or "")
+	local key, list = string.match(a, "^(%d+):(.*)$")
+	return tonumber(key) == Daily.dateKey() and string.find("," .. (list or "") .. ",", "," .. id .. ",", 1, true) ~= nil
+end
+local function claimDaily(id: string)
+	if dailySent[id] or dailyHave(id) then
+		return
+	end
+	dailySent[id] = true
+	DailyR:FireServer(id)
+end
 -- достижения, которые видит только клиент: отправляем один раз, сервер проверяет и награждает
 local achSent: { [string]: boolean } = {}
 local function claimAch(id: string)
@@ -404,6 +419,13 @@ local function handleEvents(f: FlightPhysics.Flight)
 				})
 			end
 			comfort = Comfort.touchdown(comfort, ev.fpm or 0)
+			if ev.airport then
+				for _, t in Daily.tasks(Daily.dateKey()) do
+					if (t.kind == "land" and t.target == ev.airport) or (t.kind == "soft" and t.target == f.cfg.id and (ev.fpm or 999) < 200) then
+						claimDaily(t.id)
+					end
+				end
+			end
 			Landing:FireServer(ev.fpm, comfort)
 			if ev.airport then
 				local ap = World.airportById(ev.airport)
@@ -554,6 +576,13 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	end
 	if c.id == "F16" and f.gload >= 8 and f.damage < 0.05 then
 		claimAch("ace")
+	end
+	if not f.onGround and f.pos.Y * FT < 3000 then
+		for _, t in Daily.tasks(Daily.dateKey()) do
+			if t.kind == "over" and t.x and t.z and t.r and (Vector2.new(f.pos.X, f.pos.Z) - Vector2.new(t.x, t.z)).Magnitude < t.r then
+				claimDaily(t.id)
+			end
+		end
 	end
 	local att = f.att
 	local look, right, up = att.LookVector, att.RightVector, att.UpVector

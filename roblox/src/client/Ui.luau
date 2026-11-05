@@ -492,6 +492,7 @@ function Ui.new(cb: Callbacks)
 	end)
 	local bExit = button(navRow, "Выйти из самолёта", { ZIndex = 23, Visible = false, LayoutOrder = 1 })
 	local bAch = button(navRow, "🏆 Достижения", { ZIndex = 23, LayoutOrder = -1 })
+	local bDaily = button(navRow, "📋 Задания", { ZIndex = 23, LayoutOrder = -2 })
 	local bBack = button(navRow, "Назад", { ZIndex = 23, LayoutOrder = 2 })
 	local bNext = button(navRow, "Далее →", { ZIndex = 23, LayoutOrder = 3 })
 	primary(bNext)
@@ -859,6 +860,63 @@ function Ui.new(cb: Callbacks)
 	end)
 
 	-- крушение
+	-- задания дня: три задания на сегодня, выполненные отмечены (атрибут Daily от сервера)
+	local DailyM = require(Shared:WaitForChild("Daily"))
+	local dO, dS = overlay("Daily", 560)
+	h2(dS, "📋 Задания дня", nil, 1)
+	local dSub = para(dS, "Каждый день новые задания (обновляются в 00:00 UTC). Награда — очки.", 2)
+	local dList = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, dS)
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, dList)
+	local dRows: { { box: Frame, mark: TextLabel, text: TextLabel, rew: TextLabel, st: UIStroke } } = {}
+	for i = 1, 3 do
+		local row = new("Frame", { Size = UDim2.new(1, 0, 0, 56), BackgroundColor3 = Color3.fromRGB(24, 32, 50), LayoutOrder = i, ZIndex = 23 }, dList)
+		corner(row, 14)
+		local st = new("UIStroke", { Color = C.line, Transparency = 0.86, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, row)
+		local mark = new("TextLabel", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(10, 8), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 24, TextColor3 = C.dim, Text = "☐", ZIndex = 24 }, row)
+		local tx = new("TextLabel", { Size = UDim2.new(1, -140, 1, 0), Position = UDim2.fromOffset(56, 0), BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.fg, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = "", ZIndex = 24 }, row)
+		local rew = new("TextLabel", { Size = UDim2.fromOffset(70, 20), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 16, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Right, Text = "", ZIndex = 24 }, row)
+		dRows[i] = { box = row, mark = mark, text = tx, rew = rew, st = st }
+	end
+	local dRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, dS)
+	local dClose = button(dRow, "Понятно", { ZIndex = 23 })
+	primary(dClose)
+	dClose.Activated:Connect(function()
+		dO.Visible = false
+	end)
+	local function renderDaily()
+		local key = DailyM.dateKey()
+		local a = tostring(player:GetAttribute("Daily") or "")
+		local k, list = string.match(a, "^(%d+):(.*)$")
+		local done: { [string]: boolean } = {}
+		if tonumber(k) == key then
+			for id in string.gmatch(list or "", "[^,]+") do
+				done[id] = true
+			end
+		end
+		local n = 0
+		for i, t in DailyM.tasks(key) do
+			local on = done[t.id] == true
+			if on then
+				n += 1
+			end
+			local r = dRows[i]
+			r.mark.Text = if on then "✅" else "☐"
+			r.text.Text = t.text
+			r.text.TextColor3 = if on then C.dim else C.fg
+			r.rew.Text = "+" .. t.reward
+			r.st.Color = if on then C.green else C.line
+			r.st.Transparency = if on then 0.2 else 0.86
+		end
+		dSub.Text = string.format("Выполнено %d из 3. Новые задания — каждый день в 00:00 UTC.", n)
+		bDaily.Text = string.format("📋 %d/3", n)
+	end
+	renderDaily()
+	player:GetAttributeChangedSignal("Daily"):Connect(renderDaily)
+	bDaily.Activated:Connect(function()
+		renderDaily()
+		dO.Visible = true
+	end)
+
 	-- карта мира (K): фон по рельефу (строится при первом открытии), аэропорты, города, самолёт
 	local mapO, mapS = overlay("Map", 560)
 	h2(mapS, "🗺 Карта мира", nil, 1)

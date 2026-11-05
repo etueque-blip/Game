@@ -50,6 +50,7 @@ local Notify = remote("Notify")
 local RaceFinished = remote("RaceFinished")
 local GateParked = remote("GateParked")
 local AchievementRemote = remote("Achievement")
+local DailyRemote = remote("DailyTask")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -298,6 +299,28 @@ AchievementRemote.OnServerEvent:Connect(function(p, id)
 		return
 	end
 	award(p, id)
+end)
+
+-- задания дня: принимаем только сегодняшние и только во время полёта
+local Daily = require(Shared:WaitForChild("Daily"))
+DailyRemote.OnServerEvent:Connect(function(p, id)
+	local a = active[p]
+	if type(id) ~= "string" or not a or a.crashed then
+		return
+	end
+	local key = Daily.dateKey()
+	for _, t in Daily.tasks(key) do
+		if t.id == id then
+			if t.kind == "soft" and a.cfgId ~= t.target then
+				return
+			end
+			if Scores.dailyDone(p, key, id) then
+				Scores.add(p, t.reward, false)
+				Notify:FireClient(p, string.format("📋 Задание дня выполнено: %s · +%d", t.text, t.reward), "green")
+			end
+			return
+		end
+	end
 end)
 
 RequestFlight.OnServerEvent:Connect(function(p, planeId, mode, destination, liveryId)

@@ -10,7 +10,7 @@ pcall(function()
 	store = DataStoreService:GetDataStore("SkyPilot_v1")
 end)
 
-type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean } }
+type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean } }
 local cache: { [Player]: Data } = {}
 
 local function key(p: Player): string
@@ -26,7 +26,7 @@ local function stat(p: Player, name: string, value: number)
 end
 
 function Scores.get(p: Player): Data
-	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {} }
+	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {} }
 end
 
 local function refresh(p: Player)
@@ -41,6 +41,11 @@ local function refresh(p: Player)
 	end
 	table.sort(ids)
 	p:SetAttribute("Ach", table.concat(ids, ","))
+	local dn = {}
+	for id in d.daily do
+		table.insert(dn, id)
+	end
+	p:SetAttribute("Daily", tostring(d.dailyKey) .. ":" .. table.concat(dn, ","))
 end
 
 function Scores.load(p: Player)
@@ -52,7 +57,7 @@ function Scores.load(p: Player)
 		v.Parent = ls
 	end
 	ls.Parent = p
-	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {} }
+	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {} }
 	if store then
 		local ok, res = pcall(function()
 			return (store :: DataStore):GetAsync(key(p))
@@ -62,7 +67,8 @@ function Scores.load(p: Player)
 			data.landings = tonumber(res.landings) or 0
 			data.best = tonumber(res.best) or 0
 			data.flights = tonumber(res.flights) or 0
-			for _, field in { "ach", "visited" } do
+			data.dailyKey = tonumber(res.dailyKey) or 0
+			for _, field in { "ach", "visited", "daily" } do
 				if type(res[field]) == "table" then
 					for k, v in res[field] do
 						if type(k) == "string" and v == true then
@@ -109,6 +115,24 @@ function Scores.unlock(p: Player, id: string): boolean
 		return false
 	end
 	d.ach[id] = true
+	refresh(p)
+	return true
+end
+
+-- задание дня: true, если выполнено впервые сегодня (key — ГГГГММДД)
+function Scores.dailyDone(p: Player, key: number, id: string): boolean
+	local d = cache[p]
+	if not d then
+		return false
+	end
+	if d.dailyKey ~= key then
+		d.dailyKey = key
+		d.daily = {}
+	end
+	if d.daily[id] then
+		return false
+	end
+	d.daily[id] = true
 	refresh(p)
 	return true
 end

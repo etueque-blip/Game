@@ -759,6 +759,58 @@ function mapClick(e) {
 """
 
 
+DAILY_HTML = """  <div class="overlay" id="dailyO" style="z-index:40" hidden>
+    <div class="sheet">
+      <h2>📋 Задания дня</h2>
+      <p id="dailySub"></p>
+      <div class="achg" id="dailyG" style="grid-template-columns:1fr"></div>
+      <div class="row"><button class="tb primary" id="dailyClose">Понятно</button></div>
+    </div>
+  </div>
+"""
+
+DAILY_JS = r"""
+// ===== задания дня (тот же генератор, что Daily.luau: Park–Miller по ключу ГГГГММДД UTC)
+const DAILY_AP = ["A", "B", "C", "D", "E", "F", "G", "H"], DAILY_CODE = { A: "SKP", B: "MTV", C: "LNW", D: "DXC", E: "TSE", F: "ISB", G: "RYD", H: "SKD" };
+const DAILY_CITY = [["Дубай", 5500, -7500, 1700], ["Лондон", -4000, 12500, 1300], ["Ташкент", 10500, 3000, 1200], ["Стамбул", -20500, 20500, 1300], ["Эр-Рияд", 21000, 20500, 1300], ["Самарканд", -21000, -20500, 1200]];
+const DAILY_PL = ["C172", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380"];
+function dailyKey() { const d = new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); }
+function dailyTasks(key) {
+  let s = key % 2147483647 || 1; const nxt = () => (s = (s * 16807) % 2147483647);
+  nxt(); nxt(); nxt();
+  const ap = DAILY_AP[nxt() % 8], c = DAILY_CITY[nxt() % 6], pl = DAILY_PL[nxt() % 13];
+  return [
+    { id: "land_" + ap, kind: "land", target: ap, text: "Посадка в аэропорту " + DAILY_CODE[ap] + " (" + ap + ")", reward: 300 },
+    { id: "over_" + c[0], kind: "over", target: c[0], text: "Пролети над городом " + c[0] + " ниже 3000 ft", reward: 250, x: c[1], z: c[2], r: c[3] },
+    { id: "soft_" + pl, kind: "soft", target: pl, text: "Мягкая посадка (мягче 200 ft/min) на " + (PLANES[pl] ? PLANES[pl].name : pl), reward: 400 },
+  ];
+}
+const DAILY = (() => { try { const d = JSON.parse(localStorage.getItem("skypilot.daily") || "{}"); return d.key === dailyKey() ? d : { key: dailyKey(), done: [] }; } catch (e) { return { key: dailyKey(), done: [] }; } })();
+function dailyDone(t) {
+  if (DAILY.key !== dailyKey()) { DAILY.key = dailyKey(); DAILY.done = []; }
+  if (DAILY.done.includes(t.id)) return;
+  DAILY.done.push(t.id); try { localStorage.setItem("skypilot.daily", JSON.stringify(DAILY)); } catch (e) {}
+  setTimeout(() => { toast(`📋 Задание дня выполнено · +${t.reward}`, "var(--gold)"); addScore(t.reward, "задание дня"); }, 1200);
+  dailyRender();
+}
+function dailyFrame(f) {
+  if (f.onGround || f.pos.y * FT >= 3000) return;
+  for (const t of dailyTasks(dailyKey())) if (t.kind === "over" && Math.hypot(f.pos.x - t.x, f.pos.z - t.z) < t.r) dailyDone(t);
+}
+function dailyLanding(f, ap, text) {
+  if (!ap) return; const fpm = (/(\d+) fpm/.exec(text) || [0, 999])[1] | 0;
+  for (const t of dailyTasks(dailyKey())) if ((t.kind === "land" && t.target === ap.id) || (t.kind === "soft" && t.target === f.cfg.id && fpm < 200)) dailyDone(t);
+}
+function dailyRender() {
+  const ts = dailyTasks(dailyKey()), n = ts.filter((t) => DAILY.done.includes(t.id)).length;
+  const b = document.getElementById("mDaily"); if (b) b.textContent = `📋 Задания дня ${n}/3`;
+  const g = document.getElementById("dailyG"); if (!g) return;
+  g.innerHTML = ts.map((t) => { const on = DAILY.done.includes(t.id); return `<div class="achc${on ? " on" : ""}"><span class="ai">${on ? "✅" : "☐"}</span><b>${t.text}</b><small>${t.kind === "land" ? "Любая посадка на полосу" : t.kind === "over" ? "Ниже 3000 ft над городом" : "Касание мягче 200 ft/min"}</small><em>+${t.reward}</em></div>`; }).join("");
+  $("dailySub").textContent = `Выполнено ${n} из 3 · новые задания каждый день в 00:00 UTC`;
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -1000,6 +1052,13 @@ def add_premium(s, patch):
     s = patch(s, '  if (a === "guide") {', '  if (a === "map") { toggleMap(); return; }\n  if (a === "guide") {')
     s = patch(s, "function scoreLanding(ap, text) {", MAP_JS + "function scoreLanding(ap, text) {")
     s = patch(s, '$("loading").hidden = true;', '$("bMap").onclick = () => toggleMap(); $("mapClose").onclick = () => toggleMap(false); $("mapCv").onclick = mapClick;\n$("loading").hidden = true;')
+    # задания дня (как src/shared/Daily.luau): три задания на сегодня, награда очками
+    s = patch(s, '<button class="tb" id="mHelp2">Клавиши</button>', '<button class="tb" id="mHelp2">Клавиши</button><button class="tb" id="mDaily">📋 Задания дня</button>')
+    s = patch(s, '  <div class="overlay" id="help" hidden>', DAILY_HTML + '  <div class="overlay" id="help" hidden>')
+    s = patch(s, "function scoreLanding(ap, text) {", DAILY_JS + "function scoreLanding(ap, text) {")
+    s = patch(s, "achLanding(f, ap, ev.text); FST.landings++; }", "achLanding(f, ap, ev.text); dailyLanding(f, ap, ev.text); FST.landings++; }")
+    s = patch(s, "function fstatsFrame(f, dt) { paxFrame(f, dt);", "function fstatsFrame(f, dt) { paxFrame(f, dt); dailyFrame(f);")
+    s = patch(s, '$("loading").hidden = true;', '$("mDaily").onclick = () => { dailyRender(); $("dailyO").hidden = false; }; $("dailyClose").onclick = () => ($("dailyO").hidden = true); dailyRender();\n$("loading").hidden = true;')
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

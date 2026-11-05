@@ -493,7 +493,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
         <div class="ncard" data-ph="news_airports"><b>8 аэропортов</b><i>Стамбул, Эр-Рияд, Самарканд и другие</i></div>
         <div class="ncard" data-ph="mode_race"><b>Гонка колец</b><i>Под Тауэрским мостом</i></div>
       </div>
-      <div class="mbar"><button class="tb primary" id="mPlay">Полёт</button><button class="tb" id="mHelp2">Клавиши</button><button class="tb" id="mAch">🏆 Достижения</button><span class="who" id="mBest"></span></div>
+      <div class="mbar"><button class="tb primary" id="mPlay">Полёт</button><button class="tb" id="mHelp2">Клавиши</button><button class="tb" id="mDaily">📋 Задания дня</button><button class="tb" id="mAch">🏆 Достижения</button><span class="who" id="mBest"></span></div>
     </div>
   </div>
   <div class="overlay" id="flow" hidden>
@@ -530,6 +530,14 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
     <div class="mapsheet">
       <div class="maphead"><b>🗺 Карта мира</b><span>Нажми на аэропорт — навигация к нему · K — закрыть</span><button class="tb" id="mapClose">Закрыть</button></div>
       <canvas id="mapCv" width="900" height="900"></canvas>
+    </div>
+  </div>
+  <div class="overlay" id="dailyO" style="z-index:40" hidden>
+    <div class="sheet">
+      <h2>📋 Задания дня</h2>
+      <p id="dailySub"></p>
+      <div class="achg" id="dailyG" style="grid-template-columns:1fr"></div>
+      <div class="row"><button class="tb primary" id="dailyClose">Понятно</button></div>
     </div>
   </div>
   <div class="overlay" id="help" hidden>
@@ -1994,7 +2002,7 @@ function paxStars(v) { const n = v >= 90 ? 5 : v >= 70 ? 4 : v >= 50 ? 3 : v >= 
 // ===== статистика полёта и совет после крушения (как Guide.crashTip в Roblox)
 const FST = { time: 0, dist: 0, maxAlt: 0, maxKts: 0, maxG: 1, landings: 0, startPts: 0, plane: "", lx: null, lz: 0 };
 function fstatsReset(cfg) { paxReset(cfg); Object.assign(FST, { time: 0, dist: 0, maxAlt: 0, maxKts: 0, maxG: 1, landings: 0, startPts: SCORE.points, plane: cfg.name, lx: null, lz: 0 }); }
-function fstatsFrame(f, dt) { paxFrame(f, dt);
+function fstatsFrame(f, dt) { paxFrame(f, dt); dailyFrame(f);
   if (!f.onGround) FST.time += dt;
   if (FST.lx !== null) FST.dist += Math.hypot(f.pos.x - FST.lx, f.pos.z - FST.lz);
   FST.lx = f.pos.x; FST.lz = f.pos.z;
@@ -2072,6 +2080,45 @@ function mapClick(e) {
   if (!best) return;
   const i = NAV.findIndex((n) => Math.hypot(n[1] - best.cx, n[2] - best.cz) < 50);
   if (i >= 0) { navIdx = i + 1; toast("Навигация: " + NAV[i][0], "var(--magenta)"); }
+}
+
+// ===== задания дня (тот же генератор, что Daily.luau: Park–Miller по ключу ГГГГММДД UTC)
+const DAILY_AP = ["A", "B", "C", "D", "E", "F", "G", "H"], DAILY_CODE = { A: "SKP", B: "MTV", C: "LNW", D: "DXC", E: "TSE", F: "ISB", G: "RYD", H: "SKD" };
+const DAILY_CITY = [["Дубай", 5500, -7500, 1700], ["Лондон", -4000, 12500, 1300], ["Ташкент", 10500, 3000, 1200], ["Стамбул", -20500, 20500, 1300], ["Эр-Рияд", 21000, 20500, 1300], ["Самарканд", -21000, -20500, 1200]];
+const DAILY_PL = ["C172", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380"];
+function dailyKey() { const d = new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); }
+function dailyTasks(key) {
+  let s = key % 2147483647 || 1; const nxt = () => (s = (s * 16807) % 2147483647);
+  nxt(); nxt(); nxt();
+  const ap = DAILY_AP[nxt() % 8], c = DAILY_CITY[nxt() % 6], pl = DAILY_PL[nxt() % 13];
+  return [
+    { id: "land_" + ap, kind: "land", target: ap, text: "Посадка в аэропорту " + DAILY_CODE[ap] + " (" + ap + ")", reward: 300 },
+    { id: "over_" + c[0], kind: "over", target: c[0], text: "Пролети над городом " + c[0] + " ниже 3000 ft", reward: 250, x: c[1], z: c[2], r: c[3] },
+    { id: "soft_" + pl, kind: "soft", target: pl, text: "Мягкая посадка (мягче 200 ft/min) на " + (PLANES[pl] ? PLANES[pl].name : pl), reward: 400 },
+  ];
+}
+const DAILY = (() => { try { const d = JSON.parse(localStorage.getItem("skypilot.daily") || "{}"); return d.key === dailyKey() ? d : { key: dailyKey(), done: [] }; } catch (e) { return { key: dailyKey(), done: [] }; } })();
+function dailyDone(t) {
+  if (DAILY.key !== dailyKey()) { DAILY.key = dailyKey(); DAILY.done = []; }
+  if (DAILY.done.includes(t.id)) return;
+  DAILY.done.push(t.id); try { localStorage.setItem("skypilot.daily", JSON.stringify(DAILY)); } catch (e) {}
+  setTimeout(() => { toast(`📋 Задание дня выполнено · +${t.reward}`, "var(--gold)"); addScore(t.reward, "задание дня"); }, 1200);
+  dailyRender();
+}
+function dailyFrame(f) {
+  if (f.onGround || f.pos.y * FT >= 3000) return;
+  for (const t of dailyTasks(dailyKey())) if (t.kind === "over" && Math.hypot(f.pos.x - t.x, f.pos.z - t.z) < t.r) dailyDone(t);
+}
+function dailyLanding(f, ap, text) {
+  if (!ap) return; const fpm = (/(\d+) fpm/.exec(text) || [0, 999])[1] | 0;
+  for (const t of dailyTasks(dailyKey())) if ((t.kind === "land" && t.target === ap.id) || (t.kind === "soft" && t.target === f.cfg.id && fpm < 200)) dailyDone(t);
+}
+function dailyRender() {
+  const ts = dailyTasks(dailyKey()), n = ts.filter((t) => DAILY.done.includes(t.id)).length;
+  const b = document.getElementById("mDaily"); if (b) b.textContent = `📋 Задания дня ${n}/3`;
+  const g = document.getElementById("dailyG"); if (!g) return;
+  g.innerHTML = ts.map((t) => { const on = DAILY.done.includes(t.id); return `<div class="achc${on ? " on" : ""}"><span class="ai">${on ? "✅" : "☐"}</span><b>${t.text}</b><small>${t.kind === "land" ? "Любая посадка на полосу" : t.kind === "over" ? "Ниже 3000 ft над городом" : "Касание мягче 200 ft/min"}</small><em>+${t.reward}</em></div>`; }).join("");
+  $("dailySub").textContent = `Выполнено ${n} из 3 · новые задания каждый день в 00:00 UTC`;
 }
 function scoreLanding(ap, text) {
   const now = performance.now() / 1000; if (now - lastScoredLanding < 8) return;
@@ -2504,7 +2551,7 @@ function frame(t) {
     for (const ev of f.events) {
       if (ev.type === "landing") {
         addLog(ev.text);
-        { const ap = airportAt(f.pos.x, f.pos.z); { const __pts = ap ? scoreLanding(ap, ev.text) : 0; paxTouchdown(ev.text); showLandingReport(f, ap, ev.text, __pts || 0); achLanding(f, ap, ev.text); FST.landings++; } if (ap && flightDest && ap.id === flightDest) addScore(1000, "рейс выполнен"); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
+        { const ap = airportAt(f.pos.x, f.pos.z); { const __pts = ap ? scoreLanding(ap, ev.text) : 0; paxTouchdown(ev.text); showLandingReport(f, ap, ev.text, __pts || 0); achLanding(f, ap, ev.text); dailyLanding(f, ap, ev.text); FST.landings++; } if (ap && flightDest && ap.id === flightDest) addScore(1000, "рейс выполнен"); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
         for (const g of planeObj.userData.mainGear) for (let i = 0; i < 5; i++) spawnPuff(g.clone().applyQuaternion(f.att).add(f.pos), 0xdcdcdc, f.cfg.diameter * 0.5, 1.8, f.cfg.diameter * 1.2, new V3(R(-3, 3), R(1, 4), R(-3, 3)).add(f.vel.clone().multiplyScalar(0.3)), 0.7);
       }
       else if (ev.type === "log") { addLog(ev.text); if (ev.text.startsWith("Отрыв")) achUnlock("first_flight"); if (ev.text.startsWith("Отрыв")) atc(`${callsign}, взлёт в ${hhmm()}. Набирайте 3000 ft, курс по навигации.`); }
@@ -2676,6 +2723,7 @@ $("mHelp2").onclick = () => { $("help").hidden = false; };
 openMenu();
 $("mAch").onclick = () => { achRender(); $("achO").hidden = false; }; $("achClose").onclick = () => ($("achO").hidden = true); achRender();
 $("bMap").onclick = () => toggleMap(); $("mapClose").onclick = () => toggleMap(false); $("mapCv").onclick = mapClick;
+$("mDaily").onclick = () => { dailyRender(); $("dailyO").hidden = false; }; $("dailyClose").onclick = () => ($("dailyO").hidden = true); dailyRender();
 $("loading").hidden = true;
 requestAnimationFrame(frame);
 try { navigator.wakeLock && navigator.wakeLock.request("screen").catch(() => {}); } catch (e) {}

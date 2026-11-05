@@ -1,6 +1,6 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
-<Item class="Workspace" referent="RBX00000016"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
-<Item class="ReplicatedStorage" referent="RBX00000017"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX0000000A"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Achievements</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="Workspace" referent="RBX00000017"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX00000018"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX0000000B"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Achievements</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Достижения: общий список для сервера (проверка, сохранение, награда) и клиента (экран, уведомления).
 -- Тот же список — в веб-версии (tools/web_premium.py, ACH_JS).
 local Achievements = {}
@@ -8298,7 +8298,55 @@ end
 
 return Comfort
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">Daily</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Ежедневные задания: три задания на каждый день (UTC), одинаковые для всех игроков.
+-- Тот же генератор — в веб-версии (tools/web_premium.py, DAILY_JS): Park–Miller, целые до 2^53.
+local PlaneConfigs = require(script.Parent:WaitForChild("PlaneConfigs"))
+
+local Daily = {}
+
+Daily.AIRPORTS = { "A", "B", "C", "D", "E", "F", "G", "H" }
+Daily.CODES = { A = "SKP", B = "MTV", C = "LNW", D = "DXC", E = "TSE", F = "ISB", G = "RYD", H = "SKD" }
+Daily.CITIES = {
+	{ "Дубай", 5500, -7500, 1700 }, { "Лондон", -4000, 12500, 1300 }, { "Ташкент", 10500, 3000, 1200 },
+	{ "Стамбул", -20500, 20500, 1300 }, { "Эр-Рияд", 21000, 20500, 1300 }, { "Самарканд", -21000, -20500, 1200 },
+}
+Daily.PLANES = { "C172", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380" }
+
+export type Task = { id: string, kind: string, target: string, text: string, reward: number, x: number?, z: number?, r: number? }
+
+-- ключ дня: ГГГГММДД (UTC)
+function Daily.dateKey(t: any?): number
+	local d = t or os.date("!*t")
+	return d.year * 10000 + d.month * 100 + d.day
+end
+
+function Daily.tasks(key: number): { Task }
+	local s = key % 2147483647
+	if s == 0 then
+		s = 1
+	end
+	local function nxt(): number
+		s = (s * 16807) % 2147483647
+		return s
+	end
+	for _ = 1, 3 do
+		nxt()
+	end
+	local ap = Daily.AIRPORTS[nxt() % #Daily.AIRPORTS + 1]
+	local city = Daily.CITIES[nxt() % #Daily.CITIES + 1]
+	local plane = Daily.PLANES[nxt() % #Daily.PLANES + 1]
+	local pc = PlaneConfigs.PLANES[plane]
+	return {
+		{ id = "land_" .. ap, kind = "land", target = ap, text = "Посадка в аэропорту " .. Daily.CODES[ap] .. " (" .. ap .. ")", reward = 300 },
+		{ id = "over_" .. city[1], kind = "over", target = city[1], text = "Пролети над городом " .. city[1] .. " ниже 3000 ft", reward = 250, x = city[2], z = city[3], r = city[4] },
+		{ id = "soft_" .. plane, kind = "soft", target = plane, text = "Мягкая посадка (мягче 200 ft/min) на " .. (if pc then pc.name else plane), reward = 400 },
+	}
+end
+
+return Daily
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Порт FlightClient.step / physicsStep из Sky Pilot 1:1.
 -- Единицы: 1 stud/s = 1 kt, высота в футах = Y * FT, G = 19 stud/s².
 local World = require(script.Parent.World)
@@ -8662,7 +8710,7 @@ end
 
 return FlightPhysics
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Инструкция по полёту для конкретного самолёта: цифры считаются из его характеристик
 -- (те же формулы, что в веб-версии).
 local FlightPhysics = require(script.Parent:WaitForChild("FlightPhysics"))
@@ -8726,7 +8774,7 @@ end
 
 return Guide
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит модель самолёта из обычных деталей Roblox по PlaneConfigs.
 -- Оси модели: нос -Z, верх +Y, правое крыло +X. Корень (Root) — центр фюзеляжа,
 -- он стоит на высоте gearHeight над землёй, когда шасси касается полосы.
@@ -9400,7 +9448,7 @@ end
 
 return PlaneBuilder
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Те же PlaneConfigs, что и в HTML-полигоне Sky Pilot (1 stud/s = 1 kt, 1 stud = 1.69 ft).
 local WHITE = Color3.fromHex("f3f5f8")
 local GREY = Color3.fromHex("c4c8ce")
@@ -9498,7 +9546,7 @@ return {
 	} :: { [string]: string },
 }
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Данные мира. Один и тот же модуль используют сервер (строит визуал) и клиент (физика),
 -- поэтому рельеф, полосы и здания всегда совпадают с тем, что видно на экране.
 local PlaneConfigs = require(script.Parent.PlaneConfigs)
@@ -9821,7 +9869,7 @@ return World
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX00000018"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000E"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ServerScriptService" referent="RBX00000019"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000F"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — сервер: мир, выдача самолётов, посадка пилота, очки, крушения, ИИ-трафик.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9873,6 +9921,7 @@ local Notify = remote("Notify")
 local RaceFinished = remote("RaceFinished")
 local GateParked = remote("GateParked")
 local AchievementRemote = remote("Achievement")
+local DailyRemote = remote("DailyTask")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -10123,6 +10172,28 @@ AchievementRemote.OnServerEvent:Connect(function(p, id)
 	award(p, id)
 end)
 
+-- задания дня: принимаем только сегодняшние и только во время полёта
+local Daily = require(Shared:WaitForChild("Daily"))
+DailyRemote.OnServerEvent:Connect(function(p, id)
+	local a = active[p]
+	if type(id) ~= "string" or not a or a.crashed then
+		return
+	end
+	local key = Daily.dateKey()
+	for _, t in Daily.tasks(key) do
+		if t.id == id then
+			if t.kind == "soft" and a.cfgId ~= t.target then
+				return
+			end
+			if Scores.dailyDone(p, key, id) then
+				Scores.add(p, t.reward, false)
+				Notify:FireClient(p, string.format("📋 Задание дня выполнено: %s · +%d", t.text, t.reward), "green")
+			end
+			return
+		end
+	end
+end)
+
 RequestFlight.OnServerEvent:Connect(function(p, planeId, mode, destination, liveryId)
 	startFlight(p, planeId, mode, destination, liveryId)
 end)
@@ -10351,7 +10422,7 @@ end
 if AI_TRAFFIC_COUNT > 0 then
 	AITraffic.start(AI_TRAFFIC_COUNT)
 end
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
 -- ИИ-пилоты (боты-«агенты»): летают по маршрутам между аэропортами и городом
 -- на той же физике, что и игроки, управляются автопилотом.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10442,7 +10513,7 @@ end
 
 return AITraffic
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Очки и статистика игрока (leaderstats + DataStore, если включён доступ к API).
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -10454,7 +10525,7 @@ pcall(function()
 	store = DataStoreService:GetDataStore("SkyPilot_v1")
 end)
 
-type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean } }
+type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean } }
 local cache: { [Player]: Data } = {}
 
 local function key(p: Player): string
@@ -10470,7 +10541,7 @@ local function stat(p: Player, name: string, value: number)
 end
 
 function Scores.get(p: Player): Data
-	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {} }
+	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {} }
 end
 
 local function refresh(p: Player)
@@ -10485,6 +10556,11 @@ local function refresh(p: Player)
 	end
 	table.sort(ids)
 	p:SetAttribute("Ach", table.concat(ids, ","))
+	local dn = {}
+	for id in d.daily do
+		table.insert(dn, id)
+	end
+	p:SetAttribute("Daily", tostring(d.dailyKey) .. ":" .. table.concat(dn, ","))
 end
 
 function Scores.load(p: Player)
@@ -10496,7 +10572,7 @@ function Scores.load(p: Player)
 		v.Parent = ls
 	end
 	ls.Parent = p
-	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {} }
+	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {} }
 	if store then
 		local ok, res = pcall(function()
 			return (store :: DataStore):GetAsync(key(p))
@@ -10506,7 +10582,8 @@ function Scores.load(p: Player)
 			data.landings = tonumber(res.landings) or 0
 			data.best = tonumber(res.best) or 0
 			data.flights = tonumber(res.flights) or 0
-			for _, field in { "ach", "visited" } do
+			data.dailyKey = tonumber(res.dailyKey) or 0
+			for _, field in { "ach", "visited", "daily" } do
 				if type(res[field]) == "table" then
 					for k, v in res[field] do
 						if type(k) == "string" and v == true then
@@ -10557,6 +10634,24 @@ function Scores.unlock(p: Player, id: string): boolean
 	return true
 end
 
+-- задание дня: true, если выполнено впервые сегодня (key — ГГГГММДД)
+function Scores.dailyDone(p: Player, key: number, id: string): boolean
+	local d = cache[p]
+	if not d then
+		return false
+	end
+	if d.dailyKey ~= key then
+		d.dailyKey = key
+		d.daily = {}
+	end
+	if d.daily[id] then
+		return false
+	end
+	d.daily[id] = true
+	refresh(p)
+	return true
+end
+
 -- отмечает аэропорт посадки, возвращает число разных аэропортов
 function Scores.visit(p: Player, apId: string): number
 	local d = cache[p]
@@ -10600,7 +10695,7 @@ end)
 
 return Scores
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит визуальный мир по данным World (сервер, один раз при старте).
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11322,7 +11417,7 @@ return WorldBuilder
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX0000001A"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000019"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000015"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="StarterPlayer" referent="RBX0000001B"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX0000001A"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000016"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — клиент: локальная физика полёта (как FlightClient), ввод, камера, приборы.
 -- Самолёт принадлежит игроку по сети (SetNetworkOwner), поэтому управление без задержки,
 -- а другие игроки видят движение через обычную репликацию физики Roblox.
@@ -11354,6 +11449,21 @@ local PlaneState, Landing, CrashEvent, EndFlight, Notify = R("PlaneState"), R("L
 local RaceFinished = R("RaceFinished")
 local GateParked = R("GateParked")
 local AchievementR = R("Achievement")
+local DailyR = R("DailyTask")
+local Daily = require(Shared:WaitForChild("Daily"))
+local dailySent: { [string]: boolean } = {}
+local function dailyHave(id: string): boolean
+	local a = tostring(Players.LocalPlayer:GetAttribute("Daily") or "")
+	local key, list = string.match(a, "^(%d+):(.*)$")
+	return tonumber(key) == Daily.dateKey() and string.find("," .. (list or "") .. ",", "," .. id .. ",", 1, true) ~= nil
+end
+local function claimDaily(id: string)
+	if dailySent[id] or dailyHave(id) then
+		return
+	end
+	dailySent[id] = true
+	DailyR:FireServer(id)
+end
 -- достижения, которые видит только клиент: отправляем один раз, сервер проверяет и награждает
 local achSent: { [string]: boolean } = {}
 local function claimAch(id: string)
@@ -11728,6 +11838,13 @@ local function handleEvents(f: FlightPhysics.Flight)
 				})
 			end
 			comfort = Comfort.touchdown(comfort, ev.fpm or 0)
+			if ev.airport then
+				for _, t in Daily.tasks(Daily.dateKey()) do
+					if (t.kind == "land" and t.target == ev.airport) or (t.kind == "soft" and t.target == f.cfg.id and (ev.fpm or 999) < 200) then
+						claimDaily(t.id)
+					end
+				end
+			end
 			Landing:FireServer(ev.fpm, comfort)
 			if ev.airport then
 				local ap = World.airportById(ev.airport)
@@ -11878,6 +11995,13 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	end
 	if c.id == "F16" and f.gload >= 8 and f.damage < 0.05 then
 		claimAch("ace")
+	end
+	if not f.onGround and f.pos.Y * FT < 3000 then
+		for _, t in Daily.tasks(Daily.dateKey()) do
+			if t.kind == "over" and t.x and t.z and t.r and (Vector2.new(f.pos.X, f.pos.Z) - Vector2.new(t.x, t.z)).Magnitude < t.r then
+				claimDaily(t.id)
+			end
+		end
 	end
 	local att = f.att
 	local look, right, up = att.LookVector, att.RightVector, att.UpVector
@@ -12166,7 +12290,7 @@ ui.showHangar = function(on: boolean?)
 end
 
 ui.showHangar(true)
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Локальная анимация всех самолётов (своих, чужих и ИИ): винт, огни, шасси, закрылки,
 -- инверсионный след, форсаж. Состояние приходит атрибутами модели от сервера,
 -- а для своего самолёта — прямо из локальной физики (без задержки сети).
@@ -12311,7 +12435,7 @@ end
 
 return Animator
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Камеры: сзади (плавная), кабина, орбита. Плюс облёт аэропорта в ангаре.
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12427,7 +12551,7 @@ end
 
 return CameraRig
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Ввод: клавиатура, геймпад, сенсорный штурвал и мышь-штурвал -> общий ввод физики.
 local UserInputService = game:GetService("UserInputService")
 
@@ -12536,7 +12660,7 @@ end
 
 return Controls
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Гонка через кольца: маршрут Skyport → Дубай → Ташкент → Лондон → Skyport.
 -- Кольца строятся у каждого игрока локально, поэтому подсветка своя у каждого.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12664,7 +12788,7 @@ end
 
 return Race
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Радар: курс вверх, радиус 12 000 stud (~6 км). Аэропорты, города, самолёты, следующее кольцо.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -12860,7 +12984,7 @@ end
 
 return Radar
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Интерфейс Sky Pilot: верхняя панель, приборы, авиагоризонт, ангар, справка,
 -- экран крушения и сенсорное управление (штурвал, РУД, кнопки).
 local Players = game:GetService("Players")
@@ -13354,6 +13478,7 @@ function Ui.new(cb: Callbacks)
 	end)
 	local bExit = button(navRow, "Выйти из самолёта", { ZIndex = 23, Visible = false, LayoutOrder = 1 })
 	local bAch = button(navRow, "🏆 Достижения", { ZIndex = 23, LayoutOrder = -1 })
+	local bDaily = button(navRow, "📋 Задания", { ZIndex = 23, LayoutOrder = -2 })
 	local bBack = button(navRow, "Назад", { ZIndex = 23, LayoutOrder = 2 })
 	local bNext = button(navRow, "Далее →", { ZIndex = 23, LayoutOrder = 3 })
 	primary(bNext)
@@ -13721,6 +13846,63 @@ function Ui.new(cb: Callbacks)
 	end)
 
 	-- крушение
+	-- задания дня: три задания на сегодня, выполненные отмечены (атрибут Daily от сервера)
+	local DailyM = require(Shared:WaitForChild("Daily"))
+	local dO, dS = overlay("Daily", 560)
+	h2(dS, "📋 Задания дня", nil, 1)
+	local dSub = para(dS, "Каждый день новые задания (обновляются в 00:00 UTC). Награда — очки.", 2)
+	local dList = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, dS)
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, dList)
+	local dRows: { { box: Frame, mark: TextLabel, text: TextLabel, rew: TextLabel, st: UIStroke } } = {}
+	for i = 1, 3 do
+		local row = new("Frame", { Size = UDim2.new(1, 0, 0, 56), BackgroundColor3 = Color3.fromRGB(24, 32, 50), LayoutOrder = i, ZIndex = 23 }, dList)
+		corner(row, 14)
+		local st = new("UIStroke", { Color = C.line, Transparency = 0.86, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, row)
+		local mark = new("TextLabel", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(10, 8), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 24, TextColor3 = C.dim, Text = "☐", ZIndex = 24 }, row)
+		local tx = new("TextLabel", { Size = UDim2.new(1, -140, 1, 0), Position = UDim2.fromOffset(56, 0), BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.fg, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = "", ZIndex = 24 }, row)
+		local rew = new("TextLabel", { Size = UDim2.fromOffset(70, 20), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 16, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Right, Text = "", ZIndex = 24 }, row)
+		dRows[i] = { box = row, mark = mark, text = tx, rew = rew, st = st }
+	end
+	local dRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, dS)
+	local dClose = button(dRow, "Понятно", { ZIndex = 23 })
+	primary(dClose)
+	dClose.Activated:Connect(function()
+		dO.Visible = false
+	end)
+	local function renderDaily()
+		local key = DailyM.dateKey()
+		local a = tostring(player:GetAttribute("Daily") or "")
+		local k, list = string.match(a, "^(%d+):(.*)$")
+		local done: { [string]: boolean } = {}
+		if tonumber(k) == key then
+			for id in string.gmatch(list or "", "[^,]+") do
+				done[id] = true
+			end
+		end
+		local n = 0
+		for i, t in DailyM.tasks(key) do
+			local on = done[t.id] == true
+			if on then
+				n += 1
+			end
+			local r = dRows[i]
+			r.mark.Text = if on then "✅" else "☐"
+			r.text.Text = t.text
+			r.text.TextColor3 = if on then C.dim else C.fg
+			r.rew.Text = "+" .. t.reward
+			r.st.Color = if on then C.green else C.line
+			r.st.Transparency = if on then 0.2 else 0.86
+		end
+		dSub.Text = string.format("Выполнено %d из 3. Новые задания — каждый день в 00:00 UTC.", n)
+		bDaily.Text = string.format("📋 %d/3", n)
+	end
+	renderDaily()
+	player:GetAttributeChangedSignal("Daily"):Connect(renderDaily)
+	bDaily.Activated:Connect(function()
+		renderDaily()
+		dO.Visible = true
+	end)
+
 	-- карта мира (K): фон по рельефу (строится при первом открытии), аэропорты, города, самолёт
 	local mapO, mapS = overlay("Map", 560)
 	h2(mapS, "🗺 Карта мира", nil, 1)
