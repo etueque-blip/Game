@@ -335,7 +335,7 @@ PlaneState.OnServerEvent:Connect(function(p, gear, flaps, throttle, reverse)
 	end
 end)
 
-Landing.OnServerEvent:Connect(function(p, fpm)
+Landing.OnServerEvent:Connect(function(p, fpm, comfort)
 	local a = active[p]
 	if not a or a.crashed or type(fpm) ~= "number" then
 		return
@@ -378,6 +378,14 @@ Landing.OnServerEvent:Connect(function(p, fpm)
 	end
 	if routeDone then
 		award(p, "route")
+		-- бонус за комфорт пассажиров (до +500) — только за выполненный рейс
+		if type(comfort) == "number" and comfort == comfort then
+			local bonus = math.floor(math.clamp(comfort, 0, 100) * 5)
+			if bonus > 0 then
+				Scores.add(p, bonus, false)
+				Notify:FireClient(p, string.format("🧳 Пассажиры довольны: +%d за комфорт", bonus), "green")
+			end
+		end
 	end
 	if Scores.visit(p, apId) >= #World.AIRPORTS then
 		award(p, "airports")

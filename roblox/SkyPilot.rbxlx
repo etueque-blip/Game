@@ -1,6 +1,6 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
-<Item class="Workspace" referent="RBX00000015"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
-<Item class="ReplicatedStorage" referent="RBX00000016"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000009"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Achievements</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="Workspace" referent="RBX00000016"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX00000017"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX0000000A"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Achievements</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Достижения: общий список для сервера (проверка, сохранение, награда) и клиента (экран, уведомления).
 -- Тот же список — в веб-версии (tools/web_premium.py, ACH_JS).
 local Achievements = {}
@@ -8249,7 +8249,56 @@ local RINGS = {
 }
 return { props = P, obstacles = O, pads = PADS, labels = LABELS, rings = RINGS }
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">Comfort</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Комфорт пассажиров: 100% в начале полёта, падает от крутых кренов, перегрузки, резкой вертикальной,
+-- тряски и жёсткой посадки; в спокойном полёте понемногу восстанавливается.
+-- Та же логика — в веб-версии (tools/web_premium.py, PAX_JS).
+local Comfort = {}
+
+-- сколько пассажиров на борту (0 — у истребителя)
+function Comfort.passengers(c: any): number
+	if c.id == "F16" then
+		return 0
+	elseif c.engines == "prop" then
+		return 3
+	elseif c.length < 130 and c.diameter < 11 then
+		return math.max(6, math.round(c.length * 0.12))
+	end
+	local k = if c.diameter < 16 then 1.3 else 1.35
+	return math.round(c.length * k * (if c.doubleDeck then 1.5 else 1))
+end
+
+-- шаг в воздухе: bankDeg — крен, gload — перегрузка, vsFpm — вертикальная, buffet — тряска 0..1
+function Comfort.step(v: number, dt: number, bankDeg: number, gload: number, vsFpm: number, buffet: number): number
+	local pen = math.max(0, math.abs(bankDeg) - 30) * 0.05
+		+ math.max(0, math.abs(gload - 1) - 0.35) * 10
+		+ (if math.abs(vsFpm) > 3000 then 1.2 else 0)
+		+ buffet * 5
+	local nv = v - pen * dt
+	if pen == 0 then
+		nv += 0.15 * dt
+	end
+	return math.clamp(nv, 0, 100)
+end
+
+-- штраф за касание
+function Comfort.touchdown(v: number, fpm: number): number
+	return math.clamp(v - math.max(0, fpm - 350) / 25, 0, 100)
+end
+
+-- оценка 1–5 звёзд
+function Comfort.stars(v: number): number
+	return if v >= 90 then 5 elseif v >= 70 then 4 elseif v >= 50 then 3 elseif v >= 30 then 2 else 1
+end
+
+function Comfort.starsText(v: number): string
+	local n = Comfort.stars(v)
+	return string.rep("★", n) .. string.rep("☆", 5 - n)
+end
+
+return Comfort
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Порт FlightClient.step / physicsStep из Sky Pilot 1:1.
 -- Единицы: 1 stud/s = 1 kt, высота в футах = Y * FT, G = 19 stud/s².
 local World = require(script.Parent.World)
@@ -8613,7 +8662,7 @@ end
 
 return FlightPhysics
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Инструкция по полёту для конкретного самолёта: цифры считаются из его характеристик
 -- (те же формулы, что в веб-версии).
 local FlightPhysics = require(script.Parent:WaitForChild("FlightPhysics"))
@@ -8677,7 +8726,7 @@ end
 
 return Guide
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит модель самолёта из обычных деталей Roblox по PlaneConfigs.
 -- Оси модели: нос -Z, верх +Y, правое крыло +X. Корень (Root) — центр фюзеляжа,
 -- он стоит на высоте gearHeight над землёй, когда шасси касается полосы.
@@ -9322,7 +9371,7 @@ end
 
 return PlaneBuilder
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Те же PlaneConfigs, что и в HTML-полигоне Sky Pilot (1 stud/s = 1 kt, 1 stud = 1.69 ft).
 local WHITE = Color3.fromHex("f3f5f8")
 local GREY = Color3.fromHex("c4c8ce")
@@ -9420,7 +9469,7 @@ return {
 	} :: { [string]: string },
 }
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Данные мира. Один и тот же модуль используют сервер (строит визуал) и клиент (физика),
 -- поэтому рельеф, полосы и здания всегда совпадают с тем, что видно на экране.
 local PlaneConfigs = require(script.Parent.PlaneConfigs)
@@ -9742,7 +9791,7 @@ return World
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX00000017"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000D"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ServerScriptService" referent="RBX00000018"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000E"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — сервер: мир, выдача самолётов, посадка пилота, очки, крушения, ИИ-трафик.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10079,7 +10128,7 @@ PlaneState.OnServerEvent:Connect(function(p, gear, flaps, throttle, reverse)
 	end
 end)
 
-Landing.OnServerEvent:Connect(function(p, fpm)
+Landing.OnServerEvent:Connect(function(p, fpm, comfort)
 	local a = active[p]
 	if not a or a.crashed or type(fpm) ~= "number" then
 		return
@@ -10122,6 +10171,14 @@ Landing.OnServerEvent:Connect(function(p, fpm)
 	end
 	if routeDone then
 		award(p, "route")
+		-- бонус за комфорт пассажиров (до +500) — только за выполненный рейс
+		if type(comfort) == "number" and comfort == comfort then
+			local bonus = math.floor(math.clamp(comfort, 0, 100) * 5)
+			if bonus > 0 then
+				Scores.add(p, bonus, false)
+				Notify:FireClient(p, string.format("🧳 Пассажиры довольны: +%d за комфорт", bonus), "green")
+			end
+		end
 	end
 	if Scores.visit(p, apId) >= #World.AIRPORTS then
 		award(p, "airports")
@@ -10257,7 +10314,7 @@ end
 if AI_TRAFFIC_COUNT > 0 then
 	AITraffic.start(AI_TRAFFIC_COUNT)
 end
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
 -- ИИ-пилоты (боты-«агенты»): летают по маршрутам между аэропортами и городом
 -- на той же физике, что и игроки, управляются автопилотом.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10348,7 +10405,7 @@ end
 
 return AITraffic
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Очки и статистика игрока (leaderstats + DataStore, если включён доступ к API).
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -10506,7 +10563,7 @@ end)
 
 return Scores
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит визуальный мир по данным World (сервер, один раз при старте).
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11189,7 +11246,7 @@ return WorldBuilder
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX00000019"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000018"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000014"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="StarterPlayer" referent="RBX0000001A"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000019"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000015"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — клиент: локальная физика полёта (как FlightClient), ввод, камера, приборы.
 -- Самолёт принадлежит игроку по сети (SetNetworkOwner), поэтому управление без задержки,
 -- а другие игроки видят движение через обычную репликацию физики Roblox.
@@ -11387,6 +11444,8 @@ local function requestFlight(planeId: string, mode: string, destination: string?
 	RequestFlight:FireServer(planeId, mode, destination, lastLivery)
 end
 
+-- объявлена заранее: кнопка «Выйти из самолёта» (onExit) вызывает её раньше определения ниже
+local stopFlight: () -> ()
 ui = Ui.new({
 	onPick = requestFlight,
 	onAction = onAction,
@@ -11416,7 +11475,7 @@ end, function(t)
 end)
 cameraRig = CameraRig.new(ui)
 
-local function stopFlight()
+function stopFlight()
 	flight, model, root, simulating, apTarget, crashPose = nil, nil, nil, false, nil, nil
 	if engineSound then
 		engineSound:Destroy()
@@ -11433,6 +11492,8 @@ local function stopFlight()
 end
 
 -- статистика полёта для экрана крушения
+local Comfort = require(Shared:WaitForChild("Comfort"))
+local comfort = 100
 local fstats = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = 0, lastPos = nil :: Vector3? }
 local function playerPoints(): number
 	local ls = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -11442,6 +11503,7 @@ end
 
 FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: string, spawnCF: CFrame)
 	fstats = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = playerPoints(), lastPos = nil }
+	comfort = 100
 	local cfg = PlaneConfigs.PLANES[planeId]
 	if not cfg or not m then
 		return
@@ -11582,9 +11644,12 @@ local function handleEvents(f: FlightPhysics.Flight)
 					grade = ev.grade or "hard", fpm = fpmV, kts = f.speed, g = f.gload, offM = offM,
 					pts = if ap then (if fpmV < 120 then 400 elseif fpmV < 250 then 300 elseif fpmV < 600 then 150 else 50) else 0,
 					where = if ap then ap.code .. " · полоса" else "вне аэропорта", damaged = f.damage > 0.3,
+					pax = if Comfort.passengers(f.cfg) > 0 then Comfort.starsText(comfort) else nil,
+					paxBonus = if lastDest and ev.airport == lastDest and Comfort.passengers(f.cfg) > 0 then math.floor(comfort * 5) else 0,
 				})
 			end
-			Landing:FireServer(ev.fpm)
+			comfort = Comfort.touchdown(comfort, ev.fpm or 0)
+			Landing:FireServer(ev.fpm, comfort)
 			if ev.airport then
 				local ap = World.airportById(ev.airport)
 				if ap then
@@ -11740,6 +11805,12 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local agl = (f.dbg.agl or 0) * FT
 	vsSmooth += (f.vel.Y * 60 * FT - vsSmooth) * math.min(1, dt * 6)
 	local vs = math.round(vsSmooth / 10) * 10
+	-- комфорт пассажиров
+	local pax = Comfort.passengers(c)
+	if not f.onGround then
+		comfort = Comfort.step(comfort, dt, math.deg(math.asin(math.clamp(-right.Y, -1, 1))), f.gload, vsSmooth, f.buffet or 0)
+	end
+	ui.setPax(pax, comfort)
 	local hdg = World.headingDeg(look)
 	ui.setCells({
 		spd = { tostring(math.round(f.speed)) },
@@ -11981,7 +12052,7 @@ ui.showHangar = function(on: boolean?)
 end
 
 ui.showHangar(true)
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Локальная анимация всех самолётов (своих, чужих и ИИ): винт, огни, шасси, закрылки,
 -- инверсионный след, форсаж. Состояние приходит атрибутами модели от сервера,
 -- а для своего самолёта — прямо из локальной физики (без задержки сети).
@@ -12126,7 +12197,7 @@ end
 
 return Animator
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Камеры: сзади (плавная), кабина, орбита. Плюс облёт аэропорта в ангаре.
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12242,7 +12313,7 @@ end
 
 return CameraRig
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Ввод: клавиатура, геймпад, сенсорный штурвал и мышь-штурвал -> общий ввод физики.
 local UserInputService = game:GetService("UserInputService")
 
@@ -12351,7 +12422,7 @@ end
 
 return Controls
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Гонка через кольца: маршрут Skyport → Дубай → Ташкент → Лондон → Skyport.
 -- Кольца строятся у каждого игрока локально, поэтому подсветка своя у каждого.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12479,7 +12550,7 @@ end
 
 return Race
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Радар: курс вверх, радиус 12 000 stud (~6 км). Аэропорты, города, самолёты, следующее кольцо.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -12675,7 +12746,7 @@ end
 
 return Radar
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Интерфейс Sky Pilot: верхняя панель, приборы, авиагоризонт, ангар, справка,
 -- экран крушения и сенсорное управление (штурвал, РУД, кнопки).
 local Players = game:GetService("Players")
@@ -13622,12 +13693,13 @@ function Ui.new(cb: Callbacks)
 			apTag.Visible = false
 			nav.Visible = false
 			tape.Visible = false
-			gBox.Visible = false
-			vignette.BackgroundTransparency = 1
 			wx.Visible = false
 			raceTag.Visible = false
-			ils.Visible = false
 			banner.Visible = false
+			-- элементы, объявленные ниже (G, затемнение, ILS, пассажиры): раньше здесь была ошибка nil
+			if self.hideLate then
+				self.hideLate()
+			end
 		end
 	end
 	function self.showHangar(on: boolean?)
@@ -13678,6 +13750,18 @@ function Ui.new(cb: Callbacks)
 	end
 	-- перегрузка G и состояние конструкции (слева от авиагоризонта)
 	local gBox = glass(root, { Size = UDim2.fromOffset(76, 44), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -104, 0, 180), Visible = false })
+	-- комфорт пассажиров (под индикатором G)
+	local paxBox = glass(root, { Size = UDim2.fromOffset(76, 40), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -104, 0, 228), Visible = false })
+	local paxV = new("TextLabel", { Size = UDim2.new(1, 0, 0, 20), Position = UDim2.fromOffset(0, 3), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 15, TextColor3 = C.green, Text = "", ZIndex = 2 }, paxBox)
+	local paxN = new("TextLabel", { Size = UDim2.new(1, 0, 0, 12), Position = UDim2.fromOffset(0, 23), BackgroundTransparency = 1, Font = FONT, TextSize = 9, TextColor3 = C.dim, Text = "", ZIndex = 2 }, paxBox)
+	function self.setPax(n: number, v: number)
+		paxBox.Visible = n > 0 and hud.Visible
+		if n > 0 then
+			paxV.Text = string.format("🧳 %d%%", math.round(v))
+			paxV.TextColor3 = if v >= 80 then C.green elseif v >= 50 then C.amber else C.red
+			paxN.Text = string.format("%d ПАСС.", n)
+		end
+	end
 	local gVal = new("TextLabel", { Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 2), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 20, TextColor3 = C.green, Text = "1.0 G" }, gBox)
 	local gSub = new("TextLabel", { Size = UDim2.new(1, -4, 0, 14), Position = UDim2.fromOffset(2, 27), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 10, TextColor3 = C.dim, Text = "" }, gBox)
 	-- «потемнение в глазах» на больших перегрузках
@@ -13700,7 +13784,7 @@ function Ui.new(cb: Callbacks)
 	local lrNote = new("TextLabel", { Size = UDim2.new(0.7, 0, 0, 22), Position = UDim2.fromOffset(16, 120), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 13, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = "", ZIndex = 9 }, lrep)
 	local lrPts = new("TextLabel", { Size = UDim2.new(0.3, -16, 0, 24), Position = UDim2.new(0.7, 0, 0, 118), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 20, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Right, Text = "", ZIndex = 9 }, lrep)
 	local lrSeq = 0
-	function self.landingReport(r: { grade: string, fpm: number, kts: number, g: number, offM: number?, pts: number, where: string, damaged: boolean })
+	function self.landingReport(r: { grade: string, fpm: number, kts: number, g: number, offM: number?, pts: number, where: string, damaged: boolean, pax: string?, paxBonus: number? })
 		local look = if r.grade == "perfect" then { "Идеальная посадка", C.green, "★" } elseif r.grade == "good" then { "Хорошая посадка", C.magenta, "✓" } else { "Жёсткая посадка", C.amber, "!" }
 		lrTitle.Text = look[1]
 		lrBadge.BackgroundColor3 = look[2]
@@ -13711,7 +13795,11 @@ function Ui.new(cb: Callbacks)
 		lrCells[3].Text = string.format("%.1f", r.g)
 		lrCells[4].Text = if r.offM then string.format(if r.offM < 10 then "%.1f" else "%.0f", r.offM) else "—"
 		lrNote.Text = if r.offM and r.offM < 5 then "Точно по оси!" elseif r.offM and r.offM > 25 then "Далеко от оси полосы" else "Посадка засчитана"
-		lrPts.Text = if r.pts > 0 then "+" .. r.pts else ""
+		if r.pax then
+			lrNote.Text = "Пассажиры " .. r.pax .. (if (r.paxBonus or 0) > 0 then string.format(" · +%d за комфорт", r.paxBonus :: number) else "")
+		end
+		local total = r.pts + (r.paxBonus or 0)
+		lrPts.Text = if total > 0 then "+" .. total else ""
 		lrep.Visible = true
 		lrScale.Scale = 0.92
 		game:GetService("TweenService"):Create(lrScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
@@ -13737,6 +13825,12 @@ function Ui.new(cb: Callbacks)
 
 	-- указатель глиссады (ILS)
 	local ils = new("TextLabel", { Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 238), BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.amber, Text = "", Visible = false }, root)
+	function self.hideLate()
+		gBox.Visible = false
+		paxBox.Visible = false
+		vignette.BackgroundTransparency = 1
+		ils.Visible = false
+	end
 	corner(ils, 6)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, ils)
 	function self.setIls(text: string?, good: boolean?)

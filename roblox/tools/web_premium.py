@@ -272,12 +272,14 @@ function showLandingReport(f, ap, text, pts) {
   const grade = text.startsWith("Идеальная") ? ["Идеальная посадка", "#22c07a", "★"] : text.startsWith("Хорошая") ? ["Хорошая посадка", "#3ba7ff", "✓"] : ["Жёсткая посадка", "#f0a531", "!"];
   let off = null;
   if (ap) { const dx = f.pos.x - ap.cx, dz = f.pos.z - ap.cz; off = Math.abs(ap.rot ? -dz : dx) * 0.515; }
+  const paxBonus = COMF.pax > 0 && ap && flightDest && ap.id === flightDest ? Math.floor(COMF.v * 5) : 0;
+  if (paxBonus > 0) setTimeout(() => addScore(paxBonus, "комфорт пассажиров"), 1500);
   const el = $("lrep");
   el.innerHTML = `<div class="lh"><span class="lb" style="background:${grade[1]}">${grade[2]}</span><div><div class="lt">${grade[0]}</div>` +
     `<div class="ls">${ap ? ap.code + " · полоса" : "вне аэропорта"}${f.damage > 0.3 ? " · есть повреждения" : ""}</div></div></div>` +
     `<div class="lg"><div><b>${fpm}</b><small>fpm</small></div><div><b>${Math.round(f.speed)}</b><small>kt</small></div>` +
     `<div><b>${f.gload.toFixed(1)}</b><small>G</small></div><div><b>${off === null ? "—" : off.toFixed(off < 10 ? 1 : 0)}</b><small>м от оси</small></div></div>` +
-    `<div class="lp"><span>${off !== null && off < 5 ? "Точно по оси!" : off !== null && off > 25 ? "Далеко от оси полосы" : "Посадка засчитана"}</span>${pts ? `<em>+${pts}</em>` : ""}</div>`;
+    `<div class="lp"><span>${COMF.pax > 0 ? `Пассажиры ${paxStars(COMF.v)}${paxBonus ? ` · +${paxBonus} за комфорт` : ""}` : off !== null && off < 5 ? "Точно по оси!" : off !== null && off > 25 ? "Далеко от оси полосы" : "Посадка засчитана"}</span>${pts + paxBonus ? `<em>+${pts + paxBonus}</em>` : ""}</div>`;
   el.hidden = false; el.style.animation = "none"; void el.offsetWidth; el.style.animation = "";
   clearTimeout(lrepT); lrepT = setTimeout(() => (el.hidden = true), 6500);
 }
@@ -583,6 +585,37 @@ function fillCrash() {
 """
 
 
+PAX_CSS = """
+#pax { position: absolute; right: calc(110px + env(safe-area-inset-right, 0px)); top: calc(236px + env(safe-area-inset-top, 0px)); background: var(--glass); border: 1px solid var(--line);
+  border-radius: 12px; padding: 3px 10px; text-align: center; font-family: var(--f-num); box-shadow: var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+#pax b { display: block; font-size: 15px; } #pax small { display: block; font-size: 9.5px; color: var(--dim); letter-spacing: .06em; }
+@media (max-width: 600px) { #pax { right: calc(92px + env(safe-area-inset-right, 0px)); top: calc(318px + env(safe-area-inset-top, 0px)); } }
+@media (max-height: 500px) { #pax { right: calc(10px + env(safe-area-inset-right, 0px)); top: calc(178px + env(safe-area-inset-top, 0px)); padding: 2px 8px; } #pax b { font-size: 13px; } }
+"""
+
+PAX_JS = r"""
+// ===== пассажиры и комфорт (как src/shared/Comfort.luau)
+const COMF = { v: 100, pax: 0 };
+function paxCount(c) {
+  if (c.id === "F16") return 0; if (c.engines === "prop") return 3;
+  if (c.length < 130 && c.diameter < 11) return Math.max(6, Math.round(c.length * 0.12));
+  return Math.round(c.length * (c.diameter < 16 ? 1.3 : 1.35) * (c.doubleDeck ? 1.5 : 1));
+}
+function paxReset(cfg) { COMF.v = 100; COMF.pax = paxCount(cfg); }
+function paxFrame(f, dt) {
+  if (!f.onGround) {
+    const right = new V3(1, 0, 0).applyQuaternion(f.att), bank = Math.abs(THREE.MathUtils.radToDeg(Math.asin(clamp(-right.y, -1, 1)))), vs = f.vel.y * 60 * FT;
+    const pen = Math.max(0, bank - 30) * 0.05 + Math.max(0, Math.abs((f.gload || 1) - 1) - 0.35) * 10 + (Math.abs(vs) > 3000 ? 1.2 : 0) + (f.buffet || 0) * 5;
+    COMF.v = clamp(COMF.v - pen * dt + (pen === 0 ? 0.15 * dt : 0), 0, 100);
+  }
+  const el = $("pax"); el.hidden = COMF.pax === 0 || f.crashed;
+  if (!el.hidden) el.innerHTML = `<b style="color:${COMF.v >= 80 ? "var(--green)" : COMF.v >= 50 ? "var(--amber)" : "var(--red)"}">🧳 ${Math.round(COMF.v)}%</b><small>${COMF.pax} ПАСС.</small>`;
+}
+function paxTouchdown(text) { const fpm = (/(\d+) fpm/.exec(text) || [0, 0])[1] | 0; COMF.v = clamp(COMF.v - Math.max(0, fpm - 350) / 25, 0, 100); }
+function paxStars(v) { const n = v >= 90 ? 5 : v >= 70 ? 4 : v >= 50 ? 3 : v >= 30 ? 2 : 1; return "★".repeat(n) + "☆".repeat(5 - n); }
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -794,6 +827,14 @@ def add_premium(s, patch):
     s = patch(s, "    achFrame(f);\n", "    achFrame(f); fstatsFrame(f, dt);\n")
     s = patch(s, "achLanding(f, ap, ev.text); }", "achLanding(f, ap, ev.text); FST.landings++; }")
     s = patch(s, 'if (crashTimer <= 0) $("crash").hidden = false; }', 'if (crashTimer <= 0) { fillCrash(); $("crash").hidden = false; } }')
+    # пассажиры и комфорт (как src/shared/Comfort.luau)
+    s = patch(s, "</style>\n\n<div id=\"app\">", PAX_CSS + "</style>\n\n<div id=\"app\">")
+    s = patch(s, '<div id="gm" hidden></div>', '<div id="gm" hidden></div>\n  <div id="pax" hidden></div>')
+    s = patch(s, "// ===== статистика полёта и совет после крушения", PAX_JS + "// ===== статистика полёта и совет после крушения")
+    s = patch(s, "function fstatsReset(cfg) {", "function fstatsReset(cfg) { paxReset(cfg);")
+    s = patch(s, "function fstatsFrame(f, dt) {", "function fstatsFrame(f, dt) { paxFrame(f, dt);")
+    s = patch(s, "showLandingReport(f, ap, ev.text, __pts || 0);", "paxTouchdown(ev.text); showLandingReport(f, ap, ev.text, __pts || 0);")
+    s = patch(s, '$("radar").hidden = true; $("gm").hidden = true;', '$("radar").hidden = true; $("gm").hidden = true; $("pax").hidden = true;')
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

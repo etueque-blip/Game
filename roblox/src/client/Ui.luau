@@ -945,12 +945,13 @@ function Ui.new(cb: Callbacks)
 			apTag.Visible = false
 			nav.Visible = false
 			tape.Visible = false
-			gBox.Visible = false
-			vignette.BackgroundTransparency = 1
 			wx.Visible = false
 			raceTag.Visible = false
-			ils.Visible = false
 			banner.Visible = false
+			-- элементы, объявленные ниже (G, затемнение, ILS, пассажиры): раньше здесь была ошибка nil
+			if self.hideLate then
+				self.hideLate()
+			end
 		end
 	end
 	function self.showHangar(on: boolean?)
@@ -1001,6 +1002,18 @@ function Ui.new(cb: Callbacks)
 	end
 	-- перегрузка G и состояние конструкции (слева от авиагоризонта)
 	local gBox = glass(root, { Size = UDim2.fromOffset(76, 44), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -104, 0, 180), Visible = false })
+	-- комфорт пассажиров (под индикатором G)
+	local paxBox = glass(root, { Size = UDim2.fromOffset(76, 40), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -104, 0, 228), Visible = false })
+	local paxV = new("TextLabel", { Size = UDim2.new(1, 0, 0, 20), Position = UDim2.fromOffset(0, 3), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 15, TextColor3 = C.green, Text = "", ZIndex = 2 }, paxBox)
+	local paxN = new("TextLabel", { Size = UDim2.new(1, 0, 0, 12), Position = UDim2.fromOffset(0, 23), BackgroundTransparency = 1, Font = FONT, TextSize = 9, TextColor3 = C.dim, Text = "", ZIndex = 2 }, paxBox)
+	function self.setPax(n: number, v: number)
+		paxBox.Visible = n > 0 and hud.Visible
+		if n > 0 then
+			paxV.Text = string.format("🧳 %d%%", math.round(v))
+			paxV.TextColor3 = if v >= 80 then C.green elseif v >= 50 then C.amber else C.red
+			paxN.Text = string.format("%d ПАСС.", n)
+		end
+	end
 	local gVal = new("TextLabel", { Size = UDim2.new(1, 0, 0, 24), Position = UDim2.fromOffset(0, 2), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 20, TextColor3 = C.green, Text = "1.0 G" }, gBox)
 	local gSub = new("TextLabel", { Size = UDim2.new(1, -4, 0, 14), Position = UDim2.fromOffset(2, 27), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 10, TextColor3 = C.dim, Text = "" }, gBox)
 	-- «потемнение в глазах» на больших перегрузках
@@ -1023,7 +1036,7 @@ function Ui.new(cb: Callbacks)
 	local lrNote = new("TextLabel", { Size = UDim2.new(0.7, 0, 0, 22), Position = UDim2.fromOffset(16, 120), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 13, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = "", ZIndex = 9 }, lrep)
 	local lrPts = new("TextLabel", { Size = UDim2.new(0.3, -16, 0, 24), Position = UDim2.new(0.7, 0, 0, 118), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 20, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Right, Text = "", ZIndex = 9 }, lrep)
 	local lrSeq = 0
-	function self.landingReport(r: { grade: string, fpm: number, kts: number, g: number, offM: number?, pts: number, where: string, damaged: boolean })
+	function self.landingReport(r: { grade: string, fpm: number, kts: number, g: number, offM: number?, pts: number, where: string, damaged: boolean, pax: string?, paxBonus: number? })
 		local look = if r.grade == "perfect" then { "Идеальная посадка", C.green, "★" } elseif r.grade == "good" then { "Хорошая посадка", C.magenta, "✓" } else { "Жёсткая посадка", C.amber, "!" }
 		lrTitle.Text = look[1]
 		lrBadge.BackgroundColor3 = look[2]
@@ -1034,7 +1047,11 @@ function Ui.new(cb: Callbacks)
 		lrCells[3].Text = string.format("%.1f", r.g)
 		lrCells[4].Text = if r.offM then string.format(if r.offM < 10 then "%.1f" else "%.0f", r.offM) else "—"
 		lrNote.Text = if r.offM and r.offM < 5 then "Точно по оси!" elseif r.offM and r.offM > 25 then "Далеко от оси полосы" else "Посадка засчитана"
-		lrPts.Text = if r.pts > 0 then "+" .. r.pts else ""
+		if r.pax then
+			lrNote.Text = "Пассажиры " .. r.pax .. (if (r.paxBonus or 0) > 0 then string.format(" · +%d за комфорт", r.paxBonus :: number) else "")
+		end
+		local total = r.pts + (r.paxBonus or 0)
+		lrPts.Text = if total > 0 then "+" .. total else ""
 		lrep.Visible = true
 		lrScale.Scale = 0.92
 		game:GetService("TweenService"):Create(lrScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
@@ -1060,6 +1077,12 @@ function Ui.new(cb: Callbacks)
 
 	-- указатель глиссады (ILS)
 	local ils = new("TextLabel", { Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 238), BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.amber, Text = "", Visible = false }, root)
+	function self.hideLate()
+		gBox.Visible = false
+		paxBox.Visible = false
+		vignette.BackgroundTransparency = 1
+		ils.Visible = false
+	end
 	corner(ils, 6)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, ils)
 	function self.setIls(text: string?, good: boolean?)

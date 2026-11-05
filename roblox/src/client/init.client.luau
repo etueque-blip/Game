@@ -196,6 +196,8 @@ local function requestFlight(planeId: string, mode: string, destination: string?
 	RequestFlight:FireServer(planeId, mode, destination, lastLivery)
 end
 
+-- объявлена заранее: кнопка «Выйти из самолёта» (onExit) вызывает её раньше определения ниже
+local stopFlight: () -> ()
 ui = Ui.new({
 	onPick = requestFlight,
 	onAction = onAction,
@@ -225,7 +227,7 @@ end, function(t)
 end)
 cameraRig = CameraRig.new(ui)
 
-local function stopFlight()
+function stopFlight()
 	flight, model, root, simulating, apTarget, crashPose = nil, nil, nil, false, nil, nil
 	if engineSound then
 		engineSound:Destroy()
@@ -242,6 +244,8 @@ local function stopFlight()
 end
 
 -- статистика полёта для экрана крушения
+local Comfort = require(Shared:WaitForChild("Comfort"))
+local comfort = 100
 local fstats = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = 0, lastPos = nil :: Vector3? }
 local function playerPoints(): number
 	local ls = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -251,6 +255,7 @@ end
 
 FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: string, spawnCF: CFrame)
 	fstats = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = playerPoints(), lastPos = nil }
+	comfort = 100
 	local cfg = PlaneConfigs.PLANES[planeId]
 	if not cfg or not m then
 		return
@@ -391,9 +396,12 @@ local function handleEvents(f: FlightPhysics.Flight)
 					grade = ev.grade or "hard", fpm = fpmV, kts = f.speed, g = f.gload, offM = offM,
 					pts = if ap then (if fpmV < 120 then 400 elseif fpmV < 250 then 300 elseif fpmV < 600 then 150 else 50) else 0,
 					where = if ap then ap.code .. " · полоса" else "вне аэропорта", damaged = f.damage > 0.3,
+					pax = if Comfort.passengers(f.cfg) > 0 then Comfort.starsText(comfort) else nil,
+					paxBonus = if lastDest and ev.airport == lastDest and Comfort.passengers(f.cfg) > 0 then math.floor(comfort * 5) else 0,
 				})
 			end
-			Landing:FireServer(ev.fpm)
+			comfort = Comfort.touchdown(comfort, ev.fpm or 0)
+			Landing:FireServer(ev.fpm, comfort)
 			if ev.airport then
 				local ap = World.airportById(ev.airport)
 				if ap then
@@ -549,6 +557,12 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local agl = (f.dbg.agl or 0) * FT
 	vsSmooth += (f.vel.Y * 60 * FT - vsSmooth) * math.min(1, dt * 6)
 	local vs = math.round(vsSmooth / 10) * 10
+	-- комфорт пассажиров
+	local pax = Comfort.passengers(c)
+	if not f.onGround then
+		comfort = Comfort.step(comfort, dt, math.deg(math.asin(math.clamp(-right.Y, -1, 1))), f.gload, vsSmooth, f.buffet or 0)
+	end
+	ui.setPax(pax, comfort)
 	local hdg = World.headingDeg(look)
 	ui.setCells({
 		spd = { tostring(math.round(f.speed)) },
