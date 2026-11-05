@@ -51,6 +51,7 @@ local RaceFinished = remote("RaceFinished")
 local GateParked = remote("GateParked")
 local AchievementRemote = remote("Achievement")
 local DailyRemote = remote("DailyTask")
+local TrickRemote = remote("Trick")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -299,6 +300,32 @@ AchievementRemote.OnServerEvent:Connect(function(p, id)
 		return
 	end
 	award(p, id)
+end)
+
+-- авиашоу: фигуры пилотажа видит только клиент; сервер ограничивает частоту и сумму за полёт
+local Aerobatics = require(Shared:WaitForChild("Aerobatics"))
+TrickRemote.OnServerEvent:Connect(function(p, id)
+	local a = active[p]
+	if type(id) ~= "string" or not a or a.crashed then
+		return
+	end
+	local t = Aerobatics.TRICKS[id]
+	if not t then
+		return
+	end
+	local now = os.clock()
+	a.trickAt = a.trickAt or {}
+	a.trickPts = a.trickPts or 0
+	if now - (a.trickAt[id] or -1e9) < t.gap or a.trickPts + t.pts > Aerobatics.FLIGHT_CAP then
+		return
+	end
+	if a.root and a.root.Position.Y * World.FT < 250 then
+		return
+	end
+	a.trickAt[id] = now
+	a.trickPts += t.pts
+	Scores.add(p, t.pts, false)
+	Notify:FireClient(p, string.format("✈ %s · +%d", t.title, t.pts), "green")
 end)
 
 -- задания дня: принимаем только сегодняшние и только во время полёта

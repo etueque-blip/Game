@@ -31,6 +31,53 @@ local RaceFinished = R("RaceFinished")
 local GateParked = R("GateParked")
 local AchievementR = R("Achievement")
 local DailyR = R("DailyTask")
+local TrickR = R("Trick")
+local Aerobatics = require(Shared:WaitForChild("Aerobatics"))
+local acro = Aerobatics.new()
+-- цветной дым из хвоста (Y / кнопка ДЫМ): выкл → белый → красный → синий → зелёный → жёлтый
+local SMOKE = {
+	{ Color3.fromRGB(245, 245, 245), "белый" }, { Color3.fromRGB(235, 60, 60), "красный" }, { Color3.fromRGB(50, 110, 235), "синий" },
+	{ Color3.fromRGB(60, 190, 90), "зелёный" }, { Color3.fromRGB(250, 200, 40), "жёлтый" },
+}
+local smokeIdx = 0
+local function applySmoke(m: Model, cfg: any)
+	local root = m.PrimaryPart
+	if not root then
+		return
+	end
+	local tr = root:FindFirstChild("SmokeTrail") :: Trail?
+	if smokeIdx == 0 then
+		if tr then
+			tr.Enabled = false
+		end
+		return
+	end
+	if not tr then
+		local L, D = cfg.length, cfg.diameter
+		local a0 = Instance.new("Attachment")
+		a0.Name = "SmokeA"
+		a0.Position = Vector3.new(0, D * 0.3, L * 0.5 + 1)
+		a0.Parent = root
+		local a1 = Instance.new("Attachment")
+		a1.Name = "SmokeB"
+		a1.Position = Vector3.new(0, -D * 0.3, L * 0.5 + 1)
+		a1.Parent = root
+		local t = Instance.new("Trail")
+		t.Name = "SmokeTrail"
+		t.Attachment0, t.Attachment1 = a0, a1
+		t.Lifetime = 7
+		t.MinLength = 0.5
+		t.FaceCamera = true
+		t.LightInfluence = 1
+		t.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.6, 0.55), NumberSequenceKeypoint.new(1, 1) })
+		t.WidthScale = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 4) })
+		t.Parent = root
+		tr = t
+	end
+	local tt = tr :: Trail
+	tt.Color = ColorSequence.new(SMOKE[smokeIdx][1])
+	tt.Enabled = true
+end
 local Daily = require(Shared:WaitForChild("Daily"))
 local dailySent: { [string]: boolean } = {}
 local function dailyHave(id: string): boolean
@@ -148,6 +195,10 @@ local function onAction(a: string)
 			end
 			ui.setPhoto(photoMode)
 		end
+		return
+	elseif a == "smoke" then
+		smokeIdx = (smokeIdx + 1) % (#SMOKE + 1)
+		ui.toast(if smokeIdx > 0 then "Дым: " .. SMOKE[smokeIdx][2] .. " · Y — сменить цвет" else "Дым выключен", if smokeIdx > 0 then "green" else nil)
 		return
 	elseif a == "map" then
 		ui.toggleMap()
@@ -655,6 +706,19 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 		local vapor = not f.onGround and f.speed > 120 and (f.gload > 1.7 or (rainNow > 0.25 and f.flaps >= 2))
 		if model:GetAttribute("Vapor") ~= vapor then
 			model:SetAttribute("Vapor", vapor)
+		end
+	end
+	-- авиашоу: дым и фигуры пилотажа (очки начисляет сервер)
+	if model then
+		if model:GetAttribute("SmokeIdx") ~= smokeIdx then
+			model:SetAttribute("SmokeIdx", smokeIdx)
+			applySmoke(model, c)
+		end
+	end
+	if not f.crashed then
+		local trick = Aerobatics.step(acro, f.att, dt, not f.onGround and (f.dbg.agl or 0) * FT > 300)
+		if trick then
+			TrickR:FireServer(trick)
 		end
 	end
 	if not f.onGround and f.pos.Y * FT < 3000 then

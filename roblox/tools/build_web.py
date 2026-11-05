@@ -1024,6 +1024,8 @@ def main():
     s = add_premium(s, patch)
     from web_pfd import add_pfd
     s = add_pfd(s, patch)
+    from web_acro import add_acro
+    s = add_acro(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

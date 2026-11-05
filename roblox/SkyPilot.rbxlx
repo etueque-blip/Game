@@ -1,6 +1,6 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
-<Item class="Workspace" referent="RBX00000017"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
-<Item class="ReplicatedStorage" referent="RBX00000018"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX0000000B"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Achievements</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="Workspace" referent="RBX00000018"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX00000019"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX0000000C"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Achievements</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Достижения: общий список для сервера (проверка, сохранение, награда) и клиента (экран, уведомления).
 -- Тот же список — в веб-версии (tools/web_premium.py, ACH_JS).
 local Achievements = {}
@@ -29,7 +29,89 @@ end
 
 return Achievements
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000002"><Properties><string name="Name">Autopilot</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000002"><Properties><string name="Name">Aerobatics</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Авиашоу: фигуры пилотажа. Те же правила, что в веб-версии (tools/web_acro.py):
+-- бочка (полный оборот по крену через «вверх ногами»), петля (оборот по тангажу через вертикаль и спину),
+-- перевёрнутый полёт 5 с. Только в воздухе выше 300 ft над землёй; очки начисляет сервер.
+local Aerobatics = {}
+
+Aerobatics.TRICKS = {
+	roll = { title = "Бочка", pts = 150, gap = 3 },
+	loop = { title = "Петля", pts = 250, gap = 6 },
+	inverted = { title = "Перевёрнутый полёт", pts = 120, gap = 8 },
+}
+Aerobatics.FLIGHT_CAP = 3000
+
+export type State = { prev: CFrame?, roll: number, pitch: number, rIdle: number, pIdle: number, inv: number, invDone: boolean, rInv: boolean, pUp: boolean, pInv: boolean }
+
+function Aerobatics.new(): State
+	return { prev = nil, roll = 0, pitch = 0, rIdle = 0, pIdle = 0, inv = 0, invDone = false, rInv = false, pUp = false, pInv = false }
+end
+
+local function reset(s: State)
+	s.roll, s.pitch, s.inv = 0, 0, 0
+	s.rInv, s.pUp, s.pInv = false, false, false
+end
+
+function Aerobatics.step(s: State, att: CFrame, dt: number, ok: boolean): string?
+	local prev = s.prev
+	local cur = att.Rotation
+	s.prev = cur
+	if not ok or not prev or dt <= 0 then
+		reset(s)
+		return nil
+	end
+	local axis, ang = prev:ToObjectSpace(cur):ToAxisAngle()
+	if ang > math.pi then
+		ang -= 2 * math.pi
+	end
+	local dRoll, dPitch = 0, 0
+	if ang == ang and axis.X == axis.X and math.abs(ang) > 1e-7 then
+		dRoll, dPitch = axis.Z * ang, axis.X * ang
+	end
+	local up, look = cur.UpVector, cur.LookVector
+	s.rIdle = if math.abs(dRoll) / dt < 0.52 then s.rIdle + dt else 0
+	if s.rIdle > 1.5 then
+		s.roll, s.rInv = 0, false
+	end
+	s.pIdle = if math.abs(dPitch) / dt < 0.14 then s.pIdle + dt else 0
+	if s.pIdle > 3 then
+		s.pitch, s.pUp, s.pInv = 0, false, false
+	end
+	s.roll += dRoll
+	s.pitch += dPitch
+	if up.Y < -0.5 then
+		s.rInv, s.pInv = true, true
+	end
+	if math.abs(look.Y) > 0.85 then
+		s.pUp = true
+	end
+	if math.abs(s.pitch) >= 5.76 and s.pUp and s.pInv then
+		reset(s)
+		return "loop"
+	end
+	if math.abs(s.roll) >= 5.93 and s.rInv then
+		s.roll, s.rInv = 0, false
+		return "roll"
+	end
+	if up.Y < -0.6 then
+		s.inv += dt
+	else
+		s.inv = 0
+		if up.Y > 0.3 then
+			s.invDone = false
+		end
+	end
+	if s.inv >= 5 and not s.invDone then
+		s.invDone = true
+		return "inverted"
+	end
+	return nil
+end
+
+return Aerobatics
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">Autopilot</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Автопилот: держит курс / высоту / скорость, выдавая обычный ввод штурвала.
 -- Им пользуется игрок (клавиша P) и ИИ-трафик на сервере — одна и та же физика.
 local World = require(script.Parent.World)
@@ -84,7 +166,7 @@ end
 
 return Autopilot
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">CityData</string><ProtectedString name="Source"><![CDATA[--!nocheck
+<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">CityData</string><ProtectedString name="Source"><![CDATA[--!nocheck
 -- СГЕНЕРИРОВАНО tools/gen_cities.py — не правьте вручную.
 -- props: {вид, x, y, z, sx, sy, sz, rx, ry, rz, цвет 0xRRGGBB, материал, твёрдое, отражение, прозрачность}
 local P = {
@@ -13067,7 +13149,7 @@ local RINGS = {
 }
 return { props = P, obstacles = O, pads = PADS, labels = LABELS, rings = RINGS }
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">Comfort</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">Comfort</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Комфорт пассажиров: 100% в начале полёта, падает от крутых кренов, перегрузки, резкой вертикальной,
 -- тряски и жёсткой посадки; в спокойном полёте понемногу восстанавливается.
 -- Та же логика — в веб-версии (tools/web_premium.py, PAX_JS).
@@ -13116,7 +13198,7 @@ end
 
 return Comfort
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">Daily</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">Daily</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Ежедневные задания: три задания на каждый день (UTC), одинаковые для всех игроков.
 -- Тот же генератор — в веб-версии (tools/web_premium.py, DAILY_JS): Park–Miller, целые до 2^53.
 local PlaneConfigs = require(script.Parent:WaitForChild("PlaneConfigs"))
@@ -13164,7 +13246,7 @@ end
 
 return Daily
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Порт FlightClient.step / physicsStep из Sky Pilot 1:1.
 -- Единицы: 1 stud/s = 1 kt, высота в футах = Y * FT, G = 19 stud/s².
 local World = require(script.Parent.World)
@@ -13529,7 +13611,7 @@ end
 
 return FlightPhysics
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Инструкция по полёту для конкретного самолёта: цифры считаются из его характеристик
 -- (те же формулы, что в веб-версии).
 local FlightPhysics = require(script.Parent:WaitForChild("FlightPhysics"))
@@ -13593,7 +13675,7 @@ end
 
 return Guide
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит модель самолёта из обычных деталей Roblox по PlaneConfigs.
 -- Оси модели: нос -Z, верх +Y, правое крыло +X. Корень (Root) — центр фюзеляжа,
 -- он стоит на высоте gearHeight над землёй, когда шасси касается полосы.
@@ -14350,7 +14432,7 @@ end
 
 return PlaneBuilder
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Те же PlaneConfigs, что и в HTML-полигоне Sky Pilot (1 stud/s = 1 kt, 1 stud = 1.69 ft).
 local WHITE = Color3.fromHex("f3f5f8")
 local GREY = Color3.fromHex("c4c8ce")
@@ -14448,7 +14530,7 @@ return {
 	} :: { [string]: string },
 }
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Данные мира. Один и тот же модуль используют сервер (строит визуал) и клиент (физика),
 -- поэтому рельеф, полосы и здания всегда совпадают с тем, что видно на экране.
 local PlaneConfigs = require(script.Parent.PlaneConfigs)
@@ -14783,7 +14865,7 @@ return World
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX00000019"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000F"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ServerScriptService" referent="RBX0000001A"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000010"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — сервер: мир, выдача самолётов, посадка пилота, очки, крушения, ИИ-трафик.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14836,6 +14918,7 @@ local RaceFinished = remote("RaceFinished")
 local GateParked = remote("GateParked")
 local AchievementRemote = remote("Achievement")
 local DailyRemote = remote("DailyTask")
+local TrickRemote = remote("Trick")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -15084,6 +15167,32 @@ AchievementRemote.OnServerEvent:Connect(function(p, id)
 		return
 	end
 	award(p, id)
+end)
+
+-- авиашоу: фигуры пилотажа видит только клиент; сервер ограничивает частоту и сумму за полёт
+local Aerobatics = require(Shared:WaitForChild("Aerobatics"))
+TrickRemote.OnServerEvent:Connect(function(p, id)
+	local a = active[p]
+	if type(id) ~= "string" or not a or a.crashed then
+		return
+	end
+	local t = Aerobatics.TRICKS[id]
+	if not t then
+		return
+	end
+	local now = os.clock()
+	a.trickAt = a.trickAt or {}
+	a.trickPts = a.trickPts or 0
+	if now - (a.trickAt[id] or -1e9) < t.gap or a.trickPts + t.pts > Aerobatics.FLIGHT_CAP then
+		return
+	end
+	if a.root and a.root.Position.Y * World.FT < 250 then
+		return
+	end
+	a.trickAt[id] = now
+	a.trickPts += t.pts
+	Scores.add(p, t.pts, false)
+	Notify:FireClient(p, string.format("✈ %s · +%d", t.title, t.pts), "green")
 end)
 
 -- задания дня: принимаем только сегодняшние и только во время полёта
@@ -15336,7 +15445,7 @@ end
 if AI_TRAFFIC_COUNT > 0 then
 	AITraffic.start(AI_TRAFFIC_COUNT)
 end
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
 -- ИИ-пилоты (боты-«агенты»): летают по маршрутам между аэропортами и городом
 -- на той же физике, что и игроки, управляются автопилотом.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15427,7 +15536,7 @@ end
 
 return AITraffic
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Очки и статистика игрока (leaderstats + DataStore, если включён доступ к API).
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -15609,7 +15718,7 @@ end)
 
 return Scores
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит визуальный мир по данным World (сервер, один раз при старте).
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16369,7 +16478,7 @@ return WorldBuilder
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX0000001B"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX0000001A"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000016"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="StarterPlayer" referent="RBX0000001C"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX0000001B"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000017"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — клиент: локальная физика полёта (как FlightClient), ввод, камера, приборы.
 -- Самолёт принадлежит игроку по сети (SetNetworkOwner), поэтому управление без задержки,
 -- а другие игроки видят движение через обычную репликацию физики Roblox.
@@ -16402,6 +16511,53 @@ local RaceFinished = R("RaceFinished")
 local GateParked = R("GateParked")
 local AchievementR = R("Achievement")
 local DailyR = R("DailyTask")
+local TrickR = R("Trick")
+local Aerobatics = require(Shared:WaitForChild("Aerobatics"))
+local acro = Aerobatics.new()
+-- цветной дым из хвоста (Y / кнопка ДЫМ): выкл → белый → красный → синий → зелёный → жёлтый
+local SMOKE = {
+	{ Color3.fromRGB(245, 245, 245), "белый" }, { Color3.fromRGB(235, 60, 60), "красный" }, { Color3.fromRGB(50, 110, 235), "синий" },
+	{ Color3.fromRGB(60, 190, 90), "зелёный" }, { Color3.fromRGB(250, 200, 40), "жёлтый" },
+}
+local smokeIdx = 0
+local function applySmoke(m: Model, cfg: any)
+	local root = m.PrimaryPart
+	if not root then
+		return
+	end
+	local tr = root:FindFirstChild("SmokeTrail") :: Trail?
+	if smokeIdx == 0 then
+		if tr then
+			tr.Enabled = false
+		end
+		return
+	end
+	if not tr then
+		local L, D = cfg.length, cfg.diameter
+		local a0 = Instance.new("Attachment")
+		a0.Name = "SmokeA"
+		a0.Position = Vector3.new(0, D * 0.3, L * 0.5 + 1)
+		a0.Parent = root
+		local a1 = Instance.new("Attachment")
+		a1.Name = "SmokeB"
+		a1.Position = Vector3.new(0, -D * 0.3, L * 0.5 + 1)
+		a1.Parent = root
+		local t = Instance.new("Trail")
+		t.Name = "SmokeTrail"
+		t.Attachment0, t.Attachment1 = a0, a1
+		t.Lifetime = 7
+		t.MinLength = 0.5
+		t.FaceCamera = true
+		t.LightInfluence = 1
+		t.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.6, 0.55), NumberSequenceKeypoint.new(1, 1) })
+		t.WidthScale = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 4) })
+		t.Parent = root
+		tr = t
+	end
+	local tt = tr :: Trail
+	tt.Color = ColorSequence.new(SMOKE[smokeIdx][1])
+	tt.Enabled = true
+end
 local Daily = require(Shared:WaitForChild("Daily"))
 local dailySent: { [string]: boolean } = {}
 local function dailyHave(id: string): boolean
@@ -16519,6 +16675,10 @@ local function onAction(a: string)
 			end
 			ui.setPhoto(photoMode)
 		end
+		return
+	elseif a == "smoke" then
+		smokeIdx = (smokeIdx + 1) % (#SMOKE + 1)
+		ui.toast(if smokeIdx > 0 then "Дым: " .. SMOKE[smokeIdx][2] .. " · Y — сменить цвет" else "Дым выключен", if smokeIdx > 0 then "green" else nil)
 		return
 	elseif a == "map" then
 		ui.toggleMap()
@@ -17028,6 +17188,19 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 			model:SetAttribute("Vapor", vapor)
 		end
 	end
+	-- авиашоу: дым и фигуры пилотажа (очки начисляет сервер)
+	if model then
+		if model:GetAttribute("SmokeIdx") ~= smokeIdx then
+			model:SetAttribute("SmokeIdx", smokeIdx)
+			applySmoke(model, c)
+		end
+	end
+	if not f.crashed then
+		local trick = Aerobatics.step(acro, f.att, dt, not f.onGround and (f.dbg.agl or 0) * FT > 300)
+		if trick then
+			TrickR:FireServer(trick)
+		end
+	end
 	if not f.onGround and f.pos.Y * FT < 3000 then
 		for _, t in Daily.tasks(Daily.dateKey()) do
 			if t.kind == "over" and t.x and t.z and t.r and (Vector2.new(f.pos.X, f.pos.Z) - Vector2.new(t.x, t.z)).Magnitude < t.r then
@@ -17385,7 +17558,7 @@ ui.showHangar = function(on: boolean?)
 end
 
 ui.showHangar(true)
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Локальная анимация всех самолётов (своих, чужих и ИИ): винт, огни, шасси, закрылки,
 -- инверсионный след, форсаж. Состояние приходит атрибутами модели от сервера,
 -- а для своего самолёта — прямо из локальной физики (без задержки сети).
@@ -17539,7 +17712,7 @@ end
 
 return Animator
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Камеры: сзади (плавная), кабина, орбита. Плюс облёт аэропорта в ангаре.
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17655,7 +17828,7 @@ end
 
 return CameraRig
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Ввод: клавиатура, геймпад, сенсорный штурвал и мышь-штурвал -> общий ввод физики.
 local UserInputService = game:GetService("UserInputService")
 
@@ -17664,12 +17837,12 @@ local Controls = {}
 local ONCE: { [Enum.KeyCode]: string } = {
 	[Enum.KeyCode.G] = "gear", [Enum.KeyCode.F] = "flapDn", [Enum.KeyCode.R] = "flapUp",
 	[Enum.KeyCode.T] = "rev", [Enum.KeyCode.Z] = "idle", [Enum.KeyCode.V] = "cam",
-	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.Space] = "park", [Enum.KeyCode.I] = "guide", [Enum.KeyCode.X] = "spoiler", [Enum.KeyCode.K] = "map", [Enum.KeyCode.H] = "photo", [Enum.KeyCode.DPadRight] = "nav",
+	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.Space] = "park", [Enum.KeyCode.I] = "guide", [Enum.KeyCode.X] = "spoiler", [Enum.KeyCode.K] = "map", [Enum.KeyCode.H] = "photo", [Enum.KeyCode.Y] = "smoke", [Enum.KeyCode.DPadRight] = "nav",
 	-- геймпад
 	[Enum.KeyCode.ButtonY] = "gear", [Enum.KeyCode.DPadUp] = "flapUp", [Enum.KeyCode.DPadDown] = "flapDn",
 	[Enum.KeyCode.ButtonX] = "rev", [Enum.KeyCode.ButtonA] = "autopilot", [Enum.KeyCode.ButtonSelect] = "cam",
 	-- без них с геймпада нельзя было снять стояночный тормоз на старте и выпустить интерцепторы
-	[Enum.KeyCode.ButtonL3] = "park", [Enum.KeyCode.DPadLeft] = "spoiler",
+	[Enum.KeyCode.ButtonL3] = "park", [Enum.KeyCode.ButtonR3] = "smoke", [Enum.KeyCode.DPadLeft] = "spoiler",
 }
 
 -- экспонента: точность около центра, полный ход на краю
@@ -17764,7 +17937,7 @@ end
 
 return Controls
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Гонка через кольца: маршрут Skyport → Дубай → Ташкент → Лондон → Skyport.
 -- Кольца строятся у каждого игрока локально, поэтому подсветка своя у каждого.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17892,7 +18065,7 @@ end
 
 return Race
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Радар: курс вверх, радиус 12 000 stud (~6 км). Аэропорты, города, самолёты, следующее кольцо.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -18088,7 +18261,7 @@ end
 
 return Radar
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Интерфейс Sky Pilot: верхняя панель, приборы, авиагоризонт, ангар, справка,
 -- экран крушения и сенсорное управление (штурвал, РУД, кнопки).
 local Players = game:GetService("Players")
@@ -18426,6 +18599,7 @@ function Ui.new(cb: Callbacks)
 	tapBtn("РЕВЕРС", "rev")
 	tapBtn("МАЛ.ГАЗ", "idle")
 	tapBtn("ИНТЕРЦ.", "spoiler") -- на телефоне нет клавиши X
+	tapBtn("ДЫМ", "smoke")
 	tapBtn("АВТОПИЛ.", "autopilot")
 
 	local thrWrap = new("Frame", { Size = UDim2.fromOffset(66, 210), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, -4), BackgroundTransparency = 1 }, touchF)
@@ -18940,7 +19114,7 @@ function Ui.new(cb: Callbacks)
 		"F / R — закрылки выпустить / убрать      G — шасси      B — тормоз (держать)",
 		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)      Пробел — стояночный тормоз",
 		"V — камера (сзади / кабина / орбита)      M — ангар      C — мышь-штурвал",
-		"X — интерцепторы (быстрее снижение и торможение)      I — инструкция      K — карта мира      H — фото-режим",
+		"X — интерцепторы (быстрее снижение и торможение)      I — инструкция      K — карта мира      H — фото-режим      Y — дым (цвет)",
 		"N — навигация: стрелка на аэропорт или город; с выбранной целью автопилот (P) летит к ней сам",
 		"Гонка: пролети сквозь голубое кольцо у Skyport — маршрут Дубай → Ташкент → Лондон → домой, 13 колец, +1500 очков",
 		"",

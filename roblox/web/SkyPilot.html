@@ -488,6 +488,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
       <button class="rb" id="tRev">РЕВЕРС</button>
       <button class="rb" id="tIdle">МАЛ.ГАЗ</button>
       <button class="rb" id="tSpl">ИНТЕРЦ.</button>
+      <button class="rb" id="tSmoke">ДЫМ</button>
     </div>
     <div id="thrWrap"><span>ТЯГА</span><div id="thr"><div id="thrLevel"></div><div id="thrHandle"></div></div></div>
   </div>
@@ -582,7 +583,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
         <div><kbd>V</kbd> камера, <kbd>M</kbd> меню, кнопка «Звук» — гул двигателей</div>
         <div><kbd>N</kbd> навигация: стрелка на аэропорт или город</div>
         <div><kbd>Пробел</kbd> стояночный тормоз (на старте включён)</div>
-        <div><kbd>X</kbd> интерцепторы, <kbd>I</kbd> инструкция, <kbd>K</kbd> карта мира, <kbd>H</kbd> фото-режим</div>
+        <div><kbd>X</kbd> интерцепторы, <kbd>I</kbd> инструкция, <kbd>K</kbd> карта мира, <kbd>H</kbd> фото-режим, <kbd>Y</kbd> дым (цвет)</div>
         <div style="grid-column: 1 / -1">Геймпад: стик — штурвал, R2/L2 — тяга, R1/L1 — руль, Y — шасси, крестовина — закрылки (↑↓), интерцепторы (←), навигация (→), X — реверс, B — тормоз, L3 — стояночный тормоз</div>
         <div>Гонка: пролети голубое кольцо у Skyport — 13 колец через Дубай, Ташкент и Лондон</div>
       </div>
@@ -1775,7 +1776,7 @@ const particles = [];
 const puffMats = [];
 function spawnPuff(pos, color, size, life, grow, vel, opacity) {
   let p = particles.find((q) => !q.alive);
-  if (!p) { if (particles.length > 500) return; const mtl = new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false }); p = { s: new THREE.Sprite(mtl) }; scene.add(p.s); particles.push(p); }
+  if (!p) { if (particles.length > 800) return; const mtl = new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false }); p = { s: new THREE.Sprite(mtl) }; scene.add(p.s); particles.push(p); }
   p.alive = true; p.t = 0; p.life = life; p.size = size; p.grow = grow; p.v = vel ? vel.clone() : new V3(); p.o = opacity;
   p.s.material.color.copy(lin(color)); p.s.position.copy(pos); p.s.visible = true; p.s.scale.setScalar(size);
 }
@@ -1863,7 +1864,7 @@ function doCrash(reason) {
 
 // ============================================================ INPUT
 const keys = new Set();
-const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar", KeyN: "nav", Space: "park", KeyI: "guide", KeyX: "spoiler", KeyK: "map", KeyH: "photo" };
+const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar", KeyN: "nav", Space: "park", KeyI: "guide", KeyX: "spoiler", KeyK: "map", KeyH: "photo", KeyY: "smoke" };
 addEventListener("keydown", (e) => {
   if (e.repeat) { keys.add(e.code); return; }
   keys.add(e.code);
@@ -1930,6 +1931,7 @@ function action(a) {
     else { f.flaps = clamp(f.flaps + (a === "flapDn" ? 1 : -1), 0, 3); toast("Закрылки: " + f.flaps); }
   } else if (a === "rev") {
     if (f.onGround) { f.reverse = !f.reverse; toast(f.reverse ? "Реверс включён, добавь тягу" : "Реверс выключен", "var(--amber)"); } else toast("Реверс только на земле");
+  } else if (a === "smoke") { smokeIdx = (smokeIdx + 1) % SMOKE.length; toast(SMOKE[smokeIdx] ? "Дым: " + SMOKE[smokeIdx][1] + " · Y — сменить цвет" : "Дым выключен", SMOKE[smokeIdx] ? "var(--green)" : "");
   } else if (a === "spoiler") { f.spoilers = !f.spoilers; toast(f.spoilers ? "Интерцепторы выпущены" : "Интерцепторы убраны", f.spoilers ? "var(--amber)" : ""); addLog(f.spoilers ? "Интерцепторы" : "Интерцепторы убраны");
   } else if (a === "idle") { f.throttle = 0; setThrottleUI(0); }
 }
@@ -1951,7 +1953,7 @@ hold("rL", () => (touch.rl = 1), () => (touch.rl = 0));
 hold("rR", () => (touch.rr = 1), () => (touch.rr = 0));
 hold("tBrake", () => (touch.brake = true), () => (touch.brake = false));
 $("tGear").onclick = () => action("gear"); $("tFlapDn").onclick = () => action("flapDn"); $("tFlapUp").onclick = () => action("flapUp");
-$("tRev").onclick = () => action("rev"); $("tSpl").onclick = () => action("spoiler"); $("tIdle").onclick = () => action("idle");
+$("tRev").onclick = () => action("rev"); $("tSpl").onclick = () => action("spoiler"); $("tSmoke").onclick = () => action("smoke"); $("tIdle").onclick = () => action("idle");
 function setThrottleUI(v) { $("thrLevel").style.height = v * 100 + "%"; $("thrHandle").style.bottom = `calc(${v * 100}% - ${v * 14}px)`; }
 {
   const t = $("thr"); let pid = null;
@@ -2651,6 +2653,51 @@ function drawPFD(f) {
     g.fillStyle = "rgba(255,255,255,0.6)"; g.font = "600 10px ui-sans-serif, system-ui"; g.textAlign = "center"; g.fillText(METRIC ? "М" : "FT", TW / 2, H - 9);
   }
 }
+
+// ===== авиашоу: дым и фигуры пилотажа
+const TRICKS = { roll: { title: "Бочка", pts: 150, gap: 3 }, loop: { title: "Петля", pts: 250, gap: 6 }, inverted: { title: "Перевёрнутый полёт", pts: 120, gap: 8 } };
+const SMOKE = [null, [0xf5f5f5, "белый"], [0xeb3c3c, "красный"], [0x326eeb, "синий"], [0x3cbe5a, "зелёный"], [0xfac828, "жёлтый"]];
+let smokeIdx = 0, smokeLast = null;
+const acro = { prev: null, roll: 0, pitch: 0, rIdle: 0, pIdle: 0, inv: 0, invDone: false, rInv: false, pUp: false, pInv: false, at: {}, pts: 0, seq: -1, t: 0 };
+function acroReset() { acro.roll = acro.pitch = acro.inv = 0; acro.rInv = acro.pUp = acro.pInv = false; }
+function acroStep(f, dt, ok) {
+  const prev = acro.prev; acro.prev = f.att.clone();
+  if (!ok || !prev || dt <= 0) { acroReset(); return null; }
+  const q = prev.clone().invert().multiply(f.att); if (q.w < 0) { q.x = -q.x; q.y = -q.y; q.z = -q.z; q.w = -q.w; }
+  const ang = 2 * Math.acos(Math.min(1, q.w)), sn = Math.sqrt(Math.max(0, 1 - q.w * q.w));
+  const dRoll = sn > 1e-6 ? q.z / sn * ang : 0, dPitch = sn > 1e-6 ? q.x / sn * ang : 0;
+  const up = new V3(0, 1, 0).applyQuaternion(f.att), look = new V3(0, 0, -1).applyQuaternion(f.att);
+  acro.rIdle = Math.abs(dRoll) / dt < 0.52 ? acro.rIdle + dt : 0; if (acro.rIdle > 1.5) { acro.roll = 0; acro.rInv = false; }
+  acro.pIdle = Math.abs(dPitch) / dt < 0.14 ? acro.pIdle + dt : 0; if (acro.pIdle > 3) { acro.pitch = 0; acro.pUp = acro.pInv = false; }
+  acro.roll += dRoll; acro.pitch += dPitch;
+  if (up.y < -0.5) { acro.rInv = true; acro.pInv = true; }
+  if (Math.abs(look.y) > 0.85) acro.pUp = true;
+  if (Math.abs(acro.pitch) >= 5.76 && acro.pUp && acro.pInv) { acroReset(); return "loop"; }
+  if (Math.abs(acro.roll) >= 5.93 && acro.rInv) { acro.roll = 0; acro.rInv = false; return "roll"; }
+  if (up.y < -0.6) acro.inv += dt; else { acro.inv = 0; if (up.y > 0.3) acro.invDone = false; }
+  if (acro.inv >= 5 && !acro.invDone) { acro.invDone = true; return "inverted"; }
+  return null;
+}
+function acroTick(f) {
+  const now = performance.now() / 1000, dt = Math.min(0.1, now - (acro.t || now)); acro.t = now;
+  if (acro.seq !== window.__flightSeq) { acro.seq = window.__flightSeq; acro.at = {}; acro.pts = 0; acro.prev = null; acroReset(); smokeLast = null; }
+  if (f.crashed) return;
+  const id = acroStep(f, dt, !f.onGround && f.dbg.agl * FT > 300);
+  if (id) { const t = TRICKS[id];
+    if (now - (acro.at[id] || -1e9) >= t.gap && acro.pts + t.pts <= 3000) { acro.at[id] = now; acro.pts += t.pts; SCORE.points += t.pts; try { localStorage.setItem("skypilot.score", JSON.stringify(SCORE)); } catch (e) {}
+      toast(`✈ ${t.title} · +${t.pts}`, "var(--green)"); addLog(`Фигура: ${t.title} +${t.pts}`); } }
+  // дым из хвоста: шлейф пятнами с шагом по расстоянию (не больше ~20 в секунду)
+  const sm = SMOKE[smokeIdx];
+  if (!sm) { smokeLast = null; return; }
+  const c = f.cfg, tail = new V3(0, 0, c.length * 0.5 + 1).applyQuaternion(f.att).add(f.pos);
+  const step = Math.max(c.diameter * 0.6, f.speed * 0.035);
+  if (!smokeLast) smokeLast = tail.clone();
+  const d = tail.distanceTo(smokeLast);
+  if (d > 3000) smokeLast.copy(tail);
+  for (let k = Math.max(step, d - step * 60); k <= d; k += step) { const p = smokeLast.clone().lerp(tail, k / d);
+    spawnPuff(p, sm[0], Math.max(6, c.diameter * 1.3, step * 1.4), 4.5, Math.max(18, c.diameter * 4), new V3(R(-1, 1), R(0, 1.5), R(-1, 1)), 0.85); }
+  if (d >= step) smokeLast.copy(tail);
+}
 function updateHUD(f) {
   const c = f.cfg;
   const look = new V3(0, 0, -1).applyQuaternion(f.att), right = new V3(1, 0, 0).applyQuaternion(f.att), up = new V3(0, 1, 0).applyQuaternion(f.att);
@@ -2673,7 +2720,7 @@ function updateHUD(f) {
   drawADI(pitchDeg, bankDeg);
   updateNav(f, hdg);
   drawRadar(f, hdg);
-  $("htape").hidden = f.crashed; drawTape(hdg); drawPFD(f);
+  $("htape").hidden = f.crashed; drawTape(hdg); drawPFD(f); acroTick(f);
   updateSound(f);
   updateIls(f);
   atcTick(f, 1 / 60);

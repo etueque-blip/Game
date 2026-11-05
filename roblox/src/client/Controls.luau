@@ -7,12 +7,12 @@ local Controls = {}
 local ONCE: { [Enum.KeyCode]: string } = {
 	[Enum.KeyCode.G] = "gear", [Enum.KeyCode.F] = "flapDn", [Enum.KeyCode.R] = "flapUp",
 	[Enum.KeyCode.T] = "rev", [Enum.KeyCode.Z] = "idle", [Enum.KeyCode.V] = "cam",
-	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.Space] = "park", [Enum.KeyCode.I] = "guide", [Enum.KeyCode.X] = "spoiler", [Enum.KeyCode.K] = "map", [Enum.KeyCode.H] = "photo", [Enum.KeyCode.DPadRight] = "nav",
+	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.Space] = "park", [Enum.KeyCode.I] = "guide", [Enum.KeyCode.X] = "spoiler", [Enum.KeyCode.K] = "map", [Enum.KeyCode.H] = "photo", [Enum.KeyCode.Y] = "smoke", [Enum.KeyCode.DPadRight] = "nav",
 	-- геймпад
 	[Enum.KeyCode.ButtonY] = "gear", [Enum.KeyCode.DPadUp] = "flapUp", [Enum.KeyCode.DPadDown] = "flapDn",
 	[Enum.KeyCode.ButtonX] = "rev", [Enum.KeyCode.ButtonA] = "autopilot", [Enum.KeyCode.ButtonSelect] = "cam",
 	-- без них с геймпада нельзя было снять стояночный тормоз на старте и выпустить интерцепторы
-	[Enum.KeyCode.ButtonL3] = "park", [Enum.KeyCode.DPadLeft] = "spoiler",
+	[Enum.KeyCode.ButtonL3] = "park", [Enum.KeyCode.ButtonR3] = "smoke", [Enum.KeyCode.DPadLeft] = "spoiler",
 }
 
 -- экспонента: точность около центра, полный ход на краю
