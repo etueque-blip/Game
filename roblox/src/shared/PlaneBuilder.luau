@@ -400,10 +400,46 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	local function nacelle(pos: Vector3)
 		cylZ(ctx, "Nacelle", eL * 0.78, eD, pos + Vector3.new(0, 0, eL * 0.02), col.engine, Enum.Material.SmoothPlastic, engines)
 		cylZ(ctx, "Lip", eL * 0.08, eD * 1.02, pos + Vector3.new(0, 0, -eL * 0.4), Color3.fromRGB(225, 228, 232), Enum.Material.Metal, engines)
-		cylZ(ctx, "Fan", 0.2, eD * 0.86, pos + Vector3.new(0, 0, -eL * 0.38), Color3.fromRGB(45, 48, 54), Enum.Material.Metal, engines)
+		-- вентилятор: тёмный диск + вращающийся ротор с 8 лопатками (Weld «FanWeld», крутит Animator)
+		cylZ(ctx, "Fan", 0.2, eD * 0.86, pos + Vector3.new(0, 0, -eL * 0.36), Color3.fromRGB(32, 34, 40), Enum.Material.Metal, engines)
+		local hub = basePart(ctx, "Part", "FanRotor", Color3.fromRGB(150, 156, 164), Enum.Material.Metal)
+		hub.Shape = Enum.PartType.Cylinder
+		hub.Size = Vector3.new(0.25, eD * 0.22, eD * 0.22)
+		local hc0 = CFrame.new(pos + Vector3.new(0, 0, -eL * 0.385)) * CFrame.Angles(0, math.pi / 2, 0)
+		hub.CFrame = ctx.root.CFrame * hc0
+		hub.Parent = engines
+		if not ctx.static then
+			local w = Instance.new("Weld")
+			w.Name = "FanWeld"
+			w.Part0 = ctx.root
+			w.Part1 = hub
+			w.C0 = hc0
+			w:SetAttribute("Base", hc0)
+			w.Parent = hub
+		end
+		for i = 0, 7 do
+			local blade = basePart(ctx, "Part", "FanBlade", Color3.fromRGB(140, 147, 156), Enum.Material.Metal)
+			blade.Size = Vector3.new(0.12, eD * 0.3, eD * 0.1)
+			blade.CFrame = hub.CFrame * CFrame.Angles(i / 8 * math.pi * 2, 0, 0) * CFrame.new(0, eD * 0.24, 0) * CFrame.Angles(0, 0.55, 0)
+			blade.CastShadow = false
+			blade.Parent = engines
+			if not ctx.static then
+				local wc = Instance.new("WeldConstraint")
+				wc.Part0 = hub
+				wc.Part1 = blade
+				wc.Parent = blade
+			end
+		end
 		ellipsoid(ctx, "Spinner", Vector3.new(eD * 0.15, eD * 0.15, eD * 0.2), CFrame.new(pos + Vector3.new(0, 0, -eL * 0.38)), Color3.fromRGB(200, 204, 210), Enum.Material.Metal, engines)
 		cylZ(ctx, "Nozzle", eL * 0.2, eD * 0.72, pos + Vector3.new(0, 0, eL * 0.5), Color3.fromRGB(150, 154, 160), Enum.Material.Metal, engines)
 		ellipsoid(ctx, "Plug", Vector3.new(eD * 0.22, eD * 0.22, eL * 0.18), CFrame.new(pos + Vector3.new(0, 0, eL * 0.6)), Color3.fromRGB(70, 72, 78), Enum.Material.Metal, engines)
+		if cfg.id == "B787" then
+			-- «шевроны» на сопле (зубцы против шума), как у Boeing 787
+			for i = 0, 11 do
+				local a = i / 12 * math.pi * 2
+				block(ctx, "Chevron", Vector3.new(eD * 0.09, eD * 0.09, 0.15), CFrame.new(pos + Vector3.new(math.cos(a) * eD * 0.37, math.sin(a) * eD * 0.37, eL * 0.6)) * CFrame.Angles(0, 0, a + math.pi / 4), col.engine, Enum.Material.Metal, engines)
+			end
+		end
 	end
 
 	if cfg.engines == "wing2" or cfg.engines == "wing4" then

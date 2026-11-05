@@ -461,6 +461,25 @@ function windPhrase(rw) {
 """
 
 
+FAN_JS = r"""    const back = add(body, new THREE.CircleGeometry(eD * 0.43, 24), darkMat); back.position.copy(p).add(new V3(0, 0, -eL / 2 + 0.45)); back.rotation.y = Math.PI;
+    const rotor = new THREE.Group(); rotor.position.copy(p).add(new V3(0, 0, -eL / 2 + 0.3)); body.add(rotor);
+    const bladeMat = window.__bladeMat || (window.__bladeMat = std(0x8c939c, { metal: 0.85, rough: 0.28 }));
+    for (let i = 0; i < 18; i++) {
+      const a = i / 18 * Math.PI * 2, bl = new THREE.Mesh(new THREE.BoxGeometry(eD * 0.075, eD * 0.3, 0.12), bladeMat);
+      bl.position.set(Math.cos(a) * eD * 0.27, Math.sin(a) * eD * 0.27, 0); bl.rotation.z = a - Math.PI / 2; bl.rotateY(0.55); rotor.add(bl);
+    }
+    const spin = new THREE.Mesh(new THREE.ConeGeometry(eD * 0.13, eD * 0.32, 18).rotateX(-Math.PI / 2), strutMat); spin.position.z = -eD * 0.1; rotor.add(spin);
+    const swirl = new THREE.Mesh(new THREE.BoxGeometry(eD * 0.035, eD * 0.09, eD * 0.2), std(0xffffff, { rough: 0.4 })); swirl.position.set(eD * 0.045, 0, -eD * 0.12); swirl.rotation.y = -0.35; rotor.add(swirl);
+    (root.userData.fans || (root.userData.fans = [])).push(rotor);
+    const lipM = window.__lipMat || (window.__lipMat = std(0xe8ebef, { metal: 0.95, rough: 0.12 }));
+    const lip = add(body, new THREE.TorusGeometry(eD * 0.47, eD * 0.045, 10, 32), lipM); lip.position.copy(p).add(new V3(0, 0, -eL / 2 + 0.05));
+    if (cfg.id === "B787") for (let i = 0; i < 14; i++) {
+      const a = i / 14 * Math.PI * 2, ch = new THREE.Mesh(new THREE.ConeGeometry(eD * 0.06, eD * 0.16, 3).rotateX(Math.PI / 2), engMat);
+      ch.position.copy(p).add(new V3(Math.cos(a) * eD * 0.335, Math.sin(a) * eD * 0.335, eL / 2 + eD * 0.06)); body.add(ch);
+    }
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -634,6 +653,15 @@ def add_premium(s, patch):
     s = patch(s, "    const k = (c) => keys.has(c);\n", "    windStep(dt); f.wind = windVec();\n    const k = (c) => keys.has(c);\n")
     s = patch(s, "взлёт разрешён. Ветер штиль.`);", "взлёт разрешён. ${windPhrase(runwayFor(ap, flight.pos.x, flight.pos.z + 0))}`);")
     s = patch(s, "°C</small>`; }", "°C · ${WIND.kts < 2 ? \"штиль\" : \"ветер \" + String(Math.round(WIND.dir)).padStart(3, \"0\") + \"° \" + Math.round(WIND.kts) + \" kt\"}</small>`; }")
+    # баг: оболочка мотогондолы (тело вращения) рисовалась только изнутри — делаем двустороннюю
+    s = patch(s, "    const n = add(body, ng, engMat, true); n.position.copy(p);",
+              "    const n = add(body, ng, window.__nacMat && window.__nacMat.userData.src === engMat ? window.__nacMat : (window.__nacMat = Object.assign(engMat.clone(), { side: THREE.DoubleSide, userData: { src: engMat } })), true); n.position.copy(p);")
+    # двигатели: вращающийся вентилятор с лопатками и коком со спиралью, полированная губа, «шевроны» у 787
+    s = patch(s, """    const fan = add(body, new THREE.CircleGeometry(eD * 0.42, 24), darkMat); fan.position.copy(p).add(new V3(0, 0, -eL / 2 + 0.25)); fan.rotation.y = Math.PI;
+    const spin = add(body, new THREE.ConeGeometry(eD * 0.12, eD * 0.3, 16).rotateX(-Math.PI / 2), strutMat); spin.position.copy(p).add(new V3(0, 0, -eL / 2 + 0.2));""",
+              FAN_JS)
+    s = patch(s, "      if (u.prop) { u.prop.rotation.z += dt * (8 + f.throttle * 70);",
+              "      if (u.fans) for (const r of u.fans) r.rotation.z += dt * (5 + f.throttle * 38);\n      if (u.prop) { u.prop.rotation.z += dt * (8 + f.throttle * 70);")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

@@ -11,7 +11,7 @@ local World = require(Shared:WaitForChild("World"))
 local Animator = {}
 
 type Cache = {
-	lights: { BasePart }, trails: { Trail }, prop: Weld?, propBase: CFrame?, disc: BasePart?, ab: BasePart?,
+	lights: { BasePart }, trails: { Trail }, prop: Weld?, fans: { Weld }, fanAngle: number, propBase: CFrame?, disc: BasePart?, ab: BasePart?,
 	angle: number, gear: boolean?, flaps: number?,
 }
 local caches: { [Model]: Cache } = {}
@@ -45,10 +45,18 @@ local function cacheFor(m: Model): Cache
 		end
 	end
 	local engines = m:FindFirstChild("Engines")
+	local fans: { Weld } = {}
+	if engines then
+		for _, d in engines:GetDescendants() do
+			if d:IsA("Weld") and d.Name == "FanWeld" then
+				table.insert(fans, d)
+			end
+		end
+	end
 	local propPart = engines and engines:FindFirstChild("Prop")
 	local prop = propPart and propPart:FindFirstChild("PropWeld") :: Weld?
 	c = {
-		lights = lights, trails = trails, prop = prop,
+		lights = lights, trails = trails, prop = prop, fans = fans, fanAngle = 0,
 		propBase = prop and prop:GetAttribute("Base") :: CFrame?,
 		disc = engines and engines:FindFirstChild("PropDisc") :: BasePart?,
 		ab = engines and engines:FindFirstChild("Afterburner") :: BasePart?,
@@ -90,6 +98,16 @@ function Animator.step(dt: number, now: number)
 		if c.flaps ~= flaps then
 			c.flaps = flaps
 			PlaneBuilder.setFlaps(m, flaps)
+		end
+		-- вентиляторы турбовентиляторных двигателей: быстрее при большей тяге
+		if #c.fans > 0 then
+			c.fanAngle = (c.fanAngle + dt * (5 + thr * 38)) % (math.pi * 2)
+			for _, w in c.fans do
+				local base = w:GetAttribute("Base")
+				if typeof(base) == "CFrame" then
+					w.C0 = base * CFrame.Angles(c.fanAngle, 0, 0)
+				end
+			end
 		end
 		-- винт
 		if c.prop and c.propBase then
