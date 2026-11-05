@@ -122,6 +122,9 @@ local function onAction(a: string)
 	elseif a == "cam" then
 		ui.setCamLabel(cameraRig.cycle())
 		return
+	elseif a == "map" then
+		ui.toggleMap()
+		return
 	elseif a == "guide" then
 		ui.showGuide(if flight then flight.cfg else PlaneConfigs.PLANES[lastPlaneId or "C172"])
 		return
@@ -732,6 +735,7 @@ RunService:BindToRenderStep("SkyPilot", Enum.RenderPriority.Camera.Value + 1, fu
 	local now = os.clock()
 	fps += ((1 / math.max(dt, 1e-3)) - fps) * 0.05
 	ui.tick(dt)
+	ui.updateMap(if flight then flight.pos else nil, if flight then World.headingDeg(flight.att.LookVector) else nil)
 	ui.atcTick(dt)
 	Animator.step(dt, now)
 	local f = flight

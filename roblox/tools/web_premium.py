@@ -683,6 +683,82 @@ TERMINAL_JS = r"""  // терминал: крыша-волна со светов
 """
 
 
+MAP_CSS = """
+/* карта мира */
+#mapO { z-index: 35; }
+.mapsheet { background: var(--glass); border: 1px solid var(--line); border-radius: 20px; padding: 12px; box-shadow: 0 30px 80px rgba(0,0,0,.5); display: grid; gap: 8px; }
+.maphead { display: flex; align-items: center; gap: 12px; } .maphead b { font-family: var(--f-display); font-size: 20px; } .maphead span { color: var(--dim); font-size: 12.5px; margin-right: auto; }
+#mapCv { width: min(78vh, calc(100vw - 48px)); height: min(78vh, calc(100vw - 48px)); border-radius: 14px; cursor: crosshair; display: block; }
+@media (max-height: 500px) { #mapCv { width: min(74vh, calc(100vw - 48px)); height: min(74vh, calc(100vw - 48px)); } .maphead span { display: none; } }
+"""
+
+MAP_HTML = """  <div class="overlay" id="mapO" hidden>
+    <div class="mapsheet">
+      <div class="maphead"><b>🗺 Карта мира</b><span>Нажми на аэропорт — навигация к нему · K — закрыть</span><button class="tb" id="mapClose">Закрыть</button></div>
+      <canvas id="mapCv" width="900" height="900"></canvas>
+    </div>
+  </div>
+"""
+
+MAP_JS = r"""
+// ===== карта мира: фон по рельефу (один раз), сверху аэропорты, города, самолёты и цель (каждый кадр, пока открыта)
+let mapBg = null, mapOpen = false;
+const MAP_CITIES = [["Дубай", 5500, -7500, 1700], ["Лондон", -4000, 12500, 1300], ["Ташкент", 10500, 3000, 1200], ["Стамбул", -20500, 20500, 1300], ["Эр-Рияд", 21000, 20500, 1300], ["Самарканд", -21000, -20500, 1200]];
+const mapXY = (x, z, S) => [(x + WORLD) / (2 * WORLD) * S, (z + WORLD) / (2 * WORLD) * S];
+function buildMapBg() {
+  const N = 300, c = document.createElement("canvas"); c.width = c.height = N; const x = c.getContext("2d"), img = x.createImageData(N, N);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const wx = -WORLD + (i + 0.5) / N * 2 * WORLD, wz = -WORLD + (j + 0.5) / N * 2 * WORLD, h = terrainH(wx, wz), k = (j * N + i) * 4;
+    let col = h > 900 ? [236, 240, 246] : h > 350 ? [120 + h * 0.06, 118 + h * 0.05, 96 + h * 0.06] : [84 + h * 0.08, 132 - h * 0.03, 70];
+    if (Math.abs(wx - 5500) < 3200 && Math.abs(wz + 9800) < 1000) col = [30, 98, 140];
+    img.data.set([col[0], col[1], col[2], 255], k);
+  }
+  x.putImageData(img, 0, 0); return c;
+}
+function toggleMap(on) { mapOpen = on === undefined ? !mapOpen : on; $("mapO").hidden = !mapOpen; if (mapOpen) { mapBg = mapBg || buildMapBg(); drawMap(); } }
+function drawMap() {
+  if (!mapOpen) return;
+  const cv = $("mapCv"), x = cv.getContext("2d"), S = cv.width;
+  x.imageSmoothingEnabled = true; x.drawImage(mapBg, 0, 0, S, S);
+  x.fillStyle = "rgba(4,8,16,.18)"; x.fillRect(0, 0, S, S);
+  x.strokeStyle = "rgba(255,255,255,.08)"; x.lineWidth = 1;
+  for (let g = 1; g < 8; g++) { x.beginPath(); x.moveTo(g * S / 8, 0); x.lineTo(g * S / 8, S); x.moveTo(0, g * S / 8); x.lineTo(S, g * S / 8); x.stroke(); }
+  x.textAlign = "center"; x.textBaseline = "middle";
+  for (const [n, cx, cz, r] of MAP_CITIES) {
+    const [u, v] = mapXY(cx, cz, S), rr = r / (2 * WORLD) * S;
+    x.fillStyle = "rgba(220,226,236,.35)"; x.beginPath(); x.arc(u, v, rr, 0, 7); x.fill();
+    x.font = "600 17px Inter, sans-serif"; x.fillStyle = "#e8eef8"; x.fillText(n, u, v + rr + 13);
+  }
+  const navT = (() => { const n = typeof NAV !== "undefined" && navIdx > 0 ? NAV[navIdx - 1] : null; return n ? [n[1], n[2]] : null; })();
+  for (const ap of AIRPORTS) {
+    const [u, v] = mapXY(ap.cx, ap.cz, S), len = ap.L / (2 * WORLD) * S, dest = flightDest === ap.id, isNav = navT && Math.hypot(navT[0] - ap.cx, navT[1] - ap.cz) < 50;
+    x.strokeStyle = dest || isNav ? "#f4c152" : "#ffffff"; x.lineWidth = 5; x.beginPath();
+    if (ap.rot) { x.moveTo(u - len / 2, v); x.lineTo(u + len / 2, v); } else { x.moveTo(u, v - len / 2); x.lineTo(u, v + len / 2); } x.stroke();
+    x.fillStyle = dest || isNav ? "#f4c152" : "#3ba7ff"; x.beginPath(); x.arc(u + 16, v - 14, 13, 0, 7); x.fill();
+    x.fillStyle = "#06101c"; x.font = "800 14px Inter, sans-serif"; x.fillText(ap.id, u + 16, v - 13);
+    x.fillStyle = "#fff"; x.font = "700 15px Inter, sans-serif"; x.fillText(ap.code, u + 16, v + 18);
+  }
+  if (typeof BOTS !== "undefined") for (const b of BOTS) { const [u, v] = mapXY(b.f.pos.x, b.f.pos.z, S); x.fillStyle = "#ffe678"; x.beginPath(); x.arc(u, v, 4, 0, 7); x.fill(); }
+  const f = flight;
+  if (f) {
+    const [u, v] = mapXY(f.pos.x, f.pos.z, S), look = new V3(0, 0, -1).applyQuaternion(f.att), h = Math.atan2(look.x, -look.z);
+    if (navT) { const [tu, tv] = mapXY(navT[0], navT[1], S); x.setLineDash([10, 8]); x.strokeStyle = "rgba(244,193,82,.9)"; x.lineWidth = 2.5; x.beginPath(); x.moveTo(u, v); x.lineTo(tu, tv); x.stroke(); x.setLineDash([]); }
+    x.save(); x.translate(u, v); x.rotate(h); x.fillStyle = "#3ba7ff"; x.strokeStyle = "#fff"; x.lineWidth = 2;
+    x.beginPath(); x.moveTo(0, -16); x.lineTo(10, 12); x.lineTo(0, 6); x.lineTo(-10, 12); x.closePath(); x.fill(); x.stroke(); x.restore();
+  }
+  requestAnimationFrame(drawMap);
+}
+function mapClick(e) {
+  const cv = $("mapCv"), r = cv.getBoundingClientRect(), S = cv.width, px = (e.clientX - r.left) / r.width * S, py = (e.clientY - r.top) / r.height * S;
+  let best = null, bd = 60;
+  for (const ap of AIRPORTS) { const [u, v] = mapXY(ap.cx, ap.cz, S), d = Math.hypot(u - px, v - py); if (d < bd) { bd = d; best = ap; } }
+  if (!best) return;
+  const i = NAV.findIndex((n) => Math.hypot(n[1] - best.cx, n[2] - best.cz) < 50);
+  if (i >= 0) { navIdx = i + 1; toast("Навигация: " + NAV[i][0], "var(--magenta)"); }
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -914,6 +990,16 @@ def add_premium(s, patch):
     # терминал: крыша-волна, навес, дорога и парковка с машинами (как в WorldBuilder.luau)
     s = patch(s, "  addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1500, -1000, 0.49);\n", "  addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1500, -1000, 0.49);\n  addLocalRect(ap, W / 2 + 880, W / 2 + 1320, -700, 700, 0.49);\n")
     s = patch(s, "  // вышка\n", TERMINAL_JS + "  // вышка\n")
+    # карта мира (K или кнопка «Карта»): аэропорты, города, самолёт, ИИ, цель; клик по аэропорту — навигация к нему
+    # баг: в навигации (N) не было трёх новых аэропортов (ISB, RYD, SKD) — добавляем все недостающие
+    s = patch(s, "let navIdx = 0;", "for (const ap of AIRPORTS) if (!NAV.some((n) => Math.hypot(n[1] - ap.cx, n[2] - ap.cz) < 50)) NAV.splice(NAV.findIndex((n) => !/·/.test(n[0])), 0, [ap.code + \" · \" + ap.title, ap.cx, ap.cz]);\nlet navIdx = 0;")
+    s = patch(s, '<button class="tb" id="bNav">Навигация</button>', '<button class="tb" id="bNav">Навигация</button><button class="tb" id="bMap">Карта</button>')
+    s = patch(s, "</style>\n\n<div id=\"app\">", MAP_CSS + "</style>\n\n<div id=\"app\">")
+    s = patch(s, '  <div class="overlay" id="help" hidden>', MAP_HTML + '  <div class="overlay" id="help" hidden>')
+    s = patch(s, 'KeyX: "spoiler" };', 'KeyX: "spoiler", KeyK: "map" };')
+    s = patch(s, '  if (a === "guide") {', '  if (a === "map") { toggleMap(); return; }\n  if (a === "guide") {')
+    s = patch(s, "function scoreLanding(ap, text) {", MAP_JS + "function scoreLanding(ap, text) {")
+    s = patch(s, '$("loading").hidden = true;', '$("bMap").onclick = () => toggleMap(); $("mapClose").onclick = () => toggleMap(false); $("mapCv").onclick = mapClick;\n$("loading").hidden = true;')
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

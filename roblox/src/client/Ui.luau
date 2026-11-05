@@ -126,6 +126,7 @@ function Ui.new(cb: Callbacks)
 	local bMouse = button(top, "Мышь: выкл")
 	local bAP = button(top, "Автопилот")
 	local bNav = button(top, "Навигация")
+	local bMap = button(top, "Карта")
 	local bDebug = button(top, "Отладка")
 	local bGuide = button(top, "Инструкция")
 	local bHelp = button(top, "Клавиши")
@@ -858,6 +859,74 @@ function Ui.new(cb: Callbacks)
 	end)
 
 	-- крушение
+	-- карта мира (K): фон по рельефу (строится при первом открытии), аэропорты, города, самолёт
+	local mapO, mapS = overlay("Map", 560)
+	h2(mapS, "🗺 Карта мира", nil, 1)
+	local MS = 520
+	local mapF = new("Frame", { Size = UDim2.fromOffset(MS, MS), BackgroundColor3 = Color3.fromRGB(84, 132, 70), LayoutOrder = 2, ZIndex = 22, ClipsDescendants = true }, mapS)
+	corner(mapF, 12)
+	local mapRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, mapS)
+	local mapClose = button(mapRow, "Закрыть", { ZIndex = 23 })
+	primary(mapClose)
+	mapClose.Activated:Connect(function()
+		mapO.Visible = false
+	end)
+	local function mxy(x: number, z: number): (number, number)
+		return (x + World.SIZE) / (2 * World.SIZE) * MS, (z + World.SIZE) / (2 * World.SIZE) * MS
+	end
+	local planeMark = new("TextLabel", { Size = UDim2.fromOffset(24, 24), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 22, TextColor3 = C.magenta, TextStrokeTransparency = 0.2, Text = "▲", ZIndex = 27 }, mapF)
+	local mapBuilt = false
+	local function buildMap()
+		mapBuilt = true
+		local N = 28
+		local cell = MS / N
+		for j = 0, N - 1 do
+			for i = 0, N - 1 do
+				local wx = -World.SIZE + (i + 0.5) / N * 2 * World.SIZE
+				local wz = -World.SIZE + (j + 0.5) / N * 2 * World.SIZE
+				local h = World.terrainH(wx, wz)
+				local col = if h > 900 then Color3.fromRGB(236, 240, 246) elseif h > 350 then Color3.fromRGB(140, 134, 110) else Color3.fromRGB(84 + math.floor(h * 0.08), 132, 70)
+				if math.abs(wx - 5500) < 3200 and math.abs(wz + 9800) < 1000 then
+					col = Color3.fromRGB(30, 98, 140)
+				end
+				new("Frame", { Size = UDim2.fromOffset(cell + 1, cell + 1), Position = UDim2.fromOffset(i * cell, j * cell), BackgroundColor3 = col, BorderSizePixel = 0, ZIndex = 23 }, mapF)
+			end
+		end
+		local RU = { DUBAI = "Дубай", LONDON = "Лондон", TASHKENT = "Ташкент", ISTANBUL = "Стамбул", RIYADH = "Эр-Рияд", SAMARKAND = "Самарканд" }
+		for _, c in World.CITIES do
+			local u, v = mxy(c.x, c.z)
+			local d = c.r / (2 * World.SIZE) * MS * 2
+			local dot = new("Frame", { Size = UDim2.fromOffset(d, d), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(u, v), BackgroundColor3 = Color3.fromRGB(220, 226, 236), BackgroundTransparency = 0.6, ZIndex = 24 }, mapF)
+			corner(dot, math.floor(d / 2))
+			new("TextLabel", { Size = UDim2.fromOffset(100, 14), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(u, v + d / 2 + 2), BackgroundTransparency = 1, Font = FONT, TextSize = 11, TextColor3 = C.fg, TextStrokeTransparency = 0.4, Text = RU[c.name] or c.name, ZIndex = 25 }, mapF)
+		end
+		for _, ap in World.AIRPORTS do
+			local u, v = mxy(ap.cx, ap.cz)
+			local len = ap.L / (2 * World.SIZE) * MS
+			new("Frame", { Size = if ap.rot == 1 then UDim2.fromOffset(len, 4) else UDim2.fromOffset(4, len), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(u, v), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 25 }, mapF)
+			local badge = new("TextLabel", { Size = UDim2.fromOffset(20, 20), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(u + 12, v - 10), BackgroundColor3 = C.magenta, Font = FONT_TITLE, TextSize = 12, TextColor3 = Color3.new(1, 1, 1), Text = ap.id, ZIndex = 26 }, mapF)
+			corner(badge, 10)
+			new("TextLabel", { Size = UDim2.fromOffset(40, 14), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(u + 12, v + 2), BackgroundTransparency = 1, Font = FONT, TextSize = 11, TextColor3 = C.fg, TextStrokeTransparency = 0.4, Text = ap.code, ZIndex = 26 }, mapF)
+		end
+	end
+	function self.toggleMap(on: boolean?)
+		mapO.Visible = if on == nil then not mapO.Visible else on
+		if mapO.Visible and not mapBuilt then
+			buildMap()
+		end
+	end
+	function self.updateMap(pos: Vector3?, hdg: number?)
+		if not mapO.Visible then
+			return
+		end
+		planeMark.Visible = pos ~= nil
+		if pos then
+			local u, v = mxy(pos.X, pos.Z)
+			planeMark.Position = UDim2.fromOffset(u, v)
+			planeMark.Rotation = hdg or 0
+		end
+	end
+
 	-- экран крушения: причина, отчёт о полёте (статистика) и совет
 	local crash, cs = overlay("Crash", 520)
 	h2(cs, "💥 Крушение", C.red, 1)
@@ -906,6 +975,9 @@ function Ui.new(cb: Callbacks)
 	end)
 	bNav.Activated:Connect(function()
 		cb.onAction("nav")
+	end)
+	bMap.Activated:Connect(function()
+		cb.onAction("map")
 	end)
 	bGuide.Activated:Connect(function()
 		cb.onAction("guide")
