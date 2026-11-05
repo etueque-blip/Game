@@ -811,6 +811,23 @@ function dailyRender() {
 """
 
 
+LAND_JS = r"""  if (!isStatic && kind === "jet") {
+    const land = { sprites: [], beams: [], spot: null };
+    for (const s of [-1, 1]) {
+      const p = wings[s].rootLE.clone().addScaledVector(wings[s].spanVec, 0.1).add(new V3(0, -0.4, 0.3));
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xfff1d6, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+      sp.scale.setScalar(Math.max(4, D * 0.7)); sp.position.copy(p); body.add(sp); land.sprites.push(sp);
+      const g = new THREE.ConeGeometry(L * 0.14, L * 1.3, 20, 1, true).rotateX(Math.PI / 2).translate(0, 0, -L * 0.65);
+      const beam = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xfff1d6, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: true }));
+      beam.position.copy(p); beam.rotation.x = 0.07; body.add(beam); land.beams.push(beam);
+    }
+    const spot = new THREE.SpotLight(0xfff1d6, 0, L * 9, 0.32, 0.55, 1.1); spot.position.set(0, -Rr * 0.5, -L * 0.3);
+    const tgt = new THREE.Object3D(); tgt.position.set(0, -L * 0.55, -L * 4); root.add(spot, tgt); spot.target = tgt; land.spot = spot;
+    root.userData.land = land;
+  }
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -1059,6 +1076,11 @@ def add_premium(s, patch):
     s = patch(s, "achLanding(f, ap, ev.text); FST.landings++; }", "achLanding(f, ap, ev.text); dailyLanding(f, ap, ev.text); FST.landings++; }")
     s = patch(s, "function fstatsFrame(f, dt) { paxFrame(f, dt);", "function fstatsFrame(f, dt) { paxFrame(f, dt); dailyFrame(f);")
     s = patch(s, '$("loading").hidden = true;', '$("mDaily").onclick = () => { dailyRender(); $("dailyO").hidden = false; }; $("dailyClose").onclick = () => ($("dailyO").hidden = true); dailyRender();\n$("loading").hidden = true;')
+    # посадочные фары: светящиеся точки у корней крыльев, лучи вперёд-вниз и прожектор ночью; горят при выпущенном шасси
+    s = patch(s, "  root.userData.lights = lights;\n", "  root.userData.lights = lights;\n" + LAND_JS)
+    s = patch(s, "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02;",
+              "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02; if (u.land) { const on = gearAnim > 0.5, nf = window.__nightF || 0; for (const sp of u.land.sprites) sp.material.opacity = on ? 0.95 : 0; for (const b of u.land.beams) b.material.opacity = on ? 0.1 * nf : 0; u.land.spot.intensity = on ? 30 * nf : 0; }")
+    s = patch(s, "    if (window.__lampMat) window.__lampMat.emissiveIntensity = 2.6 * n;", "    if (window.__lampMat) window.__lampMat.emissiveIntensity = 2.6 * n;\n    window.__nightF = n;")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

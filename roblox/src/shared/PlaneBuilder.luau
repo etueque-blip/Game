@@ -540,6 +540,23 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 		sl.Face = Enum.NormalId.Front
 		sl.Parent = lampPart
 	end
+	-- посадочные фары у корней крыльев (горят при выпущенном шасси — их включает setGearVisible)
+	if cfg.engines ~= "jet1" and cfg.engines ~= "prop" then
+		for _, s in { -1, 1 } do
+			local le = wingPoint(s, 0.1)
+			local wl = block(ctx, "LandingLight", Vector3.one * math.max(0.4, D * 0.05), CFrame.new(le.X, le.Y - wingThick * 0.3, le.Z + 0.3), Color3.fromRGB(255, 250, 230), Enum.Material.Neon, gearFolder)
+			wl.CastShadow = false
+			if not static then
+				local wsl = Instance.new("SpotLight")
+				wsl.Brightness = 3
+				wsl.Range = 90
+				wsl.Angle = 30
+				wsl.Face = Enum.NormalId.Front
+				wsl.Color = Color3.fromRGB(255, 241, 214)
+				wsl.Parent = wl
+			end
+		end
+	end
 	local mainZ = wz + chord * 0.25
 	local mainX = if cfg.wing == "high" then D * 0.75 else math.max(D * 0.55, span * 0.08)
 	for _, s in { -1, 1 } do
