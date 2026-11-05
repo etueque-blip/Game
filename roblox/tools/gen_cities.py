@@ -215,7 +215,8 @@ def dubai():
     roads(cx, cz, half, 145, 72.5)
     labels.append({"name": "DUBAI", "x": cx, "y": 1900, "z": cz})
     frame = (cx - 720, cz + 640)
-    zones = [(cx, cz, 240), (frame[0], frame[1], 150)]
+    museum = (cx + 620, cz - 560)
+    zones = [(cx, cz, 240), (frame[0], frame[1], 150), (museum[0], museum[1], 150)]
     for gx in range(-7, 8):
         for gz in range(-7, 8):
             x, z = cx + gx * 145, cz + gz * 145
@@ -227,6 +228,37 @@ def dubai():
             r = rng.random()
             shape = "cyl" if r < 0.25 else "setback" if r < 0.5 else "twist" if r < 0.62 else "box"
             glass_tower(x, z, w, d, h, shape, rng.choice(GLASS), R(0, 0.5) if shape == "box" else 0.0)
+
+    # Музей будущего: серебристый «тор» на зелёном холме, сквозное окно в центре
+    mx, mz = museum
+    ell((mx, 0.45 + 6, mz), (95, 12, 70), c=(86, 140, 70), m="Grass")
+    Rt, rt, N = m2s(38), m2s(14), 36
+    for i in range(N):
+        a_ = 2 * math.pi * (i + 0.5) / N
+        # кольцо в вертикальной плоскости X-Y, сечение — эллипс (толще снизу)
+        px, py = mx + math.cos(a_) * Rt, 0.45 + 12 + Rt + math.sin(a_) * Rt * 0.82
+        seg = 2 * math.pi * Rt / N * 1.15
+        thick = rt * (1.25 if math.sin(a_) < 0 else 0.95)
+        add("box", (px, py, mz), (thick, seg, rt * 1.6), (0, 0, a_), c=(200, 206, 214), m="Metal", refl=0.4)
+    for i in range(12):  # тёмные «надписи»-ленты по фасаду
+        a_ = 2 * math.pi * i / 12
+        add("box", (mx + math.cos(a_) * (Rt + rt * 0.5), 0.45 + 12 + Rt + math.sin(a_) * Rt * 0.82, mz), (1, 6, rt * 1.2), (0, 0, a_), c=(70, 76, 86), m="Glass", solid=False)
+    # Ain Dubai: колесо обозрения на берегу моря
+    wx, wy, wz = cx + 900, 0.45, -8850.0
+    Rw = m2s(125)
+    hub = wy + Rw + 25
+    for sx_ in (-1, 1):  # A-образные опоры
+        tilted_cyl((wx - Rw * 0.45, wy, wz + sx_ * 28), (wx, hub, wz + sx_ * 8), 9, c=(220, 224, 230), m="Metal")
+        tilted_cyl((wx + Rw * 0.45, wy, wz + sx_ * 28), (wx, hub, wz + sx_ * 8), 9, c=(220, 224, 230), m="Metal")
+    add("cyl", (wx, hub, wz), (26, 22, 22), (0, math.pi / 2, 0), c=(180, 186, 194), m="Metal")
+    NW = 48
+    for i in range(NW):
+        a_ = 2 * math.pi * (i + 0.5) / NW
+        add("box", (wx + math.cos(a_) * Rw, hub + math.sin(a_) * Rw, wz), (3, 2 * math.pi * Rw / NW * 1.05, 6), (0, 0, a_), c=(225, 228, 234), m="Metal", solid=False)
+        if i % 2 == 0:
+            ra = 2 * math.pi * i / NW
+            tilted_cyl((wx, hub, wz - 6), (wx + math.cos(ra) * Rw, hub + math.sin(ra) * Rw, wz), 0.8, c=(200, 204, 210), m="Metal", solid=False)
+            ell((wx + math.cos(ra) * (Rw + 8), hub + math.sin(ra) * (Rw + 8), wz), (6, 4, 4), c=(150, 190, 220), m="Glass", solid=False)
 
     # Бурдж-Халифа (828 м): Y-образный план из трёх крыльев, ступенчато сужается, шпиль
     top_body = m2s(585)
