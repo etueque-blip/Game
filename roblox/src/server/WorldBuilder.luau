@@ -95,7 +95,8 @@ local function mix(a: Color3, b: Color3, t: number): Color3
 end
 
 -- цвет атмосферы, облаков и общий оттенок по времени суток: голубой день, тёплый закат, синяя ночь
-function WorldBuilder.updateSky(clock: number)
+function WorldBuilder.updateSky(clock: number, rain: number?)
+	local r = math.clamp(rain or 0, 0, 1)
 	local elev = math.sin((clock - 6) / 24 * math.pi * 2)
 	local day = math.clamp(elev * 3 + 0.25, 0, 1)
 	local dusk = if elev > -0.25 then math.clamp(1 - math.abs(elev) * 4, 0, 1) else 0
@@ -103,14 +104,21 @@ function WorldBuilder.updateSky(clock: number)
 	if atm then
 		atm.Color = mix(mix(Color3.fromRGB(28, 36, 64), Color3.fromRGB(199, 215, 235), day), Color3.fromRGB(255, 168, 120), dusk * 0.55)
 		atm.Decay = mix(mix(Color3.fromRGB(16, 20, 40), Color3.fromRGB(106, 130, 160), day), Color3.fromRGB(196, 104, 78), dusk * 0.6)
-		atm.Glare = 0.3 + dusk * 0.9
-		atm.Haze = 1.2 + dusk * 0.8
+		atm.Glare = (0.3 + dusk * 0.9) * (1 - r)
+		atm.Haze = 1.2 + dusk * 0.8 + r * 1.5
+		-- дождь: серая плотная дымка, хуже видимость
+		atm.Color = mix(atm.Color, Color3.fromRGB(150, 156, 166):Lerp(Color3.fromRGB(30, 34, 44), 1 - day), r * 0.75)
+		atm.Density = 0.28 + r * 0.22
 	end
 	if clouds then
-		clouds.Color = mix(mix(Color3.fromRGB(60, 66, 88), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 186, 150), dusk * 0.6)
+		clouds.Color = mix(mix(mix(Color3.fromRGB(60, 66, 88), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 186, 150), dusk * 0.6), Color3.fromRGB(110, 116, 126), r * 0.7)
+		clouds.Cover = 0.55 + r * 0.4
+		clouds.Density = 0.6 + r * 0.35
 	end
 	if cc then
 		cc.TintColor = mix(mix(Color3.fromRGB(196, 206, 255), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 222, 196), dusk * 0.7)
+		cc.Brightness = -0.08 * r
+		cc.Saturation = 0.08 - 0.25 * r
 	end
 end
 

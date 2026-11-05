@@ -494,7 +494,7 @@ if DAY_LENGTH_MIN > 0 then
 	local Lighting = game:GetService("Lighting")
 	Lighting.ClockTime = 10
 	-- ветер: общий для всех игроков, плавно меняется (атрибуты workspace WindDir / WindKts)
-	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0 }
+	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0, rain = 0, rainT = 0, rainAt = os.clock() + 120 }
 	wind.tDir, wind.tKts = wind.dir, wind.kts
 	task.spawn(function()
 		local last = os.clock()
@@ -511,9 +511,16 @@ if DAY_LENGTH_MIN > 0 then
 			wind.kts += math.clamp(wind.tKts - wind.kts, -0.04, 0.04)
 			workspace:SetAttribute("WindDir", math.round(wind.dir))
 			workspace:SetAttribute("WindKts", math.round(wind.kts * 10) / 10)
+			-- дождь: раз в 5–12 минут новая цель (примерно половина времени — дождь разной силы), плавно
+			if now > wind.rainAt then
+				wind.rainT = if math.random() < 0.45 then 0.3 + math.random() * 0.7 else 0
+				wind.rainAt = now + math.random(300, 720)
+			end
+			wind.rain += math.clamp(wind.rainT - wind.rain, -0.004, 0.004)
+			workspace:SetAttribute("Rain", math.round(wind.rain * 100) / 100)
 			Lighting.ClockTime = (Lighting.ClockTime + (now - last) * 24 / (DAY_LENGTH_MIN * 60)) % 24
 			last = now
-			WorldBuilder.updateSky(Lighting.ClockTime)
+			WorldBuilder.updateSky(Lighting.ClockTime, wind.rain)
 		end
 	end)
 end

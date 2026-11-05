@@ -193,7 +193,7 @@ function Ui.new(cb: Callbacks)
 		local temp = math.max(-56.5, 15 - 1.98 * altFt / 1000)
 		local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
 		local wd = tonumber(workspace:GetAttribute("WindDir")) or 0
-		wxBot.Text = string.format("за бортом %+d °C · %s", math.round(temp), if wk < 2 then "штиль" else string.format("ветер %03d° %d kt", wd, math.round(wk)))
+		wxBot.Text = string.format("за бортом %+d °C · %s", math.round(temp), (if wk < 2 then "штиль" else string.format("ветер %03d° %d kt", wd, math.round(wk))) .. (if (tonumber(workspace:GetAttribute("Rain")) or 0) > 0.6 then " · ливень" elseif (tonumber(workspace:GetAttribute("Rain")) or 0) > 0.15 then " · дождь" else ""))
 	end
 
 	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 258), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = Color3.new(1, 1, 1), Text = "", Visible = false }, root)

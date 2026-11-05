@@ -693,6 +693,40 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	end
 end
 
+-- ===== дождь: струи вокруг камеры (сила — атрибут сервера Rain)
+local rainEmitter: ParticleEmitter? = nil
+do
+	local box = Instance.new("Part")
+	box.Name = "SkyPilotRain"
+	box.Anchored = true
+	box.CanCollide = false
+	box.CanQuery = false
+	box.CanTouch = false
+	box.Transparency = 1
+	box.Size = Vector3.new(160, 1, 160)
+	box.Parent = workspace.CurrentCamera
+	local pe = Instance.new("ParticleEmitter")
+	pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	pe.Color = ColorSequence.new(Color3.fromRGB(200, 214, 230))
+	pe.LightEmission = 0.2
+	pe.Transparency = NumberSequence.new(0.35)
+	pe.Size = NumberSequence.new(0.18)
+	pe.Squash = NumberSequence.new(-2.5)
+	pe.Orientation = Enum.ParticleOrientation.VelocityParallel
+	pe.EmissionDirection = Enum.NormalId.Bottom
+	pe.Speed = NumberRange.new(140, 170)
+	pe.Lifetime = NumberRange.new(0.7, 0.9)
+	pe.Rate = 0
+	pe.Parent = box
+	rainEmitter = pe
+	RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera
+		box.CFrame = CFrame.new(cam.CFrame.Position + Vector3.new(0, 60, 0))
+		local r = tonumber(workspace:GetAttribute("Rain")) or 0
+		pe.Rate = if r > 0.05 then r * 900 else 0
+	end)
+end
+
 -- ===== кадр: камера, приборы, анимация
 RunService:BindToRenderStep("SkyPilot", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	local now = os.clock()

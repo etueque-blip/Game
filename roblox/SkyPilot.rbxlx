@@ -10316,7 +10316,7 @@ if DAY_LENGTH_MIN > 0 then
 	local Lighting = game:GetService("Lighting")
 	Lighting.ClockTime = 10
 	-- ветер: общий для всех игроков, плавно меняется (атрибуты workspace WindDir / WindKts)
-	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0 }
+	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0, rain = 0, rainT = 0, rainAt = os.clock() + 120 }
 	wind.tDir, wind.tKts = wind.dir, wind.kts
 	task.spawn(function()
 		local last = os.clock()
@@ -10333,9 +10333,16 @@ if DAY_LENGTH_MIN > 0 then
 			wind.kts += math.clamp(wind.tKts - wind.kts, -0.04, 0.04)
 			workspace:SetAttribute("WindDir", math.round(wind.dir))
 			workspace:SetAttribute("WindKts", math.round(wind.kts * 10) / 10)
+			-- дождь: раз в 5–12 минут новая цель (примерно половина времени — дождь разной силы), плавно
+			if now > wind.rainAt then
+				wind.rainT = if math.random() < 0.45 then 0.3 + math.random() * 0.7 else 0
+				wind.rainAt = now + math.random(300, 720)
+			end
+			wind.rain += math.clamp(wind.rainT - wind.rain, -0.004, 0.004)
+			workspace:SetAttribute("Rain", math.round(wind.rain * 100) / 100)
 			Lighting.ClockTime = (Lighting.ClockTime + (now - last) * 24 / (DAY_LENGTH_MIN * 60)) % 24
 			last = now
-			WorldBuilder.updateSky(Lighting.ClockTime)
+			WorldBuilder.updateSky(Lighting.ClockTime, wind.rain)
 		end
 	end)
 end
@@ -10689,7 +10696,8 @@ local function mix(a: Color3, b: Color3, t: number): Color3
 end
 
 -- цвет атмосферы, облаков и общий оттенок по времени суток: голубой день, тёплый закат, синяя ночь
-function WorldBuilder.updateSky(clock: number)
+function WorldBuilder.updateSky(clock: number, rain: number?)
+	local r = math.clamp(rain or 0, 0, 1)
 	local elev = math.sin((clock - 6) / 24 * math.pi * 2)
 	local day = math.clamp(elev * 3 + 0.25, 0, 1)
 	local dusk = if elev > -0.25 then math.clamp(1 - math.abs(elev) * 4, 0, 1) else 0
@@ -10697,14 +10705,21 @@ function WorldBuilder.updateSky(clock: number)
 	if atm then
 		atm.Color = mix(mix(Color3.fromRGB(28, 36, 64), Color3.fromRGB(199, 215, 235), day), Color3.fromRGB(255, 168, 120), dusk * 0.55)
 		atm.Decay = mix(mix(Color3.fromRGB(16, 20, 40), Color3.fromRGB(106, 130, 160), day), Color3.fromRGB(196, 104, 78), dusk * 0.6)
-		atm.Glare = 0.3 + dusk * 0.9
-		atm.Haze = 1.2 + dusk * 0.8
+		atm.Glare = (0.3 + dusk * 0.9) * (1 - r)
+		atm.Haze = 1.2 + dusk * 0.8 + r * 1.5
+		-- дождь: серая плотная дымка, хуже видимость
+		atm.Color = mix(atm.Color, Color3.fromRGB(150, 156, 166):Lerp(Color3.fromRGB(30, 34, 44), 1 - day), r * 0.75)
+		atm.Density = 0.28 + r * 0.22
 	end
 	if clouds then
-		clouds.Color = mix(mix(Color3.fromRGB(60, 66, 88), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 186, 150), dusk * 0.6)
+		clouds.Color = mix(mix(mix(Color3.fromRGB(60, 66, 88), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 186, 150), dusk * 0.6), Color3.fromRGB(110, 116, 126), r * 0.7)
+		clouds.Cover = 0.55 + r * 0.4
+		clouds.Density = 0.6 + r * 0.35
 	end
 	if cc then
 		cc.TintColor = mix(mix(Color3.fromRGB(196, 206, 255), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 222, 196), dusk * 0.7)
+		cc.Brightness = -0.08 * r
+		cc.Saturation = 0.08 - 0.25 * r
 	end
 end
 
@@ -11970,6 +11985,40 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	end
 end
 
+-- ===== дождь: струи вокруг камеры (сила — атрибут сервера Rain)
+local rainEmitter: ParticleEmitter? = nil
+do
+	local box = Instance.new("Part")
+	box.Name = "SkyPilotRain"
+	box.Anchored = true
+	box.CanCollide = false
+	box.CanQuery = false
+	box.CanTouch = false
+	box.Transparency = 1
+	box.Size = Vector3.new(160, 1, 160)
+	box.Parent = workspace.CurrentCamera
+	local pe = Instance.new("ParticleEmitter")
+	pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	pe.Color = ColorSequence.new(Color3.fromRGB(200, 214, 230))
+	pe.LightEmission = 0.2
+	pe.Transparency = NumberSequence.new(0.35)
+	pe.Size = NumberSequence.new(0.18)
+	pe.Squash = NumberSequence.new(-2.5)
+	pe.Orientation = Enum.ParticleOrientation.VelocityParallel
+	pe.EmissionDirection = Enum.NormalId.Bottom
+	pe.Speed = NumberRange.new(140, 170)
+	pe.Lifetime = NumberRange.new(0.7, 0.9)
+	pe.Rate = 0
+	pe.Parent = box
+	rainEmitter = pe
+	RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera
+		box.CFrame = CFrame.new(cam.CFrame.Position + Vector3.new(0, 60, 0))
+		local r = tonumber(workspace:GetAttribute("Rain")) or 0
+		pe.Rate = if r > 0.05 then r * 900 else 0
+	end)
+end
+
 -- ===== кадр: камера, приборы, анимация
 RunService:BindToRenderStep("SkyPilot", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	local now = os.clock()
@@ -12970,7 +13019,7 @@ function Ui.new(cb: Callbacks)
 		local temp = math.max(-56.5, 15 - 1.98 * altFt / 1000)
 		local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
 		local wd = tonumber(workspace:GetAttribute("WindDir")) or 0
-		wxBot.Text = string.format("за бортом %+d °C · %s", math.round(temp), if wk < 2 then "штиль" else string.format("ветер %03d° %d kt", wd, math.round(wk)))
+		wxBot.Text = string.format("за бортом %+d °C · %s", math.round(temp), (if wk < 2 then "штиль" else string.format("ветер %03d° %d kt", wd, math.round(wk))) .. (if (tonumber(workspace:GetAttribute("Rain")) or 0) > 0.6 then " · ливень" elseif (tonumber(workspace:GetAttribute("Rain")) or 0) > 0.15 then " · дождь" else ""))
 	end
 
 	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 258), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = Color3.new(1, 1, 1), Text = "", Visible = false }, root)

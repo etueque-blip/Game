@@ -631,6 +631,35 @@ DOORS_JS = r"""  if (kind === "jet" && !cfg.fixedGear) {
 """
 
 
+RAIN_JS = r"""// ===== дождь (как в Roblox): налетает раз в 5–12 минут, струи вокруг камеры, серое небо и дымка
+const RAIN = { v: 0, t: 0, at: 120, clock: 0 };
+const GREY_D = lin(0x9aa2ae), GREY_N = lin(0x1c2028);
+let rainLines = null;
+function rainSky(dt) {
+  RAIN.clock += dt;
+  if (RAIN.clock > RAIN.at) { RAIN.t = Math.random() < 0.45 ? 0.3 + Math.random() * 0.7 : 0; RAIN.at = RAIN.clock + 300 + Math.random() * 420; }
+  RAIN.v += clamp(RAIN.t - RAIN.v, -0.004 * dt, 0.004 * dt);
+  const r = RAIN.v; if (r < 0.01 && !rainLines) return;
+  const day = clamp(Math.sin((gameClock - 6) / 24 * Math.PI * 2) * 3 + 0.25, 0, 1), grey = GREY_N.clone().lerp(GREY_D, day);
+  ZENITH.lerp(grey, r * 0.75); HORIZON.lerp(grey, r * 0.7); GROUND_HAZE.lerp(grey, r * 0.5);
+  sun.intensity *= 1 - 0.65 * r; hemi.intensity *= 1 - 0.3 * r; renderer.toneMappingExposure *= 1 - 0.18 * r; scene.fog.near = 2500 * (1 - 0.7 * r); scene.fog.far = 36000 * (1 - 0.62 * r);
+  if (!rainLines) {
+    const N = 1800, pos = new Float32Array(N * 6);
+    for (let i = 0; i < N; i++) { const x = R(-120, 120), y = R(-60, 90), z = R(-120, 120); pos.set([x, y, z, x - 0.6, y - 7, z], i * 6); }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    rainLines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xc8d4e2, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+    rainLines.frustumCulled = false; scene.add(rainLines);
+  }
+  rainLines.visible = r > 0.05; rainLines.material.opacity = Math.min(0.55, r * 0.6);
+  if (rainLines.visible) {
+    const p = rainLines.geometry.attributes.position, a = p.array, fall = 160 * dt;
+    for (let i = 0; i < a.length; i += 6) { a[i + 1] -= fall; a[i + 4] -= fall; if (a[i + 1] < -60) { a[i + 1] += 150; a[i + 4] += 150; } }
+    p.needsUpdate = true; rainLines.position.copy(camera.position);
+  }
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -854,6 +883,11 @@ def add_premium(s, patch):
     s = patch(s, '  leg(0, -L / 2 + L * 0.12, kind === "light" ? 1 : 2, 1);\n', '  leg(0, -L / 2 + L * 0.12, kind === "light" ? 1 : 2, 1);\n' + DOORS_JS)
     s = patch(s, "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02;",
               "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02; if (u.doorsUp) u.doorsUp.visible = gearAnim < 0.05;")
+    # дождь: струи вокруг камеры, серое небо и дымка, хуже видимость, тусклое солнце; на панели погоды
+    s = patch(s, "function dayNight(dt) {", RAIN_JS + "function dayNight(dt) {")
+    s = patch(s, "  renderer.toneMappingExposure = 0.42 + 0.63 * day;\n", "  renderer.toneMappingExposure = 0.42 + 0.63 * day;\n  rainSky(dt);\n  scene.fog.color.copy(HORIZON);\n")
+    s = patch(s, 'el.innerHTML = `${ic} ${ph} · ', 'el.innerHTML = `${RAIN.v > 0.15 ? "🌧" : ic} ${ph} · ')
+    s = patch(s, " + \" kt\"}</small>`; }", " + \" kt\"}${RAIN.v > 0.6 ? \" · ливень\" : RAIN.v > 0.15 ? \" · дождь\" : \"\"}</small>`; }")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

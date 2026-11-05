@@ -2000,6 +2000,32 @@ const DN = { top: ZENITH.clone(), hor: HORIZON.clone(), gnd: GROUND_HAZE.clone()
   topN: lin(0x060b1c), horN: lin(0x18223a), gndN: lin(0x0b1018), horS: lin(0xf2955a), topS: lin(0x41528a) };
 const WARM = new THREE.Color(0xffc480).convertSRGBToLinear();
 let dnLast = -1;
+// ===== дождь (как в Roblox): налетает раз в 5–12 минут, струи вокруг камеры, серое небо и дымка
+const RAIN = { v: 0, t: 0, at: 120, clock: 0 };
+const GREY_D = lin(0x9aa2ae), GREY_N = lin(0x1c2028);
+let rainLines = null;
+function rainSky(dt) {
+  RAIN.clock += dt;
+  if (RAIN.clock > RAIN.at) { RAIN.t = Math.random() < 0.45 ? 0.3 + Math.random() * 0.7 : 0; RAIN.at = RAIN.clock + 300 + Math.random() * 420; }
+  RAIN.v += clamp(RAIN.t - RAIN.v, -0.004 * dt, 0.004 * dt);
+  const r = RAIN.v; if (r < 0.01 && !rainLines) return;
+  const day = clamp(Math.sin((gameClock - 6) / 24 * Math.PI * 2) * 3 + 0.25, 0, 1), grey = GREY_N.clone().lerp(GREY_D, day);
+  ZENITH.lerp(grey, r * 0.75); HORIZON.lerp(grey, r * 0.7); GROUND_HAZE.lerp(grey, r * 0.5);
+  sun.intensity *= 1 - 0.65 * r; hemi.intensity *= 1 - 0.3 * r; renderer.toneMappingExposure *= 1 - 0.18 * r; scene.fog.near = 2500 * (1 - 0.7 * r); scene.fog.far = 36000 * (1 - 0.62 * r);
+  if (!rainLines) {
+    const N = 1800, pos = new Float32Array(N * 6);
+    for (let i = 0; i < N; i++) { const x = R(-120, 120), y = R(-60, 90), z = R(-120, 120); pos.set([x, y, z, x - 0.6, y - 7, z], i * 6); }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    rainLines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xc8d4e2, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+    rainLines.frustumCulled = false; scene.add(rainLines);
+  }
+  rainLines.visible = r > 0.05; rainLines.material.opacity = Math.min(0.55, r * 0.6);
+  if (rainLines.visible) {
+    const p = rainLines.geometry.attributes.position, a = p.array, fall = 160 * dt;
+    for (let i = 0; i < a.length; i += 6) { a[i + 1] -= fall; a[i + 4] -= fall; if (a[i + 1] < -60) { a[i + 1] += 150; a[i + 4] += 150; } }
+    p.needsUpdate = true; rainLines.position.copy(camera.position);
+  }
+}
 function dayNight(dt) {
   rabbitStep(dt);
   WATER_U.uTime.value += dt;
@@ -2013,6 +2039,8 @@ function dayNight(dt) {
   scene.fog.color.copy(HORIZON);
   sun.intensity = 2.4 * day; hemi.intensity = 0.14 + 0.61 * day;
   renderer.toneMappingExposure = 0.42 + 0.63 * day;
+  rainSky(dt);
+  scene.fog.color.copy(HORIZON);
   const g = window.__cityGlass;
   const n = 1 - day;
   if (Math.abs(n - dnLast) > 0.02) {
@@ -2316,7 +2344,7 @@ function updateHUD(f) {
   updateIls(f);
   atcTick(f, 1 / 60);
   if (gateTarget && f.onGround && f.speed < 3 && Math.hypot(f.pos.x - gateTarget.x, f.pos.z - gateTarget.z) < 45) { toast("Рейс завершён у гейта " + gateTarget.id + " · +500", "var(--green)"); addScore(500, "стоянка " + gateTarget.id); atc(`Земля: ${callsign}, стоянка ${gateTarget.id}, двигатели выключить. До связи!`); addLog("Гейт " + gateTarget.id); gateTarget = null; }
-  { const el = $("wx"); el.hidden = f.crashed; const tC = Math.max(-56.5, 15 - 1.98 * f.pos.y * FT / 1000); const [ic, ph] = dayPhase(); el.innerHTML = `${ic} ${ph} · ${String(Math.floor(gameClock)).padStart(2, "0")}:${String(Math.floor(gameClock % 1 * 60)).padStart(2, "0")}<small>за бортом ${tC >= 0 ? "+" : ""}${Math.round(tC)} °C · ${WIND.kts < 2 ? "штиль" : "ветер " + String(Math.round(WIND.dir)).padStart(3, "0") + "° " + Math.round(WIND.kts) + " kt"}</small>`; }
+  { const el = $("wx"); el.hidden = f.crashed; const tC = Math.max(-56.5, 15 - 1.98 * f.pos.y * FT / 1000); const [ic, ph] = dayPhase(); el.innerHTML = `${RAIN.v > 0.15 ? "🌧" : ic} ${ph} · ${String(Math.floor(gameClock)).padStart(2, "0")}:${String(Math.floor(gameClock % 1 * 60)).padStart(2, "0")}<small>за бортом ${tC >= 0 ? "+" : ""}${Math.round(tC)} °C · ${WIND.kts < 2 ? "штиль" : "ветер " + String(Math.round(WIND.dir)).padStart(3, "0") + "° " + Math.round(WIND.kts) + " kt"}${RAIN.v > 0.6 ? " · ливень" : RAIN.v > 0.15 ? " · дождь" : ""}</small>`; }
   if (!f.onGround) parkBrake = false;
   $("park").hidden = !parkBrake || f.crashed;
   { const el = $("race"); if (raceStart !== null) { el.hidden = false; el.textContent = `КОЛЬЦА ${raceIdx}/${RINGS.length} · ${fmtT(performance.now() / 1000 - raceStart)}`; } else el.hidden = true; }
