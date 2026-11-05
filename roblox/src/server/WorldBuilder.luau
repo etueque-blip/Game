@@ -424,6 +424,44 @@ local function buildAirport(folder: Folder, ap: any)
 			sl.Parent = lamp
 		end
 	end
+	-- пожарная станция, топливный склад, указатели рулёжек, ветроуказатель (конус поворачивает клиент по ветру)
+	do
+		local fx, fz = W / 2 + 420, 1260
+		part(f, Vector3.new(90, 18, 50), cf(fx, 9, fz), Color3.fromRGB(226, 228, 232), Enum.Material.Concrete, true)
+		part(f, Vector3.new(92, 2, 52), cf(fx, 19, fz), Color3.fromRGB(70, 76, 86), Enum.Material.Metal)
+		for k = -1, 1 do
+			part(f, Vector3.new(1, 13, 24), cf(fx - 45.6, 7, fz + k * 15), Color3.fromRGB(196, 40, 36), Enum.Material.Metal)
+		end
+		local sgn = part(f, Vector3.new(1, 5, 40), cf(fx - 45.6, 16, fz), Color3.fromRGB(196, 40, 36))
+		textDecal(sgn, Enum.NormalId.Left, "FIRE · RESCUE", Color3.new(1, 1, 1), Color3.fromRGB(196, 40, 36))
+		part(f, Vector3.new(14, 8, 7), cf(fx - 58, 4.5, fz + 15), Color3.fromRGB(210, 40, 34), Enum.Material.SmoothPlastic)
+		local tx2, tz2 = W / 2 + 560, 1380
+		for k = 0, 2 do
+			local tank = part(f, Vector3.new(16, 34, 34), cf(tx2 + k * 46, 8, tz2) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(236, 238, 240), Enum.Material.Metal, true)
+			tank.Shape = Enum.PartType.Cylinder
+		end
+		part(f, Vector3.new(150, 3, 60), cf(tx2 + 46, 1.5, tz2), Color3.fromRGB(150, 150, 146), Enum.Material.Concrete)
+		for k, zc in { -L / 2 + 150, 0, L / 2 - 150 } do
+			for _, s2 in { -1, 1 } do
+				local board = part(f, Vector3.new(2, 4, 9), cf(W / 2 + 16, 3.6, zc + s2 * 42), Color3.fromRGB(240, 200, 30), Enum.Material.SmoothPlastic)
+				board.CastShadow = false
+				textDecal(board, Enum.NormalId.Left, ap.id .. tostring(k), Color3.new(0, 0, 0), Color3.fromRGB(240, 200, 30))
+				textDecal(board, Enum.NormalId.Right, ap.id .. tostring(k), Color3.new(0, 0, 0), Color3.fromRGB(240, 200, 30))
+				part(f, Vector3.new(0.5, 1.6, 0.5), cf(W / 2 + 16, 0.8, zc + s2 * 42), Color3.fromRGB(60, 60, 60), Enum.Material.Metal)
+			end
+		end
+		local wx, wz = -(W / 2 + 110), L / 2 - 500
+		part(f, Vector3.new(0.8, 22, 0.8), cf(wx, 11, wz), Color3.fromRGB(200, 200, 205), Enum.Material.Metal)
+		local cone = part(f, Vector3.new(3, 3, 14), cf(wx, 21.5, wz), Color3.fromRGB(255, 110, 20), Enum.Material.Fabric)
+		cone.Name = "WindsockCone"
+		cone:SetAttribute("PoleCF", cf(wx, 21.5, wz))
+		for i = 1, 2 do -- белые полосы
+			local band = part(f, Vector3.new(3.1, 3.1, 2), cone.CFrame * CFrame.new(0, 0, -7 + i * 4.6), Color3.new(1, 1, 1), Enum.Material.Fabric)
+			band.Name = "WindsockBand"
+			band:SetAttribute("Offset", -7 + i * 4.6)
+			band.Parent = cone
+		end
+	end
 	-- вышка
 	local tw = Instance.new("Part")
 	tw.Shape = Enum.PartType.Cylinder

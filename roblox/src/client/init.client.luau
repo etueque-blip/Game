@@ -822,6 +822,37 @@ task.spawn(function()
 			table.insert(rabbits, d)
 		end
 	end
+	-- ветроуказатели аэропортов: конус по ветру, при слабом ветре повисает
+	local socks: { BasePart } = {}
+	for _, d in worldFolder:GetDescendants() do
+		if d:IsA("BasePart") and d.Name == "WindsockCone" then
+			table.insert(socks, d)
+		end
+	end
+	if #socks > 0 then
+		task.spawn(function()
+			while true do
+				local wd = math.rad(tonumber(workspace:GetAttribute("WindDir")) or 0)
+				local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
+				local droop = math.clamp(1 - wk / 15, 0, 0.85)
+				local v = Vector3.new(-math.sin(wd), 0, math.cos(wd)) * (1 - droop) + Vector3.new(0, -droop, 0)
+				v = if v.Magnitude > 0.01 then v.Unit else Vector3.new(0, -1, 0)
+				for _, c in socks do
+					local pole = c:GetAttribute("PoleCF")
+					if typeof(pole) == "CFrame" then
+						local p0 = pole.Position
+						c.CFrame = CFrame.lookAt(p0 + v * 7, p0 + v * 14)
+						for _, b in c:GetChildren() do
+							if b:IsA("BasePart") then
+								b.CFrame = c.CFrame * CFrame.new(0, 0, b:GetAttribute("Offset") :: number)
+							end
+						end
+					end
+				end
+				task.wait(1)
+			end
+		end)
+	end
 	-- бегущие вспышки огней подхода: дважды в секунду от дальнего огня к полосе
 	if #rabbits > 0 then
 		task.spawn(function()
