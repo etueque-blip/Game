@@ -132,7 +132,8 @@ function Animator.step(dt: number, now: number)
 			l.Transparency = if on then 0 else 0.85
 		end
 		-- инверсионный след выше 18 000 ft
-		local contrail = root.Position.Y * World.FT > 18000 and thr > 0.3
+		-- плюс конденсационные следы с законцовок при большой перегрузке или во влажном воздухе (атрибут Vapor от клиента)
+		local contrail = (root.Position.Y * World.FT > 18000 and thr > 0.3) or m:GetAttribute("Vapor") == true
 		for _, t in c.trails do
 			if t.Enabled ~= contrail then
 				t.Enabled = contrail

@@ -1318,6 +1318,7 @@ function buildPlane(cfg, isStatic) {
     const tgt = new THREE.Object3D(); tgt.position.set(0, -L * 0.55, -L * 4); root.add(spot, tgt); spot.target = tgt; land.spot = spot;
     root.userData.land = land;
   }
+  if (!isStatic && kind !== "light") root.userData.wingVapor = [-1, 1].flatMap((s) => [0.3, 0.55].map((t) => wings[s].rootLE.clone().addScaledVector(wings[s].spanVec, t).add(new V3(0, rootC * 0.12, rootC * 0.3))));
   return root;
 }
 
@@ -2541,7 +2542,7 @@ function copyReport() {
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener("resize", resize);
 applyQuality();
-let lastT = performance.now(), fps = 60, trailT = 0;
+let lastT = performance.now(), fps = 60, trailT = 0, vaporT = 0;
 const tmpV = new V3();
 
 function frame(t) {
@@ -2589,6 +2590,22 @@ function frame(t) {
       }
       // инверсионный след выше 18 000 ft
       trailT += dt;
+      const vapOn = !f.onGround && f.speed > 120 && ((f.gload || 1) > 1.7 || (typeof RAIN !== "undefined" && RAIN.v > 0.25 && f.flaps >= 2));
+      if (!vapOn) u.vapLast = null;
+      if (vapOn && ((f.gload || 1) > 1.7 || (typeof RAIN !== "undefined" && RAIN.v > 0.25 && f.flaps >= 2))) {
+        vaporT += dt;
+        if (vaporT > 0.0) { vaporT = 0; const k = clamp(((f.gload || 1) - 1.5) / 2, 0.5, 1);
+          // заполняем промежуток с прошлого кадра — сплошная полоса даже при низком FPS
+          const sz = Math.max(1.2, f.cfg.diameter * 0.22);
+          for (const key of ["nav-1", "nav1"]) if (u[key]) {
+            const p = u[key].clone().applyQuaternion(f.att).add(f.pos), last = (u.vapLast || (u.vapLast = {}))[key];
+            const n = last ? Math.min(24, Math.max(1, Math.ceil(last.distanceTo(p) / (sz * 0.3)))) : 1;
+            for (let i = 1; i <= n; i++) spawnPuff(last ? last.clone().lerp(p, i / n) : p, 0xf4f7fb, sz, 1.4, Math.max(3, f.cfg.diameter * 0.9), null, 0.85 * k);
+            u.vapLast[key] = p;
+          }
+          if ((f.gload || 1) > 2.2 && u.wingVapor) for (const wv of u.wingVapor) spawnPuff(wv.clone().applyQuaternion(f.att).add(f.pos), 0xffffff, f.cfg.diameter * 0.35, 0.5, f.cfg.diameter * 0.6, null, 0.35 * k);
+        }
+      }
       if (f.pos.y * FT > 18000 && trailT > 0.05 && f.throttle > 0.3) {
         trailT = 0;
         for (const e of u.engines) spawnPuff(e.clone().applyQuaternion(f.att).add(f.pos), 0xffffff, f.cfg.diameter * 0.25, 7, f.cfg.diameter * 0.9, null, 0.55);

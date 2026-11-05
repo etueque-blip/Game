@@ -825,6 +825,26 @@ LAND_JS = r"""  if (!isStatic && kind === "jet") {
     const tgt = new THREE.Object3D(); tgt.position.set(0, -L * 0.55, -L * 4); root.add(spot, tgt); spot.target = tgt; land.spot = spot;
     root.userData.land = land;
   }
+  if (!isStatic && kind !== "light") root.userData.wingVapor = [-1, 1].flatMap((s) => [0.3, 0.55].map((t) => wings[s].rootLE.clone().addScaledVector(wings[s].spanVec, t).add(new V3(0, rootC * 0.12, rootC * 0.3))));
+"""
+
+
+VAPOR_JS = r"""      const vapOn = !f.onGround && f.speed > 120 && ((f.gload || 1) > 1.7 || (typeof RAIN !== "undefined" && RAIN.v > 0.25 && f.flaps >= 2));
+      if (!vapOn) u.vapLast = null;
+      if (vapOn && ((f.gload || 1) > 1.7 || (typeof RAIN !== "undefined" && RAIN.v > 0.25 && f.flaps >= 2))) {
+        vaporT += dt;
+        if (vaporT > 0.0) { vaporT = 0; const k = clamp(((f.gload || 1) - 1.5) / 2, 0.5, 1);
+          // заполняем промежуток с прошлого кадра — сплошная полоса даже при низком FPS
+          const sz = Math.max(1.2, f.cfg.diameter * 0.22);
+          for (const key of ["nav-1", "nav1"]) if (u[key]) {
+            const p = u[key].clone().applyQuaternion(f.att).add(f.pos), last = (u.vapLast || (u.vapLast = {}))[key];
+            const n = last ? Math.min(24, Math.max(1, Math.ceil(last.distanceTo(p) / (sz * 0.3)))) : 1;
+            for (let i = 1; i <= n; i++) spawnPuff(last ? last.clone().lerp(p, i / n) : p, 0xf4f7fb, sz, 1.4, Math.max(3, f.cfg.diameter * 0.9), null, 0.85 * k);
+            u.vapLast[key] = p;
+          }
+          if ((f.gload || 1) > 2.2 && u.wingVapor) for (const wv of u.wingVapor) spawnPuff(wv.clone().applyQuaternion(f.att).add(f.pos), 0xffffff, f.cfg.diameter * 0.35, 0.5, f.cfg.diameter * 0.6, null, 0.35 * k);
+        }
+      }
 """
 
 
@@ -1081,6 +1101,9 @@ def add_premium(s, patch):
     s = patch(s, "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02;",
               "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02; if (u.land) { const on = gearAnim > 0.5, nf = window.__nightF || 0; for (const sp of u.land.sprites) sp.material.opacity = on ? 0.95 : 0; for (const b of u.land.beams) b.material.opacity = on ? 0.1 * nf : 0; u.land.spot.intensity = on ? 30 * nf : 0; }")
     s = patch(s, "    if (window.__lampMat) window.__lampMat.emissiveIntensity = 2.6 * n;", "    if (window.__lampMat) window.__lampMat.emissiveIntensity = 2.6 * n;\n    window.__nightF = n;")
+    # конденсационные следы с законцовок крыла при большой перегрузке / во влажном воздухе (дождь + закрылки)
+    s = patch(s, "fps = 60, trailT = 0;", "fps = 60, trailT = 0, vaporT = 0;")
+    s = patch(s, "      if (f.pos.y * FT > 18000 && trailT > 0.05 && f.throttle > 0.3) {", VAPOR_JS + "      if (f.pos.y * FT > 18000 && trailT > 0.05 && f.throttle > 0.3) {")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

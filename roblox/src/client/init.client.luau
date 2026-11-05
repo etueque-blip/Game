@@ -577,6 +577,13 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	if c.id == "F16" and f.gload >= 8 and f.damage < 0.05 then
 		claimAch("ace")
 	end
+	if model then
+		local rainNow = tonumber(workspace:GetAttribute("Rain")) or 0
+		local vapor = not f.onGround and f.speed > 120 and (f.gload > 1.7 or (rainNow > 0.25 and f.flaps >= 2))
+		if model:GetAttribute("Vapor") ~= vapor then
+			model:SetAttribute("Vapor", vapor)
+		end
+	end
 	if not f.onGround and f.pos.Y * FT < 3000 then
 		for _, t in Daily.tasks(Daily.dateKey()) do
 			if t.kind == "over" and t.x and t.z and t.r and (Vector2.new(f.pos.X, f.pos.Z) - Vector2.new(t.x, t.z)).Magnitude < t.r then
