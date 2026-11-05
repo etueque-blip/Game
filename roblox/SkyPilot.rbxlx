@@ -16255,6 +16255,18 @@ local function onAction(a: string)
 	elseif a == "cam" then
 		ui.setCamLabel(cameraRig.cycle())
 		return
+	elseif a == "photo" then
+		if flight and not flight.crashed then
+			photoMode = not photoMode
+			if photoMode then
+				photoPrevCam = cameraRig.mode
+				cameraRig.mode = 3
+			else
+				cameraRig.mode = photoPrevCam
+			end
+			ui.setPhoto(photoMode)
+		end
+		return
 	elseif a == "map" then
 		ui.toggleMap()
 		return
@@ -16334,6 +16346,7 @@ end
 
 -- объявлена заранее: кнопка «Выйти из самолёта» (onExit) вызывает её раньше определения ниже
 local stopFlight: () -> ()
+local photoMode, photoPrevCam = false, 1
 ui = Ui.new({
 	onPick = requestFlight,
 	onAction = onAction,
@@ -16364,6 +16377,11 @@ end)
 cameraRig = CameraRig.new(ui)
 
 function stopFlight()
+	if photoMode then
+		photoMode = false
+		cameraRig.mode = photoPrevCam
+		ui.setPhoto(false)
+	end
 	flight, model, root, simulating, apTarget, crashPose = nil, nil, nil, false, nil, nil
 	if engineSound then
 		engineSound:Destroy()
@@ -16616,6 +16634,13 @@ RunService.PreSimulation:Connect(function(dt)
 			return
 		end
 		simulating = true
+	end
+	-- фото-режим: самолёт замер в воздухе (держим позу, скорость обнулена)
+	if photoMode then
+		root.CFrame = FlightPhysics.pose(f)
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+		return
 	end
 	local input, manual = controls.read()
 	if parkBrake then
@@ -17313,7 +17338,7 @@ local Controls = {}
 local ONCE: { [Enum.KeyCode]: string } = {
 	[Enum.KeyCode.G] = "gear", [Enum.KeyCode.F] = "flapDn", [Enum.KeyCode.R] = "flapUp",
 	[Enum.KeyCode.T] = "rev", [Enum.KeyCode.Z] = "idle", [Enum.KeyCode.V] = "cam",
-	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.Space] = "park", [Enum.KeyCode.I] = "guide", [Enum.KeyCode.X] = "spoiler", [Enum.KeyCode.K] = "map", [Enum.KeyCode.DPadRight] = "nav",
+	[Enum.KeyCode.M] = "hangar", [Enum.KeyCode.P] = "autopilot", [Enum.KeyCode.C] = "mouse", [Enum.KeyCode.N] = "nav", [Enum.KeyCode.Space] = "park", [Enum.KeyCode.I] = "guide", [Enum.KeyCode.X] = "spoiler", [Enum.KeyCode.K] = "map", [Enum.KeyCode.H] = "photo", [Enum.KeyCode.DPadRight] = "nav",
 	-- геймпад
 	[Enum.KeyCode.ButtonY] = "gear", [Enum.KeyCode.DPadUp] = "flapUp", [Enum.KeyCode.DPadDown] = "flapDn",
 	[Enum.KeyCode.ButtonX] = "rev", [Enum.KeyCode.ButtonA] = "autopilot", [Enum.KeyCode.ButtonSelect] = "cam",
@@ -17869,6 +17894,7 @@ function Ui.new(cb: Callbacks)
 	local bDebug = button(top, "Отладка")
 	local bGuide = button(top, "Инструкция")
 	local bHelp = button(top, "Клавиши")
+	local bPhoto = button(top, "📷")
 	local planeName = new("TextLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -4, 0, 48), Size = UDim2.fromOffset(260, 20), Font = FONT_TITLE, TextSize = 15, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Right, Text = "", TextStrokeTransparency = 0.6 }, root)
 	self.bCam, self.bMouse, self.bAP = bCam, bMouse, bAP
 
@@ -18575,7 +18601,7 @@ function Ui.new(cb: Callbacks)
 		"F / R — закрылки выпустить / убрать      G — шасси      B — тормоз (держать)",
 		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)      Пробел — стояночный тормоз",
 		"V — камера (сзади / кабина / орбита)      M — ангар      C — мышь-штурвал",
-		"X — интерцепторы (быстрее снижение и торможение)      I — инструкция      K — карта мира",
+		"X — интерцепторы (быстрее снижение и торможение)      I — инструкция      K — карта мира      H — фото-режим",
 		"N — навигация: стрелка на аэропорт или город; с выбранной целью автопилот (P) летит к ней сам",
 		"Гонка: пролети сквозь голубое кольцо у Skyport — маршрут Дубай → Ташкент → Лондон → домой, 13 колец, +1500 очков",
 		"",
@@ -18864,6 +18890,21 @@ function Ui.new(cb: Callbacks)
 	bMap.Activated:Connect(function()
 		cb.onAction("map")
 	end)
+	bPhoto.Activated:Connect(function()
+		cb.onAction("photo")
+	end)
+	-- фото-режим: прячем весь интерфейс, кроме подсказки внизу
+	local photoBar = new("TextButton", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(0, 40), AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = C.panel, BackgroundTransparency = 0.15, Font = FONT, TextSize = 14, TextColor3 = C.fg, Text = "📷 Фото-режим · пауза · ПКМ/палец — вращать, колесо — зум · H или нажми, чтобы выйти", Visible = false, ZIndex = 50 }, gui)
+	corner(photoBar, 14)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16) }, photoBar)
+	photoBar.Activated:Connect(function()
+		cb.onAction("photo")
+	end)
+	function self.setPhoto(on: boolean)
+		root.Visible = not on
+		photoBar.Visible = on
+	end
 	bGuide.Activated:Connect(function()
 		cb.onAction("guide")
 	end)

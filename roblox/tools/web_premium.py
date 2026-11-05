@@ -906,6 +906,33 @@ $("mSet").onclick = () => { renderSettings(); $("setO").hidden = false; }; $("se
 """
 
 
+PHOTO_CSS = """
+/* фото-режим */
+#app.photo > *:not(#c):not(#photoBar) { visibility: hidden !important; }
+#photoBar { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 18px; padding: 10px 14px; box-shadow: var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 7; max-width: calc(100% - 24px); }
+#photoBar b { font-family: var(--f-display); font-size: 16px; } #photoBar span { color: var(--dim); font-size: 12.5px; }
+"""
+
+PHOTO_JS = r"""
+// ===== фото-режим: пауза, скрыть интерфейс, орбита, сохранить кадр
+var PHOTO = false; let photoPrevCam = 0;
+function togglePhoto(on) {
+  if (!flight) return;
+  PHOTO = on === undefined ? !PHOTO : on;
+  document.getElementById("app").classList.toggle("photo", PHOTO); $("photoBar").hidden = !PHOTO;
+  if (PHOTO) { photoPrevCam = camMode; camMode = 2; orbit.dist = Math.max(orbit.dist, flight.cfg.length * 1.6); }
+  else { camMode = photoPrevCam; $("bCam").textContent = "Камера: " + CAMS[camMode]; }
+}
+function savePhoto() {
+  renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL("image/png"), a = document.createElement("a");
+  a.href = url; a.download = "skypilot-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".png"; document.body.appendChild(a); a.click(); a.remove();
+  toast("Фото сохранено");
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -936,7 +963,7 @@ def add_premium(s, patch):
     s = patch(s, '<div><kbd>N</kbd> навигация: стрелка на аэропорт или город</div>',
               '<div><kbd>N</kbd> навигация: стрелка на аэропорт или город</div>\n'
               '        <div><kbd>Пробел</kbd> стояночный тормоз (на старте включён)</div>\n'
-              '        <div><kbd>X</kbd> интерцепторы, <kbd>I</kbd> инструкция, <kbd>K</kbd> карта мира</div>\n'
+              '        <div><kbd>X</kbd> интерцепторы, <kbd>I</kbd> инструкция, <kbd>K</kbd> карта мира, <kbd>H</kbd> фото-режим</div>\n'
               '        <div style="grid-column: 1 / -1">Геймпад: стик — штурвал, R2/L2 — тяга, R1/L1 — руль, Y — шасси, крестовина — закрылки (↑↓), интерцепторы (←), навигация (→), X — реверс, B — тормоз, L3 — стояночный тормоз</div>')
     s = patch(s, "справа — рычаг тяги.", "справа — рычаг тяги, кнопки ИНТЕРЦ., ШАССИ, ЗАКР.")
     # фасады с окнами у обычных зданий городов (днём тёмное стекло, ночью часть окон светится)
@@ -1187,6 +1214,14 @@ def add_premium(s, patch):
     s = patch(s, '  const vs = Math.round(vsSmooth / 10) * 10; $("vVs").textContent = (vs > 0 ? "+" : "") + fmt(vs);',
               '  const vs = Math.round(vsSmooth / 10) * 10; if (METRIC) { const ms = Math.round(vsSmooth * 0.0508) / 10; $("vVs").textContent = (ms > 0 ? "+" : "") + ms.toFixed(1); } else $("vVs").textContent = (vs > 0 ? "+" : "") + fmt(vs); $("vVs").nextElementSibling.textContent = METRIC ? "м/с" : "ft/min";')
     s = patch(s, '$("loading").hidden = true;', SET_JS + '$("loading").hidden = true;')
+    # 📷 фото-режим (H): пауза, интерфейс скрыт, камера-орбита, сохранение кадра в PNG
+    s = patch(s, 'KeyK: "map" };', 'KeyK: "map", KeyH: "photo" };')
+    s = patch(s, '  if (a === "map") { toggleMap(); return; }', '  if (a === "map") { toggleMap(); return; }\n  if (a === "photo") { togglePhoto(); return; }')
+    s = patch(s, "  if (f && !f.crashed) {\n", "  if (f && !f.crashed && !PHOTO) {\n")
+    s = patch(s, "</style>\n\n<div id=\"app\">", PHOTO_CSS + "</style>\n\n<div id=\"app\">")
+    s = patch(s, '<div id="gm" hidden></div>', '<div id="gm" hidden></div>\n  <div id="photoBar" hidden><b>📷 Фото-режим</b><span>Пауза · крути камеру мышью или пальцем, колесо — зум</span><button class="tb primary" id="photoSave">Сохранить фото</button><button class="tb" id="photoExit">Выйти (H)</button></div>')
+    s = patch(s, "function scoreLanding(ap, text) {", PHOTO_JS + "function scoreLanding(ap, text) {")
+    s = patch(s, '$("loading").hidden = true;', '$("photoSave").onclick = savePhoto; $("photoExit").onclick = () => togglePhoto(false); $("bHelp") && $("bHelp").insertAdjacentHTML("beforebegin", \'<button class="tb" id="bPhoto">📷 Фото</button>\'); $("bPhoto") && ($("bPhoto").onclick = () => togglePhoto());\n$("loading").hidden = true;')
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

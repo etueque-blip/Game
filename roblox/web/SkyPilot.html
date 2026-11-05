@@ -415,6 +415,12 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .maphead { display: flex; align-items: center; gap: 12px; } .maphead b { font-family: var(--f-display); font-size: 20px; } .maphead span { color: var(--dim); font-size: 12.5px; margin-right: auto; }
 #mapCv { width: min(78vh, calc(100vw - 48px)); height: min(78vh, calc(100vw - 48px)); border-radius: 14px; cursor: crosshair; display: block; }
 @media (max-height: 500px) { #mapCv { width: min(74vh, calc(100vw - 48px)); height: min(74vh, calc(100vw - 48px)); } .maphead span { display: none; } }
+
+/* фото-режим */
+#app.photo > *:not(#c):not(#photoBar) { visibility: hidden !important; }
+#photoBar { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 18px; padding: 10px 14px; box-shadow: var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 7; max-width: calc(100% - 24px); }
+#photoBar b { font-family: var(--f-display); font-size: 16px; } #photoBar span { color: var(--dim); font-size: 12.5px; }
 </style>
 
 <div id="app">
@@ -444,6 +450,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   <canvas id="htape" width="880" height="68" hidden></canvas>
   <div id="nav" hidden></div>
   <div id="gm" hidden></div>
+  <div id="photoBar" hidden><b>📷 Фото-режим</b><span>Пауза · крути камеру мышью или пальцем, колесо — зум</span><button class="tb primary" id="photoSave">Сохранить фото</button><button class="tb" id="photoExit">Выйти (H)</button></div>
   <div id="pax" hidden></div>
   <div id="lrep" hidden></div>
   <div id="gfx"></div>
@@ -564,7 +571,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
         <div><kbd>V</kbd> камера, <kbd>M</kbd> меню, кнопка «Звук» — гул двигателей</div>
         <div><kbd>N</kbd> навигация: стрелка на аэропорт или город</div>
         <div><kbd>Пробел</kbd> стояночный тормоз (на старте включён)</div>
-        <div><kbd>X</kbd> интерцепторы, <kbd>I</kbd> инструкция, <kbd>K</kbd> карта мира</div>
+        <div><kbd>X</kbd> интерцепторы, <kbd>I</kbd> инструкция, <kbd>K</kbd> карта мира, <kbd>H</kbd> фото-режим</div>
         <div style="grid-column: 1 / -1">Геймпад: стик — штурвал, R2/L2 — тяга, R1/L1 — руль, Y — шасси, крестовина — закрылки (↑↓), интерцепторы (←), навигация (→), X — реверс, B — тормоз, L3 — стояночный тормоз</div>
         <div>Гонка: пролети голубое кольцо у Skyport — 13 колец через Дубай, Ташкент и Лондон</div>
       </div>
@@ -1807,7 +1814,7 @@ function doCrash(reason) {
 
 // ============================================================ INPUT
 const keys = new Set();
-const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar", KeyN: "nav", Space: "park", KeyI: "guide", KeyX: "spoiler", KeyK: "map" };
+const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar", KeyN: "nav", Space: "park", KeyI: "guide", KeyX: "spoiler", KeyK: "map", KeyH: "photo" };
 addEventListener("keydown", (e) => {
   if (e.repeat) { keys.add(e.code); return; }
   keys.add(e.code);
@@ -1858,6 +1865,7 @@ function action(a) {
   if (a === "cam") { cycleCam(); return; }
   if (a === "nav") { cycleNav(); return; }
   if (a === "map") { toggleMap(); return; }
+  if (a === "photo") { togglePhoto(); return; }
   if (a === "guide") { showGuide(flight ? flight.cfg : PLANES.C172); return; }
   if (a === "park") { if (flight && flight.onGround) { parkBrake = !parkBrake; toast(parkBrake ? "Стояночный тормоз включён" : "Стояночный тормоз отключён", parkBrake ? "var(--amber)" : "var(--green)"); } return; }
   const f = flight; if (!f || f.crashed) return;
@@ -2172,6 +2180,22 @@ function dailyRender() {
   const g = document.getElementById("dailyG"); if (!g) return;
   g.innerHTML = ts.map((t) => { const on = DAILY.done.includes(t.id); return `<div class="achc${on ? " on" : ""}"><span class="ai">${on ? "✅" : "☐"}</span><b>${t.text}</b><small>${t.kind === "land" ? "Любая посадка на полосу" : t.kind === "over" ? "Ниже 3000 ft над городом" : "Касание мягче 200 ft/min"}</small><em>+${t.reward}</em></div>`; }).join("");
   $("dailySub").textContent = `Выполнено ${n} из 3 · новые задания каждый день в 00:00 UTC`;
+}
+
+// ===== фото-режим: пауза, скрыть интерфейс, орбита, сохранить кадр
+var PHOTO = false; let photoPrevCam = 0;
+function togglePhoto(on) {
+  if (!flight) return;
+  PHOTO = on === undefined ? !PHOTO : on;
+  document.getElementById("app").classList.toggle("photo", PHOTO); $("photoBar").hidden = !PHOTO;
+  if (PHOTO) { photoPrevCam = camMode; camMode = 2; orbit.dist = Math.max(orbit.dist, flight.cfg.length * 1.6); }
+  else { camMode = photoPrevCam; $("bCam").textContent = "Камера: " + CAMS[camMode]; }
+}
+function savePhoto() {
+  renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL("image/png"), a = document.createElement("a");
+  a.href = url; a.download = "skypilot-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".png"; document.body.appendChild(a); a.click(); a.remove();
+  toast("Фото сохранено");
 }
 function scoreLanding(ap, text) {
   const now = performance.now() / 1000; if (now - lastScoredLanding < 8) return;
@@ -2588,7 +2612,7 @@ function frame(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t; fps += ((1 / Math.max(dt, 1e-3)) - fps) * 0.05;
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $("toast").hidden = true; }
   const f = flight;
-  if (f && !f.crashed) {
+  if (f && !f.crashed && !PHOTO) {
     windStep(dt); f.wind = windVec();
     const k = (c) => keys.has(c);
     padPoll();
@@ -2809,6 +2833,7 @@ function renderSettings() {
   }
 }
 $("mSet").onclick = () => { renderSettings(); $("setO").hidden = false; }; $("setClose").onclick = () => ($("setO").hidden = true);
+$("photoSave").onclick = savePhoto; $("photoExit").onclick = () => togglePhoto(false); $("bHelp") && $("bHelp").insertAdjacentHTML("beforebegin", '<button class="tb" id="bPhoto">📷 Фото</button>'); $("bPhoto") && ($("bPhoto").onclick = () => togglePhoto());
 $("loading").hidden = true;
 requestAnimationFrame(frame);
 try { navigator.wakeLock && navigator.wakeLock.request("screen").catch(() => {}); } catch (e) {}

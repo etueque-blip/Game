@@ -130,6 +130,7 @@ function Ui.new(cb: Callbacks)
 	local bDebug = button(top, "Отладка")
 	local bGuide = button(top, "Инструкция")
 	local bHelp = button(top, "Клавиши")
+	local bPhoto = button(top, "📷")
 	local planeName = new("TextLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -4, 0, 48), Size = UDim2.fromOffset(260, 20), Font = FONT_TITLE, TextSize = 15, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Right, Text = "", TextStrokeTransparency = 0.6 }, root)
 	self.bCam, self.bMouse, self.bAP = bCam, bMouse, bAP
 
@@ -836,7 +837,7 @@ function Ui.new(cb: Callbacks)
 		"F / R — закрылки выпустить / убрать      G — шасси      B — тормоз (держать)",
 		"T — реверс на земле      P — автопилот (держит курс, высоту, скорость)      Пробел — стояночный тормоз",
 		"V — камера (сзади / кабина / орбита)      M — ангар      C — мышь-штурвал",
-		"X — интерцепторы (быстрее снижение и торможение)      I — инструкция      K — карта мира",
+		"X — интерцепторы (быстрее снижение и торможение)      I — инструкция      K — карта мира      H — фото-режим",
 		"N — навигация: стрелка на аэропорт или город; с выбранной целью автопилот (P) летит к ней сам",
 		"Гонка: пролети сквозь голубое кольцо у Skyport — маршрут Дубай → Ташкент → Лондон → домой, 13 колец, +1500 очков",
 		"",
@@ -1125,6 +1126,21 @@ function Ui.new(cb: Callbacks)
 	bMap.Activated:Connect(function()
 		cb.onAction("map")
 	end)
+	bPhoto.Activated:Connect(function()
+		cb.onAction("photo")
+	end)
+	-- фото-режим: прячем весь интерфейс, кроме подсказки внизу
+	local photoBar = new("TextButton", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(0, 40), AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = C.panel, BackgroundTransparency = 0.15, Font = FONT, TextSize = 14, TextColor3 = C.fg, Text = "📷 Фото-режим · пауза · ПКМ/палец — вращать, колесо — зум · H или нажми, чтобы выйти", Visible = false, ZIndex = 50 }, gui)
+	corner(photoBar, 14)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16) }, photoBar)
+	photoBar.Activated:Connect(function()
+		cb.onAction("photo")
+	end)
+	function self.setPhoto(on: boolean)
+		root.Visible = not on
+		photoBar.Visible = on
+	end
 	bGuide.Activated:Connect(function()
 		cb.onAction("guide")
 	end)

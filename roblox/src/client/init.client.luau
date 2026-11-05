@@ -137,6 +137,18 @@ local function onAction(a: string)
 	elseif a == "cam" then
 		ui.setCamLabel(cameraRig.cycle())
 		return
+	elseif a == "photo" then
+		if flight and not flight.crashed then
+			photoMode = not photoMode
+			if photoMode then
+				photoPrevCam = cameraRig.mode
+				cameraRig.mode = 3
+			else
+				cameraRig.mode = photoPrevCam
+			end
+			ui.setPhoto(photoMode)
+		end
+		return
 	elseif a == "map" then
 		ui.toggleMap()
 		return
@@ -216,6 +228,7 @@ end
 
 -- объявлена заранее: кнопка «Выйти из самолёта» (onExit) вызывает её раньше определения ниже
 local stopFlight: () -> ()
+local photoMode, photoPrevCam = false, 1
 ui = Ui.new({
 	onPick = requestFlight,
 	onAction = onAction,
@@ -246,6 +259,11 @@ end)
 cameraRig = CameraRig.new(ui)
 
 function stopFlight()
+	if photoMode then
+		photoMode = false
+		cameraRig.mode = photoPrevCam
+		ui.setPhoto(false)
+	end
 	flight, model, root, simulating, apTarget, crashPose = nil, nil, nil, false, nil, nil
 	if engineSound then
 		engineSound:Destroy()
@@ -498,6 +516,13 @@ RunService.PreSimulation:Connect(function(dt)
 			return
 		end
 		simulating = true
+	end
+	-- фото-режим: самолёт замер в воздухе (держим позу, скорость обнулена)
+	if photoMode then
+		root.CFrame = FlightPhysics.pose(f)
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+		return
 	end
 	local input, manual = controls.read()
 	if parkBrake then
