@@ -393,6 +393,15 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .spec .nums b { display: block; font-family: var(--f-num); font-size: 16px; color: #fff; }
 .spec .nums small { display: block; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 @media (max-height: 500px) { .spec .bars { padding: 6px 10px; gap: 3px 8px; } .spec .nums b { font-size: 13px; } }
+
+/* экран крушения: отчёт о полёте */
+.cstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.cstats div { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 12px; padding: 8px 4px; text-align: center; min-width: 0; }
+.cstats b { display: block; font-family: var(--f-num); font-size: 17px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cstats small { display: block; font-size: 9.5px; letter-spacing: .1em; color: var(--dim); text-transform: uppercase; }
+.ctip { background: rgba(244,193,82,.12); border: 1px solid rgba(244,193,82,.45); border-radius: 12px; padding: 10px 12px; font-size: 14px; line-height: 1.45; }
+.ctip b { color: var(--gold); }
+@media (max-width: 600px) { .cstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
 
 <div id="app">
@@ -537,8 +546,10 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
   <div class="overlay" id="crash" hidden>
     <div class="sheet">
-      <h2>Крушение</h2>
-      <p id="crashReason" style="margin-inline:auto"></p>
+      <h2 style="color:var(--red)">💥 Крушение</h2>
+      <p id="crashReason" style="margin-inline:auto;color:var(--fg);font-size:15px"></p>
+      <div class="cstats" id="cStats"></div>
+      <div class="ctip" id="cTip"></div>
       <div class="row" style="justify-content:center"><button class="tb primary" id="again">Снова</button><button class="tb" id="toHangar">В ангар</button></div>
     </div>
   </div>
@@ -1653,7 +1664,7 @@ let gearAnim = 1;
 function startFlight(cfg, mode) {
   if (planeObj) scene.remove(planeObj);
   debris.forEach((d) => scene.remove(d.m)); debris.length = 0;
-  lastCfg = cfg; lastMode = mode; lastDest = flightDest; raceReset(); gateTarget = null; const __seq = ++window.__flightSeq; atcStart(mode);
+  lastCfg = cfg; lastMode = mode; fstatsReset(cfg); lastDest = flightDest; raceReset(); gateTarget = null; const __seq = ++window.__flightSeq; atcStart(mode);
   parkBrake = mode.startsWith("runway"); { const a0 = AIRPORTS.find((a) => "runway:" + a.id === mode); scoreFrom = a0 ? a0.id : null; } if (mode === "race") navIdx = 0;
   if (flightDest) { navIdx = AIRPORTS.findIndex((a) => a.id === flightDest) + 1; setTimeout(() => { if (__seq !== window.__flightSeq) return; const d = AIRPORTS[navIdx - 1]; toast("Рейс в " + d.code + " · " + d.title + " — навигация включена", "var(--magenta)"); }, 3200); }
   flight = newFlight(cfg, mode);
@@ -1902,6 +1913,33 @@ function achRender() {
     return `<div class="achc${on ? " on" : ""}"><span class="ai">${on ? ic : "🔒"}</span><b>${t}</b><small>${d}</small><em>+${r}</em></div>`; }).join("");
   $("achSub").textContent = `Открыто ${n} из ${ACH.length} · награды до +${total.toLocaleString("ru-RU")} очков · аэропортов посещено: ${ACHS.visited.length}/${AIRPORTS.length}`;
   $("achBar").style.width = (n / ACH.length * 100).toFixed(1) + "%";
+}
+
+// ===== статистика полёта и совет после крушения (как Guide.crashTip в Roblox)
+const FST = { time: 0, dist: 0, maxAlt: 0, maxKts: 0, maxG: 1, landings: 0, startPts: 0, plane: "", lx: null, lz: 0 };
+function fstatsReset(cfg) { Object.assign(FST, { time: 0, dist: 0, maxAlt: 0, maxKts: 0, maxG: 1, landings: 0, startPts: SCORE.points, plane: cfg.name, lx: null, lz: 0 }); }
+function fstatsFrame(f, dt) {
+  if (!f.onGround) FST.time += dt;
+  if (FST.lx !== null) FST.dist += Math.hypot(f.pos.x - FST.lx, f.pos.z - FST.lz);
+  FST.lx = f.pos.x; FST.lz = f.pos.z;
+  FST.maxAlt = Math.max(FST.maxAlt, f.pos.y * FT); FST.maxKts = Math.max(FST.maxKts, f.speed); FST.maxG = Math.max(FST.maxG, f.gload || 1);
+}
+function crashTip(reason) {
+  const r = reason.toLowerCase(), has = (w) => r.includes(w);
+  if (has("без шасси")) return "Выпусти шасси (G) заранее — примерно на 1500 ft, когда скорость ниже 270 kt.";
+  if (has("жёсткая")) return "Перед касанием вертикальная должна быть меньше 600 ft/min: у самой земли убери тягу (Z) и плавно подними нос.";
+  if (has("крылом")) return "Касайся полосы с ровными крыльями: крен не больше 5–10°, нос чуть выше горизонта.";
+  if (has("перегрузка") || has("ограничения")) return "Тяни штурвал плавнее и следи за индикатором G справа; не превышай максимальную скорость.";
+  if (has("здани") || has("земл") || has("гор")) return "Держи высоту над городами и горами; при «PULL UP» сразу тяни на себя и добавь тягу.";
+  if (has("край")) return "Не улетай за край карты: радар и навигация (N) покажут аэропорты.";
+  return "Открой «Инструкцию» (I): там скорости взлёта, захода и пределы этого самолёта.";
+}
+function fillCrash() {
+  const t = Math.floor(FST.time), cell = (v, k) => `<div><b>${v}</b><small>${k}</small></div>`;
+  $("cStats").innerHTML = cell(`${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`, "в воздухе") + cell((FST.dist * 0.515 / 1000).toFixed(1) + " км", "пройдено") +
+    cell(Math.round(FST.maxAlt).toLocaleString("ru-RU") + " ft", "макс. высота") + cell(Math.round(FST.maxKts) + " kt", "макс. скорость") +
+    cell(FST.maxG.toFixed(1), "макс. G") + cell(FST.landings, "посадок") + cell("+" + Math.max(0, SCORE.points - FST.startPts), "очки") + `<div><b style="font-size:12px;white-space:normal;line-height:1.25">${FST.plane || "—"}</b><small>самолёт</small></div>`;
+  $("cTip").innerHTML = "<b>Совет:</b> " + crashTip($("crashReason").textContent || "");
 }
 function scoreLanding(ap, text) {
   const now = performance.now() / 1000; if (now - lastScoredLanding < 8) return;
@@ -2300,12 +2338,12 @@ function frame(t) {
     };
     const __prev = f.pos.clone();
     physicsStep(f, input, dt);
-    achFrame(f);
+    achFrame(f); fstatsFrame(f, dt);
     if (!f.crashed) raceStep(__prev, f.pos);
     for (const ev of f.events) {
       if (ev.type === "landing") {
         addLog(ev.text);
-        { const ap = airportAt(f.pos.x, f.pos.z); { const __pts = ap ? scoreLanding(ap, ev.text) : 0; showLandingReport(f, ap, ev.text, __pts || 0); achLanding(f, ap, ev.text); } if (ap && flightDest && ap.id === flightDest) addScore(1000, "рейс выполнен"); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
+        { const ap = airportAt(f.pos.x, f.pos.z); { const __pts = ap ? scoreLanding(ap, ev.text) : 0; showLandingReport(f, ap, ev.text, __pts || 0); achLanding(f, ap, ev.text); FST.landings++; } if (ap && flightDest && ap.id === flightDest) addScore(1000, "рейс выполнен"); if (ap) atc(`Вышка ${ap.code}: ${callsign}, посадка в ${hhmm()}. Освободите полосу.`); if (flightDest && ap && ap.id === flightDest) { const d = ap; flightDest = null; setTimeout(() => toast("РЕЙС ВЫПОЛНЕН · " + d.code + " · " + d.title, "var(--green)"), 2500); { const L = STANDS[d.id]; gateTarget = L[Math.floor(Math.random() * L.length)]; setTimeout(() => gateTarget && toast("Зарули на стоянку " + gateTarget.id + " и остановись", "var(--magenta)"), 5500); } addLog("Рейс выполнен: " + d.code); } }
         for (const g of planeObj.userData.mainGear) for (let i = 0; i < 5; i++) spawnPuff(g.clone().applyQuaternion(f.att).add(f.pos), 0xdcdcdc, f.cfg.diameter * 0.5, 1.8, f.cfg.diameter * 1.2, new V3(R(-3, 3), R(1, 4), R(-3, 3)).add(f.vel.clone().multiplyScalar(0.3)), 0.7);
       }
       else if (ev.type === "log") { addLog(ev.text); if (ev.text.startsWith("Отрыв")) achUnlock("first_flight"); if (ev.text.startsWith("Отрыв")) atc(`${callsign}, взлёт в ${hhmm()}. Набирайте 3000 ft, курс по навигации.`); }
@@ -2343,7 +2381,7 @@ function frame(t) {
     const gy = groundAt(d.m.position.x, d.m.position.z); if (d.m.position.y < gy + 0.5) { d.m.position.y = gy + 0.5; d.v.multiplyScalar(0.4); d.v.y = Math.abs(d.v.y) * 0.3; }
     d.m.rotation.x += d.w.x * dt; d.m.rotation.y += d.w.y * dt;
   }
-  if (crashTimer > 0) { crashTimer -= dt; if (crashTimer <= 0) $("crash").hidden = false; }
+  if (crashTimer > 0) { crashTimer -= dt; if (crashTimer <= 0) { fillCrash(); $("crash").hidden = false; } }
 
   // камера
   if (f) {

@@ -542,6 +542,47 @@ function rabbitStep(dt) {
 """
 
 
+CRASH_CSS = """
+/* экран крушения: отчёт о полёте */
+.cstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.cstats div { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 12px; padding: 8px 4px; text-align: center; min-width: 0; }
+.cstats b { display: block; font-family: var(--f-num); font-size: 17px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cstats small { display: block; font-size: 9.5px; letter-spacing: .1em; color: var(--dim); text-transform: uppercase; }
+.ctip { background: rgba(244,193,82,.12); border: 1px solid rgba(244,193,82,.45); border-radius: 12px; padding: 10px 12px; font-size: 14px; line-height: 1.45; }
+.ctip b { color: var(--gold); }
+@media (max-width: 600px) { .cstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+"""
+
+CRASH_JS = r"""
+// ===== статистика полёта и совет после крушения (как Guide.crashTip в Roblox)
+const FST = { time: 0, dist: 0, maxAlt: 0, maxKts: 0, maxG: 1, landings: 0, startPts: 0, plane: "", lx: null, lz: 0 };
+function fstatsReset(cfg) { Object.assign(FST, { time: 0, dist: 0, maxAlt: 0, maxKts: 0, maxG: 1, landings: 0, startPts: SCORE.points, plane: cfg.name, lx: null, lz: 0 }); }
+function fstatsFrame(f, dt) {
+  if (!f.onGround) FST.time += dt;
+  if (FST.lx !== null) FST.dist += Math.hypot(f.pos.x - FST.lx, f.pos.z - FST.lz);
+  FST.lx = f.pos.x; FST.lz = f.pos.z;
+  FST.maxAlt = Math.max(FST.maxAlt, f.pos.y * FT); FST.maxKts = Math.max(FST.maxKts, f.speed); FST.maxG = Math.max(FST.maxG, f.gload || 1);
+}
+function crashTip(reason) {
+  const r = reason.toLowerCase(), has = (w) => r.includes(w);
+  if (has("без шасси")) return "Выпусти шасси (G) заранее — примерно на 1500 ft, когда скорость ниже 270 kt.";
+  if (has("жёсткая")) return "Перед касанием вертикальная должна быть меньше 600 ft/min: у самой земли убери тягу (Z) и плавно подними нос.";
+  if (has("крылом")) return "Касайся полосы с ровными крыльями: крен не больше 5–10°, нос чуть выше горизонта.";
+  if (has("перегрузка") || has("ограничения")) return "Тяни штурвал плавнее и следи за индикатором G справа; не превышай максимальную скорость.";
+  if (has("здани") || has("земл") || has("гор")) return "Держи высоту над городами и горами; при «PULL UP» сразу тяни на себя и добавь тягу.";
+  if (has("край")) return "Не улетай за край карты: радар и навигация (N) покажут аэропорты.";
+  return "Открой «Инструкцию» (I): там скорости взлёта, захода и пределы этого самолёта.";
+}
+function fillCrash() {
+  const t = Math.floor(FST.time), cell = (v, k) => `<div><b>${v}</b><small>${k}</small></div>`;
+  $("cStats").innerHTML = cell(`${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`, "в воздухе") + cell((FST.dist * 0.515 / 1000).toFixed(1) + " км", "пройдено") +
+    cell(Math.round(FST.maxAlt).toLocaleString("ru-RU") + " ft", "макс. высота") + cell(Math.round(FST.maxKts) + " kt", "макс. скорость") +
+    cell(FST.maxG.toFixed(1), "макс. G") + cell(FST.landings, "посадок") + cell("+" + Math.max(0, SCORE.points - FST.startPts), "очки") + `<div><b style="font-size:12px;white-space:normal;line-height:1.25">${FST.plane || "—"}</b><small>самолёт</small></div>`;
+  $("cTip").innerHTML = "<b>Совет:</b> " + crashTip($("crashReason").textContent || "");
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -741,6 +782,18 @@ def add_premium(s, patch):
               "  instanced(new THREE.BoxGeometry(1, 1, 1), basic(0xff3030), toW(red));" + ALS_INST_JS)
     s = patch(s, "function dayNight(dt) {\n", "function dayNight(dt) {\n  rabbitStep(dt);\n")
     s = patch(s, "function buildAirport(ap) {", RABBIT_JS + "function buildAirport(ap) {")
+    # экран крушения: отчёт о полёте (статистика) и совет по причине
+    s = patch(s, """      <h2>Крушение</h2>
+      <p id="crashReason" style="margin-inline:auto"></p>""", """      <h2 style="color:var(--red)">💥 Крушение</h2>
+      <p id="crashReason" style="margin-inline:auto;color:var(--fg);font-size:15px"></p>
+      <div class="cstats" id="cStats"></div>
+      <div class="ctip" id="cTip"></div>""")
+    s = patch(s, "</style>\n\n<div id=\"app\">", CRASH_CSS + "</style>\n\n<div id=\"app\">")
+    s = patch(s, "function scoreLanding(ap, text) {", CRASH_JS + "function scoreLanding(ap, text) {")
+    s = patch(s, "lastCfg = cfg; lastMode = mode;", "lastCfg = cfg; lastMode = mode; fstatsReset(cfg);")
+    s = patch(s, "    achFrame(f);\n", "    achFrame(f); fstatsFrame(f, dt);\n")
+    s = patch(s, "achLanding(f, ap, ev.text); }", "achLanding(f, ap, ev.text); FST.landings++; }")
+    s = patch(s, 'if (crashTimer <= 0) $("crash").hidden = false; }', 'if (crashTimer <= 0) { fillCrash(); $("crash").hidden = false; } }')
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

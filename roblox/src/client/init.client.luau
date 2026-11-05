@@ -241,7 +241,16 @@ local function stopFlight()
 	setCharacterControls(true)
 end
 
+-- статистика полёта для экрана крушения
+local fstats = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = 0, lastPos = nil :: Vector3? }
+local function playerPoints(): number
+	local ls = Players.LocalPlayer:FindFirstChild("leaderstats")
+	local v = ls and ls:FindFirstChild("Очки")
+	return if v and v:IsA("IntValue") then v.Value else 0
+end
+
 FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: string, spawnCF: CFrame)
+	fstats = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = playerPoints(), lastPos = nil }
 	local cfg = PlaneConfigs.PLANES[planeId]
 	if not cfg or not m then
 		return
@@ -365,6 +374,7 @@ local function handleEvents(f: FlightPhysics.Flight)
 	for _, ev in f.events do
 		if ev.type == "landing" then
 			addLog(ev.text)
+			fstats.landings += 1
 			-- карточка «отчёт о посадке» (очки за касание — как на сервере; бонусы за перелёт/рейс приходят уведомлением)
 			do
 				local ap = ev.airport and World.airportById(ev.airport)
@@ -516,6 +526,18 @@ end
 
 local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local c = f.cfg
+	fstats.plane = c.name
+	if not f.onGround then
+		fstats.time += dt
+	end
+	if fstats.lastPos then
+		local d = f.pos - (fstats.lastPos :: Vector3)
+		fstats.dist += Vector3.new(d.X, 0, d.Z).Magnitude
+	end
+	fstats.lastPos = f.pos
+	fstats.maxAlt = math.max(fstats.maxAlt, f.pos.Y * FT)
+	fstats.maxKts = math.max(fstats.maxKts, f.speed)
+	fstats.maxG = math.max(fstats.maxG, f.gload)
 	if f.pos.Y * FT > 35000 then
 		claimAch("high")
 	end
@@ -670,7 +692,8 @@ RunService:BindToRenderStep("SkyPilot", Enum.RenderPriority.Camera.Value + 1, fu
 			if crashTimer > 0 then
 				crashTimer -= dt
 				if crashTimer <= 0 then
-					ui.showCrash(f.crashReason or "Крушение")
+					fstats.points = math.max(0, playerPoints() - fstats.startPts)
+					ui.showCrash(f.crashReason or "Крушение", fstats)
 				end
 			end
 			cameraRig.update(dt, crashPose or FlightPhysics.pose(f), f.cfg, 0, false, true)

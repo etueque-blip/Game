@@ -858,10 +858,26 @@ function Ui.new(cb: Callbacks)
 	end)
 
 	-- крушение
-	local crash, cs = overlay("Crash", 440)
-	h2(cs, "Крушение", C.red, 1)
+	-- экран крушения: причина, отчёт о полёте (статистика) и совет
+	local crash, cs = overlay("Crash", 520)
+	h2(cs, "💥 Крушение", C.red, 1)
 	local crashReason = para(cs, "", 2)
-	local cr = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, cs)
+	crashReason.TextColor3 = C.fg
+	local statGrid = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, cs)
+	new("UIGridLayout", { CellSize = UDim2.new(0.25, -6, 0, 50), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, statGrid)
+	local statCells: { TextLabel } = {}
+	for i, k in { "В ВОЗДУХЕ", "ПРОЙДЕНО", "МАКС. ВЫСОТА", "МАКС. СКОРОСТЬ", "МАКС. G", "ПОСАДОК", "ОЧКИ", "САМОЛЁТ" } do
+		local cell = new("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.94, LayoutOrder = i, ZIndex = 23 }, statGrid)
+		corner(cell, 10)
+		stroke(cell)
+		statCells[i] = new("TextLabel", { Size = UDim2.new(1, -8, 0, 22), Position = UDim2.fromOffset(4, 6), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 16, TextColor3 = C.fg, TextTruncate = Enum.TextTruncate.AtEnd, Text = "—", ZIndex = 24 }, cell)
+		new("TextLabel", { Size = UDim2.new(1, 0, 0, 12), Position = UDim2.fromOffset(0, 31), BackgroundTransparency = 1, Font = FONT, TextSize = 9, TextColor3 = C.dim, Text = k, ZIndex = 24 }, cell)
+	end
+	local tipBox = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = C.gold, BackgroundTransparency = 0.88, LayoutOrder = 4, ZIndex = 22 }, cs)
+	corner(tipBox, 12)
+	new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, tipBox)
+	local tipText = new("TextLabel", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.fg, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, RichText = true, Text = "", ZIndex = 23 }, tipBox)
+	local cr = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 5, ZIndex = 22 }, cs)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, cr)
 	local again = button(cr, "Снова", { ZIndex = 23 })
 	primary(again)
@@ -955,8 +971,22 @@ function Ui.new(cb: Callbacks)
 	function self.hangarVisible(): boolean
 		return hangar.Visible
 	end
-	function self.showCrash(reason: string)
+	function self.showCrash(reason: string, st: any?)
 		crashReason.Text = reason
+		local v = st or {}
+		local secs = math.floor(v.time or 0)
+		statCells[1].Text = string.format("%d:%02d", secs // 60, secs % 60)
+		statCells[2].Text = string.format("%.1f км", (v.dist or 0) * World.METERS_PER_STUD / 1000)
+		statCells[3].Text = string.format("%d ft", math.round(v.maxAlt or 0))
+		statCells[4].Text = string.format("%d kt", math.round(v.maxKts or 0))
+		statCells[5].Text = string.format("%.1f", v.maxG or 1)
+		statCells[6].Text = tostring(v.landings or 0)
+		statCells[7].Text = "+" .. tostring(v.points or 0)
+		statCells[8].Text = v.plane or "—"
+		statCells[8].TextSize = 11
+		statCells[8].TextWrapped = true
+		statCells[8].TextTruncate = Enum.TextTruncate.None
+		tipText.Text = "<b>Совет:</b> " .. Guide.crashTip(reason)
 		crash.Visible = true
 	end
 	function self.hideCrash()

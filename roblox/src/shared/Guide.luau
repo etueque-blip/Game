@@ -38,4 +38,26 @@ function Guide.steps(c: any): { { string } }
 	}
 end
 
+-- Совет после крушения по его причине (тот же текст — в веб-версии, crashTip)
+function Guide.crashTip(reason: string): string
+	local r = string.lower(reason)
+	local function has(w: string): boolean
+		return string.find(r, w, 1, true) ~= nil
+	end
+	if has("без шасси") then
+		return "Выпусти шасси (G) заранее — примерно на 1500 ft, когда скорость ниже 270 kt."
+	elseif has("жёсткая") then
+		return "Перед касанием вертикальная должна быть меньше 600 ft/min: у самой земли убери тягу (Z) и плавно подними нос."
+	elseif has("крылом") then
+		return "Касайся полосы с ровными крыльями: крен не больше 5–10°, нос чуть выше горизонта."
+	elseif has("перегрузка") or has("ограничения") then
+		return "Тяни штурвал плавнее и следи за индикатором G справа; не превышай максимальную скорость."
+	elseif has("здани") or has("земл") or has("гор") then
+		return "Держи высоту над городами и горами; при «PULL UP» сразу тяни на себя и добавь тягу."
+	elseif has("край") then
+		return "Не улетай за край карты: радар и навигация (N) покажут аэропорты."
+	end
+	return "Открой «Инструкцию» (I): там скорости взлёта, захода и пределы этого самолёта."
+end
+
 return Guide
