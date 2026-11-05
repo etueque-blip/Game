@@ -945,6 +945,49 @@ function savePhoto() {
 """
 
 
+CTRL_JS = r"""  if (kind !== "light" || true) {
+    const cs = [];
+    // шарнир: группа на линии шарнира, локальная X вдоль шарнира, деталь позади (по +Z); поворот вокруг X
+    const piece = (A, B, cf, th, mat, kindC) => {
+      if (B.x < A.x && kindC !== "rud") { const t = A; A = B; B = t; }
+      const d = B.clone().sub(A), len = d.length(), g = new THREE.Group();
+      g.position.copy(A).add(B).multiplyScalar(0.5); body.add(g);
+      const xAxis = d.clone().normalize(), zAxis = new V3(0, 0, 1).sub(xAxis.clone().multiplyScalar(xAxis.z)).normalize(), yAxis = zAxis.clone().cross(xAxis);
+      g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
+      const pivot = new THREE.Group(); g.add(pivot);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len, th, cf), mat); m.position.z = cf / 2; m.castShadow = sh; pivot.add(m);
+      cs.push({ pivot, kind: kindC, cur: 0 });
+    };
+    const chordAt = (stt, t) => { for (let i = 1; i < stt.length; i++) if (t <= stt[i].t) { const a = stt[i - 1], b = stt[i], k = (t - a.t) / (b.t - a.t); return a.chord + (b.chord - a.chord) * k; } return stt[stt.length - 1].chord; };
+    const teAt = (w, stt, t, frac) => { const c = chordAt(stt, t); return [w.rootLE.clone().addScaledVector(w.spanVec, t).add(new V3(0, 0, c * (1 - frac))), c * frac]; };
+    for (const sd of [-1, 1]) {
+      const w = wings[sd];
+      const [a0, c0] = teAt(w, st, 0.6, 0.26), [a1, c1] = teAt(w, st, 0.92, 0.26);
+      piece(a0, a1, (c0 + c1) / 2, Math.max(0.15, (c0 + c1) * 0.03), wingMat, sd > 0 ? "ailR" : "ailL");
+      if (!cfg.noFlaps) { const [f0, k0] = teAt(w, st, 0.08, 0.26), [f1, k1] = teAt(w, st, 0.52, 0.26); piece(f0, f1, (k0 + k1) / 2, Math.max(0.15, (k0 + k1) * 0.03), wingMat, "flap"); }
+      const half = cfg.hstabSpan / 2, sw = THREE.MathUtils.degToRad(cfg.sweep + 6), hsRoot = hsLE.clone().add(new V3(sd * (T ? 0 : Rr * 0.2), 0, 0));
+      const hsVec = new V3(sd * half, half * Math.tan(THREE.MathUtils.degToRad(T ? 1 : 6)), half * Math.tan(sw)), hst = [{ t: 0, chord: hsRootC }, { t: 1, chord: hsRootC * 0.42 }];
+      const [e0, d0] = teAt({ rootLE: hsRoot, spanVec: hsVec }, hst, 0.08, 0.3), [e1, d1] = teAt({ rootLE: hsRoot, spanVec: hsVec }, hst, 0.95, 0.3);
+      piece(e0, e1, (d0 + d1) / 2, Math.max(0.12, (d0 + d1) * 0.03), T ? tailMat : wingMat, "elev");
+    }
+    const fst = [{ t: 0, chord: finRootC }, { t: 1, chord: finTipC }];
+    const [r0, q0] = teAt({ rootLE: finRoot, spanVec: finVec }, fst, 0.08, 0.3), [r1, q1] = teAt({ rootLE: finRoot, spanVec: finVec }, fst, 0.92, 0.3);
+    piece(r0, r1, (q0 + q1) / 2, Math.max(0.12, (q0 + q1) * 0.03), tailMat, "rud");
+    root.userData.cs = cs;
+  }
+"""
+
+CTRL_ANIM_JS = r"""// отклонение рулей: элероны по крену, руль высоты по тангажу, руль направления по педалям, закрылки по положению
+function ctrlAnim(cs, f, dt) {
+  const R = THREE.MathUtils.degToRad, k = Math.min(1, dt * 10);
+  for (const c of cs) {
+    const target = c.kind === "ailR" ? -f.inR * 18 : c.kind === "ailL" ? f.inR * 18 : c.kind === "elev" ? -f.inP * 20 : c.kind === "rud" ? f.inY * 25 : f.flaps * 11;
+    c.cur += (target - c.cur) * k; c.pivot.rotation.x = R(c.cur);
+  }
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -1234,6 +1277,10 @@ def add_premium(s, patch):
     s = patch(s, '<div id="gm" hidden></div>', '<div id="gm" hidden></div>\n  <div id="photoBar" hidden><b>📷 Фото-режим</b><span>Пауза · крути камеру мышью или пальцем, колесо — зум</span><button class="tb primary" id="photoSave">Сохранить фото</button><button class="tb" id="photoExit">Выйти (H)</button></div>')
     s = patch(s, "function scoreLanding(ap, text) {", PHOTO_JS + "function scoreLanding(ap, text) {")
     s = patch(s, '$("loading").hidden = true;', '$("photoSave").onclick = savePhoto; $("photoExit").onclick = () => togglePhoto(false); $("bHelp") && $("bHelp").insertAdjacentHTML("beforebegin", \'<button class="tb" id="bPhoto">📷 Фото</button>\'); $("bPhoto") && ($("bPhoto").onclick = () => togglePhoto());\n$("loading").hidden = true;')
+    # рули и закрылки: элероны, закрылки, руль высоты, руль направления — отклоняются по управлению
+    s = patch(s, "  root.userData.strobe = finTop.clone()", CTRL_JS + "  root.userData.strobe = finTop.clone()")
+    s = patch(s, "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02;", "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02; if (u.cs) ctrlAnim(u.cs, f, dt);")
+    s = patch(s, "function buildPlane(cfg, isStatic) {", CTRL_ANIM_JS + "function buildPlane(cfg, isStatic) {")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

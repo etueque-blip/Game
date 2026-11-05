@@ -256,6 +256,35 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	local flapsFolder = Instance.new("Folder")
 	flapsFolder.Name = "Flaps"
 	flapsFolder.Parent = model
+	-- рули: элероны, руль высоты, руль направления (поворачивает Animator по управлению)
+	local controlsFolder = Instance.new("Folder")
+	controlsFolder.Name = "Controls"
+	controlsFolder.Parent = model
+	local function controlSurface(kind: string, pA: Vector3, pB: Vector3, fc: number, thick: number, color: Color3, vertical: boolean?)
+		local sgn = if vertical then 1 else (if pB.X >= pA.X then 1 else -1)
+		local u = ((pB - pA) * sgn).Unit
+		local back = Vector3.zAxis - u * Vector3.zAxis:Dot(u)
+		back = back.Unit
+		local upV = back:Cross(u)
+		local hinge = CFrame.fromMatrix((pA + pB) / 2, u, upV, back)
+		local cp = basePart(ctx, "Part", "Control", color)
+		cp.Size = Vector3.new((pB - pA).Magnitude, thick, fc)
+		local c0 = hinge * CFrame.new(0, 0, fc / 2)
+		cp.CFrame = root.CFrame * c0
+		cp.CastShadow = false
+		cp.Parent = controlsFolder
+		if not static then
+			local w = Instance.new("Weld")
+			w.Name = "ControlWeld"
+			w.Part0 = root
+			w.Part1 = cp
+			w.C0 = c0
+			w:SetAttribute("Hinge", hinge)
+			w:SetAttribute("Chord", fc)
+			w:SetAttribute("Kind", kind)
+			w.Parent = cp
+		end
+	end
 	local gearFolder = Instance.new("Folder")
 	gearFolder.Name = "Gear"
 	gearFolder.Parent = model
@@ -281,6 +310,13 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 			local dir = (a1 - a0).Unit
 			local strut = block(ctx, "Strut", Vector3.new((a1 - a0).Magnitude, 0.3, 0.6), CFrame.fromMatrix(mid, dir, Vector3.zAxis:Cross(dir).Unit), col.body)
 			strut.CastShadow = false
+		end
+		-- элерон на внешней части крыла
+		do
+			local ai, cai = wingPoint(s, 0.6)
+			local ao, cao = wingPoint(s, 0.92)
+			local afc = math.min(cai, cao) * 0.26
+			controlSurface(if s > 0 then "ailR" else "ailL", ai + Vector3.new(0, 0, cai - afc), ao + Vector3.new(0, 0, cao - afc), afc, wingThick * 0.6, Color3.fromRGB(214, 218, 224))
 		end
 		-- закрылки на внутренней половине
 		if not cfg.noFlaps then
@@ -361,6 +397,12 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	triangle(ctx, "Fin", finLE, finLE + Vector3.new(0, 0, finRoot), finTipLE + Vector3.new(0, 0, finTip), finThick, col.tail)
 	triangle(ctx, "Fin", finLE, finTipLE + Vector3.new(0, 0, finTip), finTipLE, finThick, col.tail)
 	light(ctx, "beacon", finTipLE + Vector3.new(0, 0.4, finTip * 0.5), Color3.fromRGB(255, 40, 40), math.max(0.5, D * 0.07))
+	do -- руль направления у задней кромки киля
+		local rcB, rcT = finRoot * 0.3, finTip * 0.3
+		local rb = finLE + Vector3.new(0, cfg.finHeight * 0.08, finRoot - rcB)
+		local rt = finTipLE + Vector3.new(0, -cfg.finHeight * 0.08, finTip - rcT)
+		controlSurface("rud", rb, rt, (rcB + rcT) / 2, finThick * 0.7, col.tail, true)
+	end
 	-- форкиль и выхлоп ВСУ
 	triangle(ctx, "Dorsal", finLE + Vector3.new(0, 0, -finRoot * 0.45), finLE, finLE + Vector3.new(0, cfg.finHeight * 0.18, finRoot * 0.12), finThick * 0.8, col.tail)
 	if L > 50 then
@@ -387,6 +429,10 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 		local d = hsHalf - hsRootX
 		local t = Vector3.new(s * hsHalf, hsY + d * 0.05, hsLEz + d * hsTan)
 		panel(ctx, "HStab", r, hsRootChord, t, hsRootChord * 0.45, math.clamp(hsRootChord * 0.08, 0.25, 2), col.body)
+		local efcR, efcT = hsRootChord * 0.3, hsRootChord * 0.45 * 0.3
+		local ea = r + Vector3.new(s * 0.2, 0, hsRootChord - efcR)
+		local eb = t + Vector3.new(-s * 0.5, 0, hsRootChord * 0.45 - efcT)
+		controlSurface("elev", ea, eb, (efcR + efcT) / 2, math.clamp(hsRootChord * 0.08, 0.25, 2) * 0.7, col.body)
 	end
 
 	-- ===== двигатели
@@ -646,6 +692,26 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 end
 
 -- Положение закрылков (0..3) — меняет C0 сварки, работает локально у каждого клиента
+-- p: штурвал на себя (+), r: крен вправо (+), y: педаль вправо (+); значения -1..1
+function PlaneBuilder.setControls(model: Model, p: number, r: number, y: number)
+	local f = model:FindFirstChild("Controls")
+	if not f then
+		return
+	end
+	for _, part in f:GetChildren() do
+		local w = part:FindFirstChild("ControlWeld") :: Weld?
+		if w then
+			local hinge = w:GetAttribute("Hinge") :: CFrame?
+			local fc = w:GetAttribute("Chord") :: number?
+			local kind = w:GetAttribute("Kind")
+			if hinge and fc then
+				local deg = if kind == "ailR" then -r * 18 elseif kind == "ailL" then r * 18 elseif kind == "elev" then -p * 20 else y * 25
+				w.C0 = hinge * CFrame.Angles(math.rad(deg), 0, 0) * CFrame.new(0, 0, fc / 2)
+			end
+		end
+	end
+end
+
 function PlaneBuilder.setFlaps(model: Model, flaps: number)
 	local f = model:FindFirstChild("Flaps")
 	if not f then

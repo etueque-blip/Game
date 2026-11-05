@@ -502,6 +502,7 @@ local function syncState(f: FlightPhysics.Flight)
 		PlaneState:FireServer(f.gear, f.flaps, f.throttle, f.reverse)
 	end
 	Animator.setLocal(model, f.gear, f.flaps, f.throttle)
+	Animator.setInputs(f.inP, f.inR, f.inY)
 end
 
 -- ===== физика: каждый шаг перед симуляцией Roblox

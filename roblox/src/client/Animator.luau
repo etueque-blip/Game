@@ -18,6 +18,11 @@ local caches: { [Model]: Cache } = {}
 local localModel: Model? = nil
 local localState: { gear: boolean, flaps: number, throttle: number } = { gear = true, flaps = 0, throttle = 0 }
 
+local ctrlIn = { p = 0, r = 0, y = 0 }
+function Animator.setInputs(p: number, r: number, y: number)
+	ctrlIn.p, ctrlIn.r, ctrlIn.y = p, r, y
+end
+
 function Animator.setLocal(model: Model?, gear: boolean?, flaps: number?, throttle: number?)
 	localModel = model
 	if gear ~= nil then
@@ -98,6 +103,9 @@ function Animator.step(dt: number, now: number)
 		if c.flaps ~= flaps then
 			c.flaps = flaps
 			PlaneBuilder.setFlaps(m, flaps)
+		end
+		if m == localModel then
+			PlaneBuilder.setControls(m, ctrlIn.p, ctrlIn.r, ctrlIn.y)
 		end
 		-- вентиляторы турбовентиляторных двигателей: быстрее при большей тяге
 		if #c.fans > 0 then
