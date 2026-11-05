@@ -81,6 +81,13 @@ local function setupLighting()
 	clouds.Density = 0.6
 	clouds.Parent = workspace.Terrain
 	skyFx.clouds = clouds
+	-- вода движка: цвет, волны, отражения
+	local T = workspace.Terrain
+	T.WaterColor = Color3.fromRGB(24, 86, 122)
+	T.WaterReflectance = 0.8
+	T.WaterTransparency = 0.35
+	T.WaterWaveSize = 0.12
+	T.WaterWaveSpeed = 9
 end
 
 local function mix(a: Color3, b: Color3, t: number): Color3
@@ -411,6 +418,22 @@ local function buildAirport(folder: Folder, ap: any)
 	spawn.Parent = f
 end
 
+-- Настоящая вода движка (Terrain Water: волны, отражения, прозрачность) вместо плоского стекла.
+-- top — высота поверхности; заливаем слой глубиной 7 stud вниз (ниже — под деталями земли).
+local function terrainWaterBlock(cframe: CFrame, size: Vector3, top: number): boolean
+	local depth = 7
+	return pcall(function()
+		local c = CFrame.new(cframe.Position.X, top - depth / 2, cframe.Position.Z) * cframe.Rotation
+		workspace.Terrain:FillBlock(c, Vector3.new(size.X, depth, size.Z), Enum.Material.Water)
+	end)
+end
+local function terrainWaterDisc(x: number, z: number, diameter: number, top: number): boolean
+	local depth = 7
+	return pcall(function()
+		workspace.Terrain:FillCylinder(CFrame.new(x, top - depth / 2, z), depth, diameter / 2, Enum.Material.Water)
+	end)
+end
+
 -- Города из CityData: каждая запись — деталь (коробка, цилиндр, шар, эллипсоид, клин)
 local function buildCity(folder: Folder)
 	local data = World.CityData
@@ -419,6 +442,18 @@ local function buildCity(folder: Folder)
 	f.Parent = folder
 	for i, d in data.props do
 		local kind = d[1]
+		-- вода (тонкое стекло без столкновений): Босфор, Темза, море, озёра, фонтаны
+		if d[12] == "Glass" and d[13] ~= 1 then
+			if kind == "box" and d[6] < 1 then
+				if terrainWaterBlock(CFrame.new(d[2], d[3], d[4]) * CFrame.Angles(d[8], d[9], d[10]), Vector3.new(d[5], d[6], d[7]), d[3] + d[6] / 2 + 0.05) then
+					continue
+				end
+			elseif kind == "cyl" and d[5] < 1 then
+				if terrainWaterDisc(d[2], d[4], d[6], d[3] + d[5] / 2 + 0.05) then
+					continue
+				end
+			end
+		end
 		local p: BasePart
 		if kind == "wedge" then
 			p = Instance.new("WedgePart")
@@ -511,6 +546,7 @@ local function buildNature(folder: Folder)
 	for _, lk in World.LAKES do
 		if World.terrainH(lk[1], lk[2]) <= 5 then
 			local water = Instance.new("Part")
+			local usedTerrain = terrainWaterDisc(lk[1], lk[2], lk[3], 0.7)
 			water.Shape = Enum.PartType.Cylinder
 			water.Anchored = true
 			water.CanCollide = false
@@ -519,7 +555,9 @@ local function buildNature(folder: Folder)
 			water.Color = Color3.fromRGB(31, 90, 134)
 			water.Material = Enum.Material.Glass
 			water.Reflectance = 0.35
-			water.Parent = f
+			if not usedTerrain then
+				water.Parent = f
+			end
 			local shore = water:Clone()
 			shore.Size = Vector3.new(0.1, lk[3] + 80, lk[3] + 80)
 			shore.CFrame = CFrame.new(lk[1], 0.52, lk[2]) * CFrame.Angles(0, 0, math.pi / 2)

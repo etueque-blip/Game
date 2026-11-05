@@ -480,6 +480,33 @@ FAN_JS = r"""    const back = add(body, new THREE.CircleGeometry(eD * 0.43, 24),
 """
 
 
+WATER_JS = r"""// вода: рябь из нескольких бегущих волн по мировым координатам (для горизонтальной глади)
+const WATER_U = { uTime: { value: 0 } };
+function waveWater(m) {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = WATER_U.uTime;
+    sh.vertexShader = "varying vec3 vWWP;\n" + sh.vertexShader.replace("#include <project_vertex>", `#include <project_vertex>
+      vec4 wwp = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        wwp = instanceMatrix * wwp;
+      #endif
+      vWWP = (modelMatrix * wwp).xyz;`);
+    sh.fragmentShader = "uniform float uTime; varying vec3 vWWP;\n" + sh.fragmentShader.replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
+      vec2 wp = vWWP.xz; float wt = uTime; vec2 g = vec2(0.0);
+      float wd = length(vWWP - cameraPosition), far1 = clamp(1.0 - wd / 900.0, 0.0, 1.0), far2 = clamp(1.0 - wd / 3500.0, 0.0, 1.0);
+      g += vec2(cos(wp.x * 0.045 + wt * 1.1), cos(wp.y * 0.05 + wt * 0.9)) * 0.5;
+      g += vec2(cos((wp.x + wp.y) * 0.11 - wt * 1.7), cos((wp.x - wp.y) * 0.13 + wt * 1.3)) * 0.28 * far2;
+      g += vec2(cos(wp.x * 0.31 + wp.y * 0.07 + wt * 2.3), cos(wp.y * 0.29 - wp.x * 0.05 + wt * 2.1)) * 0.12 * far1;
+      float amp = 0.16 * (0.25 + 0.75 * far2);
+      vec3 wn = normalize(vec3(-g.x * amp, 1.0, -g.y * amp));
+      normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);`).replace("#include <color_fragment>", `#include <color_fragment>
+      diffuseColor.rgb *= 0.9 + 0.18 * sin(vWWP.x * 0.0021 + vWWP.z * 0.0017);`);
+  };
+  return m;
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -662,6 +689,13 @@ def add_premium(s, patch):
               FAN_JS)
     s = patch(s, "      if (u.prop) { u.prop.rotation.z += dt * (8 + f.throttle * 70);",
               "      if (u.fans) for (const r of u.fans) r.rotation.z += dt * (5 + f.throttle * 38);\n      if (u.prop) { u.prop.rotation.z += dt * (8 + f.throttle * 70);")
+    # вода: бегущая рябь (нормали по мировым координатам), блики солнца — море, Босфор, Темза, озёра
+    s = patch(s, "// города: Дубай, Лондон, Ташкент (данные общие с Roblox-версией, tools/gen_cities.py)\n{", WATER_JS + "// города: Дубай, Лондон, Ташкент (данные общие с Roblox-версией, tools/gen_cities.py)\n{")
+    s = patch(s, "    water: new THREE.MeshStandardMaterial({ metalness: 0.4, roughness: 0.05, envMap, envMapIntensity: 1.3 }),",
+              "    water: waveWater(new THREE.MeshStandardMaterial({ metalness: 0.4, roughness: 0.12, envMap, envMapIntensity: 1.3 })),")
+    s = patch(s, "  const water = new THREE.MeshStandardMaterial({ color: lin(0x1f5a86), metalness: 0.35, roughness: 0.06, envMap, envMapIntensity: 1.2 });",
+              "  const water = waveWater(new THREE.MeshStandardMaterial({ color: lin(0x1f5a86), metalness: 0.35, roughness: 0.12, envMap, envMapIntensity: 1.2 }));")
+    s = patch(s, "function dayNight(dt) {\n", "function dayNight(dt) {\n  WATER_U.uTime.value += dt;\n")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);
