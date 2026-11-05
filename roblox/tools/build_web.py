@@ -1028,6 +1028,8 @@ def main():
     s = add_acro(s, patch)
     from web_atr import add_atr
     s = add_atr(s, patch)
+    from web_storm import add_storm
+    s = add_storm(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

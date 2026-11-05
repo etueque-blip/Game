@@ -916,6 +916,111 @@ do
 	end)
 end
 
+-- ===== гроза: в ливень (Rain > 0.6) раз в 6–20 с молния в 1–5 км от камеры — ломаный разряд с ветками,
+-- вспышка неба (ColorCorrection) и гром с задержкой по расстоянию; как в веб-версии (tools/web_storm.py). Только у себя на экране.
+do
+	local Lighting = game:GetService("Lighting")
+	local flashCC = Instance.new("ColorCorrectionEffect")
+	flashCC.Name = "SkyPilotStormFlash"
+	flashCC.Parent = Lighting
+	local rng = Random.new()
+	local nextAt, flash, boltT = 5, 0, 0
+	local bolt: Folder? = nil
+	local boltParts: { BasePart } = {}
+	local function path(a: Vector3, b: Vector3, n: number, jag: number): { Vector3 }
+		local pts = { a }
+		for i = 1, n - 1 do
+			local p = a:Lerp(b, i / n)
+			table.insert(pts, p + Vector3.new(rng:NextNumber(-jag, jag), rng:NextNumber(-jag, jag) * 0.3, rng:NextNumber(-jag, jag)))
+		end
+		table.insert(pts, b)
+		return pts
+	end
+	local function strike()
+		local cam = workspace.CurrentCamera
+		local base = cam.CFrame.Position
+		local ang, dist = rng:NextNumber(0, math.pi * 2), rng:NextNumber(900, 5000)
+		local gx, gz = base.X + math.cos(ang) * dist, base.Z + math.sin(ang) * dist
+		local hit = workspace:Raycast(Vector3.new(gx, 6000, gz), Vector3.new(0, -7000, 0))
+		local gy = if hit then hit.Position.Y else 0
+		local top = Vector3.new(gx + rng:NextNumber(-300, 300), math.max(2400, gy + 2000), gz + rng:NextNumber(-300, 300))
+		if bolt then
+			bolt:Destroy()
+		end
+		local folder = Instance.new("Folder")
+		folder.Name = "SkyPilotBolt"
+		boltParts = {}
+		local w = dist / 900 * 1.6
+		local function seg(pts: { Vector3 }, r: number)
+			for i = 1, #pts - 1 do
+				local a, b = pts[i], pts[i + 1]
+				local p = Instance.new("Part")
+				p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+				p.Material = Enum.Material.Neon
+				p.Color = Color3.fromRGB(235, 242, 255)
+				p.Size = Vector3.new(r * 2, r * 2, (b - a).Magnitude)
+				p.CFrame = CFrame.lookAt((a + b) / 2, b)
+				p.Parent = folder
+				table.insert(boltParts, p)
+			end
+		end
+		local main = path(top, Vector3.new(gx, gy, gz), 16, 160)
+		seg(main, w)
+		for _ = 1, 3 do
+			local s = main[rng:NextInteger(3, 10)]
+			seg(path(s, s + Vector3.new(rng:NextNumber(-500, 500), -rng:NextNumber(300, 700), rng:NextNumber(-500, 500)), 6, 90), w * 0.55)
+		end
+		folder.Parent = workspace
+		bolt, boltT, flash = folder, 0.4, 1
+		local id = (PlaneConfigs :: any).THUNDER_SOUND_ID
+		if type(id) == "string" and id ~= "" then
+			task.delay(math.min(8, dist * 0.515 / 343), function()
+				local snd = Instance.new("Sound")
+				snd.SoundId = id
+				snd.Volume = math.clamp(1.6 - dist / 4000, 0.25, 1.2)
+				snd.Parent = workspace.CurrentCamera
+				snd:Play()
+				snd.Ended:Connect(function()
+					snd:Destroy()
+				end)
+			end)
+		end
+	end
+	RunService.RenderStepped:Connect(function(dt)
+		local r = tonumber(workspace:GetAttribute("Rain")) or 0
+		if r > 0.6 then
+			nextAt -= dt
+			if nextAt <= 0 then
+				nextAt = rng:NextNumber(6, 20)
+				strike()
+			end
+		else
+			nextAt = math.max(nextAt, 3)
+		end
+		if flash > 0 then
+			flash = math.max(0, flash - dt * 2.6)
+			local k = flash * (if flash > 0.55 and rng:NextNumber() < 0.35 then 0.3 else 1)
+			flashCC.Brightness = 0.35 * k
+			flashCC.TintColor = Color3.new(1, 1, 1):Lerp(Color3.fromRGB(215, 228, 255), k)
+		elseif flashCC.Brightness ~= 0 then
+			flashCC.Brightness = 0
+			flashCC.TintColor = Color3.new(1, 1, 1)
+		end
+		if bolt then
+			boltT -= dt
+			if boltT <= 0 then
+				bolt:Destroy()
+				bolt = nil
+			else
+				local tr = 1 - math.clamp(boltT / 0.25, 0, 1) * (if rng:NextNumber() < 0.2 then 0.4 else 1)
+				for _, p in boltParts do
+					p.Transparency = tr
+				end
+			end
+		end
+	end)
+end
+
 -- ===== кадр: камера, приборы, анимация
 RunService:BindToRenderStep("SkyPilot", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	local now = os.clock()
