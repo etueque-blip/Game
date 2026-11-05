@@ -696,12 +696,31 @@ task.spawn(function()
 	task.wait(5) -- даём серверу достроить город
 	local glass: { { p: BasePart, color: Color3, mat: Enum.Material } } = {}
 	local lamps: { BasePart } = {}
+	local rabbits: { BasePart } = {}
 	for _, d in worldFolder:GetDescendants() do
 		if d:IsA("BasePart") and d.Material == Enum.Material.Glass and d.Size.Y > 20 and d.Transparency < 0.5 then
 			table.insert(glass, { p = d, color = d.Color, mat = d.Material })
 		elseif d:IsA("BasePart") and d.Name == "ApronLamp" then
 			table.insert(lamps, d)
+		elseif d:IsA("BasePart") and d.Name == "Rabbit" then
+			table.insert(rabbits, d)
 		end
+	end
+	-- бегущие вспышки огней подхода: дважды в секунду от дальнего огня к полосе
+	if #rabbits > 0 then
+		task.spawn(function()
+			local last = -1
+			while true do
+				local active = math.floor((os.clock() * 2 % 1) * 10)
+				if active ~= last then
+					last = active
+					for _, r in rabbits do
+						r.Transparency = if r:GetAttribute("Seq") == active then 0 else 1
+					end
+				end
+				task.wait(0.03)
+			end
+		end)
 	end
 	local WARM = Color3.fromRGB(255, 205, 130)
 	local night: boolean? = nil

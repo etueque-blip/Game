@@ -1269,6 +1269,17 @@ function numberMesh(text, flip) {
   m.rotation.x = -Math.PI / 2; if (flip) m.rotation.z = Math.PI; m.receiveShadow = true; return m;
 }
 
+// бегущие вспышки огней подхода («кролик»): дважды в секунду от дальнего огня к полосе
+const RABBITS = [];
+let rabbitT = 0;
+function rabbitStep(dt) {
+  rabbitT += dt; const active = Math.floor((rabbitT * 2 % 1) * 20);
+  const m = new THREE.Matrix4(), q = new Q(), p = new V3(), sc = new V3();
+  for (const r of RABBITS) {
+    r.items.forEach((it, i) => { const on = it.seq === active; p.set(it.x, it.y, it.z); sc.set(on ? it.sx : 0.001, on ? it.sy : 0.001, on ? it.sz : 0.001); q.setFromAxisAngle(AY, it.ry || 0); m.compose(p, q, sc); r.im.setMatrixAt(i, m); });
+    r.im.instanceMatrix.needsUpdate = true;
+  }
+}
 function buildAirport(ap) {
   const grp = new THREE.Group(); grp.position.set(ap.cx, 0, ap.cz); grp.rotation.y = ap.rot ? Math.PI / 2 : 0; scene.add(grp);
   const L = ap.L, W = ap.W;
@@ -1285,19 +1296,30 @@ function buildAirport(ap) {
   box(1.2, 0.1, L, yellow, W / 2 + 250, 0.53, 0);
   for (const s of [-1, 1]) box(3, 0.1, L, paint, s * (W / 2 - 5), 0.55, 0);
   for (let z = -L / 2 + 400; z <= L / 2 - 400; z += 220) box(2.5, 0.1, 110, paint, 0, 0.55, z);
-  const white = [], green = [], red = [];
+  const white = [], green = [], red = [], blue = [], poles = [], rabbit = [];
   for (const e of [-1, 1]) {
     for (let i = 1; i <= 6; i++) for (const s of [-1, 1]) box(7, 0.1, 90, paint, s * ((W / 2 - 18) - (i - 1) * 13), 0.55, e * (L / 2 - 60));
     for (const s of [-1, 1]) box(14, 0.1, 180, paint, s * 28, 0.55, e * (L / 2 - 500));
     for (let k = 0; k < 3; k++) for (const s of [-1, 1]) box(4, 0.1, 70, paint, s * 22, 0.55, e * (L / 2 - 800 - k * 150));
     const num = numberMesh(e > 0 ? ap.south : ap.north, e < 0); num.position.set(0, 0.6, e * (L / 2 - 210)); grp.add(num);
     for (let x = -W / 2; x <= W / 2; x += 20) green.push({ x, y: 0.5, z: e * (L / 2 + 2), sx: 2, sy: 1, sz: 2 });
-    for (let k = 1; k <= 10; k++) white.push({ x: 0, y: 0.75, z: e * (L / 2 + 60 * k), sx: 2, sy: 1.5, sz: 2 });
-    white.push({ x: 0, y: 0.75, z: e * (L / 2 + 300), sx: 80, sy: 1.5, sz: 2 });
+    // огни подхода: 30 стоек через 30 stud (900 stud), по 5 огней; поперечины на 300 и 600; красные боковые ряды у торца
+    for (let k = 1; k <= 30; k++) {
+      const z = e * (L / 2 + 30 * k);
+      for (let i = -2; i <= 2; i++) white.push({ x: i * 4, y: 3, z, sx: 2, sy: 1.4, sz: 2 });
+      poles.push({ x: 0, y: 1.4, z, sx: 0.8, sy: 2.8, sz: 0.8 }); poles.push({ x: 0, y: 2.2, z, sx: 18, sy: 0.5, sz: 0.5 });
+      if (k <= 10) for (const s2 of [-1, 1]) for (let i = 0; i < 3; i++) red.push({ x: s2 * (22 + i * 4), y: 3, z, sx: 2, sy: 1.4, sz: 2 });
+      if (k > 10) rabbit.push({ x: 0, y: 4.4, z, sx: 3.4, sy: 2.6, sz: 3.4, seq: 30 - k, end: e });
+    }
+    for (const zc of [300, 600]) for (let x = -66; x <= 66; x += 6) if (Math.abs(x) > 12) white.push({ x, y: 3, z: e * (L / 2 + zc), sx: 2, sy: 1.4, sz: 2 });
+
     const px = -e * (W / 2 + 40);
     for (let i = 1; i <= 4; i++) (i <= 2 ? white : red).push({ x: px - e * (i - 1) * 12, y: 1.5, z: e * (L / 2 - 450), sx: 4, sy: 3, sz: 4 });
   }
   for (let z = -L / 2; z <= L / 2; z += 125) for (const s of [-1, 1]) white.push({ x: s * (W / 2 + 3), y: 0.6, z, sx: 1.6, sy: 1.2, sz: 1.6 });
+  // синие огни по краям рулёжек
+  for (let z = -L / 2; z <= L / 2; z += 60) for (const s of [-1, 1]) blue.push({ x: W / 2 + 250 + s * 31, y: 0.6, z, sx: 1.4, sy: 1.2, sz: 1.4 });
+  for (const zc of [-L / 2 + 150, 0, L / 2 - 150]) for (let x = W / 2 + 20; x <= W / 2 + 215; x += 40) for (const s of [-1, 1]) blue.push({ x, y: 0.6, z: zc + s * 31, sx: 1.4, sy: 1.2, sz: 1.4 });
   for (const z of [-L / 2 + 150, 0, L / 2 - 150]) { box(220, 1, 60, taxi, W / 2 + 110, -0.02, z).receiveShadow = true; box(220, 0.1, 1.2, yellow, W / 2 + 110, 0.53, z); }
   box(600, 1, 2000, concrete, W / 2 + 580, -0.01, 0).receiveShadow = true;
   box(600, 1, 500, concrete, W / 2 + 580, -0.01, -1250).receiveShadow = true;
@@ -1380,6 +1402,9 @@ function buildAirport(ap) {
   instanced(new THREE.BoxGeometry(1, 1, 1), basic(0xfff3d0), toW(white));
   instanced(new THREE.BoxGeometry(1, 1, 1), basic(0x40ff70), toW(green));
   instanced(new THREE.BoxGeometry(1, 1, 1), basic(0xff3030), toW(red));
+  instanced(new THREE.BoxGeometry(1, 1, 1), basic(0x3a6cff), toW(blue));
+  instanced(new THREE.BoxGeometry(1, 1, 1), std(0x50545c, { metal: 0.6, rough: 0.5 }), toW(poles));
+  { const items = toW(rabbit), im = instanced(new THREE.BoxGeometry(1, 1, 1), basic(0xffffff), items); RABBITS.push({ im, items }); }
   const ob = (lx, lz, w, d, h) => { const a = apToWorld(ap, lx - w / 2, lz - d / 2), b = apToWorld(ap, lx + w / 2, lz + d / 2); obstacles.push({ min: { x: Math.min(a.x, b.x), y: 0, z: Math.min(a.z, b.z) }, max: { x: Math.max(a.x, b.x), y: h, z: Math.max(a.z, b.z) } }); };
   ob(tx, 0, 160, 930, 63); ob(tx + 20, 560, 48, 48, 150); ob(W / 2 + 790, -1130, 170, 210, 135); ob(W / 2 + 790, -1370, 170, 210, 135);
   for (const [id, z] of ap.parked) {
@@ -1897,6 +1922,7 @@ const DN = { top: ZENITH.clone(), hor: HORIZON.clone(), gnd: GROUND_HAZE.clone()
 const WARM = new THREE.Color(0xffc480).convertSRGBToLinear();
 let dnLast = -1;
 function dayNight(dt) {
+  rabbitStep(dt);
   WATER_U.uTime.value += dt;
   gameClock = (gameClock + dt * 24 / (DAY_MIN * 60)) % 24;
   const ang = (gameClock - 6) / 24 * Math.PI * 2, elev = Math.sin(ang);

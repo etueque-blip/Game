@@ -507,6 +507,41 @@ function waveWater(m) {
 """
 
 
+ALS_JS = r"""    // огни подхода: 30 стоек через 30 stud (900 stud), по 5 огней; поперечины на 300 и 600; красные боковые ряды у торца
+    for (let k = 1; k <= 30; k++) {
+      const z = e * (L / 2 + 30 * k);
+      for (let i = -2; i <= 2; i++) white.push({ x: i * 4, y: 3, z, sx: 2, sy: 1.4, sz: 2 });
+      poles.push({ x: 0, y: 1.4, z, sx: 0.8, sy: 2.8, sz: 0.8 }); poles.push({ x: 0, y: 2.2, z, sx: 18, sy: 0.5, sz: 0.5 });
+      if (k <= 10) for (const s2 of [-1, 1]) for (let i = 0; i < 3; i++) red.push({ x: s2 * (22 + i * 4), y: 3, z, sx: 2, sy: 1.4, sz: 2 });
+      if (k > 10) rabbit.push({ x: 0, y: 4.4, z, sx: 3.4, sy: 2.6, sz: 3.4, seq: 30 - k, end: e });
+    }
+    for (const zc of [300, 600]) for (let x = -66; x <= 66; x += 6) if (Math.abs(x) > 12) white.push({ x, y: 3, z: e * (L / 2 + zc), sx: 2, sy: 1.4, sz: 2 });
+"""
+
+TAXI_BLUE_JS = r"""
+  // синие огни по краям рулёжек
+  for (let z = -L / 2; z <= L / 2; z += 60) for (const s of [-1, 1]) blue.push({ x: W / 2 + 250 + s * 31, y: 0.6, z, sx: 1.4, sy: 1.2, sz: 1.4 });
+  for (const zc of [-L / 2 + 150, 0, L / 2 - 150]) for (let x = W / 2 + 20; x <= W / 2 + 215; x += 40) for (const s of [-1, 1]) blue.push({ x, y: 0.6, z: zc + s * 31, sx: 1.4, sy: 1.2, sz: 1.4 });"""
+
+ALS_INST_JS = r"""
+  instanced(new THREE.BoxGeometry(1, 1, 1), basic(0x3a6cff), toW(blue));
+  instanced(new THREE.BoxGeometry(1, 1, 1), std(0x50545c, { metal: 0.6, rough: 0.5 }), toW(poles));
+  { const items = toW(rabbit), im = instanced(new THREE.BoxGeometry(1, 1, 1), basic(0xffffff), items); RABBITS.push({ im, items }); }"""
+
+RABBIT_JS = r"""// бегущие вспышки огней подхода («кролик»): дважды в секунду от дальнего огня к полосе
+const RABBITS = [];
+let rabbitT = 0;
+function rabbitStep(dt) {
+  rabbitT += dt; const active = Math.floor((rabbitT * 2 % 1) * 20);
+  const m = new THREE.Matrix4(), q = new Q(), p = new V3(), sc = new V3();
+  for (const r of RABBITS) {
+    r.items.forEach((it, i) => { const on = it.seq === active; p.set(it.x, it.y, it.z); sc.set(on ? it.sx : 0.001, on ? it.sy : 0.001, on ? it.sz : 0.001); q.setFromAxisAngle(AY, it.ry || 0); m.compose(p, q, sc); r.im.setMatrixAt(i, m); });
+    r.im.instanceMatrix.needsUpdate = true;
+  }
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -696,6 +731,16 @@ def add_premium(s, patch):
     s = patch(s, "  const water = new THREE.MeshStandardMaterial({ color: lin(0x1f5a86), metalness: 0.35, roughness: 0.06, envMap, envMapIntensity: 1.2 });",
               "  const water = waveWater(new THREE.MeshStandardMaterial({ color: lin(0x1f5a86), metalness: 0.35, roughness: 0.12, envMap, envMapIntensity: 1.2 }));")
     s = patch(s, "function dayNight(dt) {\n", "function dayNight(dt) {\n  WATER_U.uTime.value += dt;\n")
+    # огни подхода (ALS): стойки с 5 огнями до 900 stud, поперечины, красные боковые ряды, бегущие вспышки; синие огни рулёжек
+    s = patch(s, """    for (let k = 1; k <= 10; k++) white.push({ x: 0, y: 0.75, z: e * (L / 2 + 60 * k), sx: 2, sy: 1.5, sz: 2 });
+    white.push({ x: 0, y: 0.75, z: e * (L / 2 + 300), sx: 80, sy: 1.5, sz: 2 });""", ALS_JS)
+    s = patch(s, "  const white = [], green = [], red = [];", "  const white = [], green = [], red = [], blue = [], poles = [], rabbit = [];")
+    s = patch(s, "  for (let z = -L / 2; z <= L / 2; z += 125) for (const s of [-1, 1]) white.push({ x: s * (W / 2 + 3), y: 0.6, z, sx: 1.6, sy: 1.2, sz: 1.6 });",
+              "  for (let z = -L / 2; z <= L / 2; z += 125) for (const s of [-1, 1]) white.push({ x: s * (W / 2 + 3), y: 0.6, z, sx: 1.6, sy: 1.2, sz: 1.6 });" + TAXI_BLUE_JS)
+    s = patch(s, "  instanced(new THREE.BoxGeometry(1, 1, 1), basic(0xff3030), toW(red));",
+              "  instanced(new THREE.BoxGeometry(1, 1, 1), basic(0xff3030), toW(red));" + ALS_INST_JS)
+    s = patch(s, "function dayNight(dt) {\n", "function dayNight(dt) {\n  rabbitStep(dt);\n")
+    s = patch(s, "function buildAirport(ap) {", RABBIT_JS + "function buildAirport(ap) {")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

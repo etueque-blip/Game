@@ -215,10 +215,29 @@ local function buildAirport(folder: Folder, ap: any)
 		for x = -W / 2, W / 2, 20 do
 			neon(f, Vector3.new(2, 1, 2), cf(x, 0.5, e * (L / 2 + 2)), Color3.fromRGB(64, 255, 112))
 		end
-		for k = 1, 10 do
-			neon(f, Vector3.new(2, 1.5, 2), cf(0, 0.75, e * (L / 2 + 60 * k)), Color3.fromRGB(255, 243, 208))
+		-- огни подхода (ALS): 15 стоек через 60 stud (900 stud) со светящейся планкой, поперечины на 300 и 600,
+		-- красные боковые ряды у торца и бегущие вспышки «Rabbit» (их переключает клиент)
+		local WARMW = Color3.fromRGB(255, 243, 208)
+		for k = 1, 15 do
+			local z = e * (L / 2 + 60 * k)
+			part(f, Vector3.new(0.8, 2.6, 0.8), cf(0, 1.3, z), Color3.fromRGB(80, 84, 92), Enum.Material.Metal).CastShadow = false
+			neon(f, Vector3.new(18, 1.4, 2), cf(0, 3, z), WARMW)
+			if k <= 5 then
+				for _, s2 in { -1, 1 } do
+					neon(f, Vector3.new(10, 1.4, 2), cf(s2 * 26, 3, z), Color3.fromRGB(255, 48, 48))
+				end
+			else
+				local r = neon(f, Vector3.new(3.4, 2.6, 3.4), cf(0, 4.6, z), Color3.new(1, 1, 1))
+				r.Name = "Rabbit"
+				r:SetAttribute("Seq", 15 - k)
+				r.Transparency = 1
+			end
 		end
-		neon(f, Vector3.new(80, 1.5, 2), cf(0, 0.75, e * (L / 2 + 300)), Color3.fromRGB(255, 243, 208))
+		for _, zc in { 300, 600 } do
+			for _, s2 in { -1, 1 } do
+				neon(f, Vector3.new(54, 1.4, 2), cf(s2 * 39, 3, e * (L / 2 + zc)), WARMW)
+			end
+		end
 		local px = -e * (W / 2 + 40)
 		for i = 1, 4 do
 			neon(f, Vector3.new(4, 3, 4), cf(px - e * (i - 1) * 12, 1.5, e * (L / 2 - 450)), if i <= 2 then Color3.fromRGB(255, 243, 208) else Color3.fromRGB(255, 48, 48))
@@ -227,6 +246,20 @@ local function buildAirport(folder: Folder, ap: any)
 	for z = -L / 2, L / 2, 125 do
 		for _, s in { -1, 1 } do
 			neon(f, Vector3.new(1.6, 1.2, 1.6), cf(s * (W / 2 + 3), 0.6, z), Color3.fromRGB(255, 243, 208))
+		end
+	end
+	-- синие огни по краям рулёжек
+	local BLUE = Color3.fromRGB(58, 108, 255)
+	for z = -L / 2, L / 2, 150 do
+		for _, s2 in { -1, 1 } do
+			neon(f, Vector3.new(1.4, 1.2, 1.4), cf(W / 2 + 250 + s2 * 31, 0.6, z), BLUE)
+		end
+	end
+	for _, zc in { -L / 2 + 150, 0, L / 2 - 150 } do
+		for x = W / 2 + 20, W / 2 + 215, 65 do
+			for _, s2 in { -1, 1 } do
+				neon(f, Vector3.new(1.4, 1.2, 1.4), cf(x, 0.6, zc + s2 * 31), BLUE)
+			end
 		end
 	end
 	for _, z in { -L / 2 + 150, 0, L / 2 - 150 } do
