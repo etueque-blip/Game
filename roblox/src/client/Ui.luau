@@ -171,7 +171,7 @@ function Ui.new(cb: Callbacks)
 
 	-- гонка через кольца: таймер
 	-- погода и время: время суток по Lighting, температура за бортом по стандартной атмосфере
-	local wx = glass(root, { Size = UDim2.fromOffset(176, 50), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 290), Visible = false })
+	local wx = glass(root, { Size = UDim2.fromOffset(232, 50), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 290), Visible = false })
 	local wxTop = new("TextLabel", { Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(10, 4), BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, wx)
 	local wxBot = new("TextLabel", { Size = UDim2.new(1, -16, 0, 18), Position = UDim2.fromOffset(10, 26), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, wx)
 	function self.setWeather(altFt: number)
@@ -191,7 +191,9 @@ function Ui.new(cb: Callbacks)
 		end
 		wxTop.Text = string.format("%s  %s · %02d:%02d", icon, phase, math.floor(t), math.floor((t % 1) * 60))
 		local temp = math.max(-56.5, 15 - 1.98 * altFt / 1000)
-		wxBot.Text = string.format("за бортом %+d °C · ясно", math.round(temp))
+		local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
+		local wd = tonumber(workspace:GetAttribute("WindDir")) or 0
+		wxBot.Text = string.format("за бортом %+d °C · %s", math.round(temp), if wk < 2 then "штиль" else string.format("ветер %03d° %d kt", wd, math.round(wk)))
 	end
 
 	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 258), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = Color3.new(1, 1, 1), Text = "", Visible = false }, root)

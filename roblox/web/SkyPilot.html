@@ -820,6 +820,7 @@ function physicsStep1(f, input, dt) {
   f.vel = vel;
   f.lastVelY = vel.y;
   pos.addScaledVector(vel, dt);
+  if (f.wind && !f.onGround) pos.addScaledVector(f.wind, dt);
   f.dbg = { agl, lift, eff, stall, thrust, drag, accel, thrustMul };
 }
 function crash(f, reason) { f.crashed = true; f.events.push({ type: "crash", text: reason }); }
@@ -1645,6 +1646,25 @@ function padPoll() {
   for (const i in PAD_ONCE) { const now = b(+i); if (now && !PAD.prev[i]) action(PAD_ONCE[i]); PAD.prev[i] = now; }
 }
 
+
+// ===== ветер (как в Roblox): плавно меняется, порывы; сносит самолёт в воздухе
+const WIND = { dir: Math.random() * 360, kts: 3 + Math.random() * 9, tDir: 0, tKts: 0, nextAt: 0, t: 0 };
+WIND.tDir = WIND.dir; WIND.tKts = WIND.kts;
+function windStep(dt) {
+  WIND.t += dt;
+  if (WIND.t > WIND.nextAt) { WIND.tDir = (WIND.dir + (Math.random() * 140 - 70) + 360) % 360; WIND.tKts = Math.floor(Math.pow(Math.random(), 1.6) * 25); WIND.nextAt = WIND.t + 300 + Math.random() * 300; }
+  const dd = ((WIND.tDir - WIND.dir + 540) % 360) - 180;
+  WIND.dir = (WIND.dir + clamp(dd, -0.4 * dt, 0.4 * dt) + 360) % 360; WIND.kts += clamp(WIND.tKts - WIND.kts, -0.04 * dt, 0.04 * dt);
+}
+function windVec() {
+  const g = 1 + 0.25 * Math.sin(WIND.t * 0.9) * Math.sin(WIND.t * 0.37 + 1), d = WIND.dir * Math.PI / 180;
+  return new V3(-Math.sin(d), 0, Math.cos(d)).multiplyScalar(WIND.kts * g);
+}
+function windPhrase(rw) {
+  if (WIND.kts < 2) return "Ветер штиль.";
+  const cross = Math.abs(WIND.kts * Math.sin((WIND.dir - (parseInt(rw, 10) || 36) * 10) * Math.PI / 180));
+  return `Ветер ${String(Math.round(WIND.dir)).padStart(3, "0")}°, ${Math.round(WIND.kts)} kt, боковой ${Math.round(cross)} kt.`;
+}
 function action(a) {
   if (a === "hangar") { $("bHangar").onclick(); return; }
   if (a === "cam") { cycleCam(); return; }
@@ -1920,7 +1940,7 @@ function atcStart(mode) {
   callsign = "SKY" + (100 + Math.floor(Math.random() * 900)); atcApproach = false;
   const ap = AIRPORTS.find((a) => "runway:" + a.id === mode);
   const __aseq = window.__flightSeq; setTimeout(() => { if (__aseq !== window.__flightSeq || !flight || flight.crashed) return;
-    if (ap) atc(`Вышка ${ap.code}: ${callsign}, полоса ${runwayFor(ap, flight.pos.x, flight.pos.z + 0)}, взлёт разрешён. Ветер штиль.`);
+    if (ap) atc(`Вышка ${ap.code}: ${callsign}, полоса ${runwayFor(ap, flight.pos.x, flight.pos.z + 0)}, взлёт разрешён. ${windPhrase(runwayFor(ap, flight.pos.x, flight.pos.z + 0))}`);
     else atc(`Подход: ${callsign}, наблюдаю вас на радаре, ${Math.round(flight.pos.y * FT)} ft. Курс по навигации.`); }, 4500);
 }
 function atcTick(f, dt) {
@@ -2151,7 +2171,7 @@ function updateHUD(f) {
   updateIls(f);
   atcTick(f, 1 / 60);
   if (gateTarget && f.onGround && f.speed < 3 && Math.hypot(f.pos.x - gateTarget.x, f.pos.z - gateTarget.z) < 45) { toast("Рейс завершён у гейта " + gateTarget.id + " · +500", "var(--green)"); addScore(500, "стоянка " + gateTarget.id); atc(`Земля: ${callsign}, стоянка ${gateTarget.id}, двигатели выключить. До связи!`); addLog("Гейт " + gateTarget.id); gateTarget = null; }
-  { const el = $("wx"); el.hidden = f.crashed; const tC = Math.max(-56.5, 15 - 1.98 * f.pos.y * FT / 1000); const [ic, ph] = dayPhase(); el.innerHTML = `${ic} ${ph} · ${String(Math.floor(gameClock)).padStart(2, "0")}:${String(Math.floor(gameClock % 1 * 60)).padStart(2, "0")}<small>за бортом ${tC >= 0 ? "+" : ""}${Math.round(tC)} °C</small>`; }
+  { const el = $("wx"); el.hidden = f.crashed; const tC = Math.max(-56.5, 15 - 1.98 * f.pos.y * FT / 1000); const [ic, ph] = dayPhase(); el.innerHTML = `${ic} ${ph} · ${String(Math.floor(gameClock)).padStart(2, "0")}:${String(Math.floor(gameClock % 1 * 60)).padStart(2, "0")}<small>за бортом ${tC >= 0 ? "+" : ""}${Math.round(tC)} °C · ${WIND.kts < 2 ? "штиль" : "ветер " + String(Math.round(WIND.dir)).padStart(3, "0") + "° " + Math.round(WIND.kts) + " kt"}</small>`; }
   if (!f.onGround) parkBrake = false;
   $("park").hidden = !parkBrake || f.crashed;
   { const el = $("race"); if (raceStart !== null) { el.hidden = false; el.textContent = `КОЛЬЦА ${raceIdx}/${RINGS.length} · ${fmtT(performance.now() / 1000 - raceStart)}`; } else el.hidden = true; }
@@ -2202,6 +2222,7 @@ function frame(t) {
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $("toast").hidden = true; }
   const f = flight;
   if (f && !f.crashed) {
+    windStep(dt); f.wind = windVec();
     const k = (c) => keys.has(c);
     padPoll();
     const input = {

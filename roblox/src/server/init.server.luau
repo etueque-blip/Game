@@ -485,11 +485,24 @@ end)
 if DAY_LENGTH_MIN > 0 then
 	local Lighting = game:GetService("Lighting")
 	Lighting.ClockTime = 10
+	-- ветер: общий для всех игроков, плавно меняется (атрибуты workspace WindDir / WindKts)
+	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0 }
+	wind.tDir, wind.tKts = wind.dir, wind.kts
 	task.spawn(function()
 		local last = os.clock()
 		while true do
 			task.wait(1)
 			local now = os.clock()
+			if now > wind.nextAt then
+				wind.tDir = (wind.dir + math.random(-70, 70)) % 360
+				wind.tKts = math.floor(math.random() ^ 1.6 * 25)
+				wind.nextAt = now + math.random(300, 600)
+			end
+			local dd = ((wind.tDir - wind.dir + 540) % 360) - 180
+			wind.dir = (wind.dir + math.clamp(dd, -0.4, 0.4)) % 360
+			wind.kts += math.clamp(wind.tKts - wind.kts, -0.04, 0.04)
+			workspace:SetAttribute("WindDir", math.round(wind.dir))
+			workspace:SetAttribute("WindKts", math.round(wind.kts * 10) / 10)
 			Lighting.ClockTime = (Lighting.ClockTime + (now - last) * 24 / (DAY_LENGTH_MIN * 60)) % 24
 			last = now
 			WorldBuilder.updateSky(Lighting.ClockTime)

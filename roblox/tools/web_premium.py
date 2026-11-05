@@ -439,6 +439,28 @@ function specHTML(c) {
 """
 
 
+WIND_JS = r"""
+// ===== ветер (как в Roblox): плавно меняется, порывы; сносит самолёт в воздухе
+const WIND = { dir: Math.random() * 360, kts: 3 + Math.random() * 9, tDir: 0, tKts: 0, nextAt: 0, t: 0 };
+WIND.tDir = WIND.dir; WIND.tKts = WIND.kts;
+function windStep(dt) {
+  WIND.t += dt;
+  if (WIND.t > WIND.nextAt) { WIND.tDir = (WIND.dir + (Math.random() * 140 - 70) + 360) % 360; WIND.tKts = Math.floor(Math.pow(Math.random(), 1.6) * 25); WIND.nextAt = WIND.t + 300 + Math.random() * 300; }
+  const dd = ((WIND.tDir - WIND.dir + 540) % 360) - 180;
+  WIND.dir = (WIND.dir + clamp(dd, -0.4 * dt, 0.4 * dt) + 360) % 360; WIND.kts += clamp(WIND.tKts - WIND.kts, -0.04 * dt, 0.04 * dt);
+}
+function windVec() {
+  const g = 1 + 0.25 * Math.sin(WIND.t * 0.9) * Math.sin(WIND.t * 0.37 + 1), d = WIND.dir * Math.PI / 180;
+  return new V3(-Math.sin(d), 0, Math.cos(d)).multiplyScalar(WIND.kts * g);
+}
+function windPhrase(rw) {
+  if (WIND.kts < 2) return "Ветер штиль.";
+  const cross = Math.abs(WIND.kts * Math.sin((WIND.dir - (parseInt(rw, 10) || 36) * 10) * Math.PI / 180));
+  return `Ветер ${String(Math.round(WIND.dir)).padStart(3, "0")}°, ${Math.round(WIND.kts)} kt, боковой ${Math.round(cross)} kt.`;
+}
+"""
+
+
 def add_premium(s, patch):
     # шрифты с кириллицей
     s = patch(s, "family=Russo+One&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600",
@@ -606,6 +628,12 @@ def add_premium(s, patch):
     s = patch(s, '    $("fText").textContent = c ? PLANE_TEXT(c) : "Выберите самолёт слева.";',
               '    if (c) $("fText").innerHTML = specHTML(c); else $("fText").textContent = "Выберите самолёт слева.";')
     s = patch(s, "const PLANE_TEXT = (c) =>", SPEC_JS + "const PLANE_TEXT = (c) =>")
+    # ветер: снос самолёта в воздухе, порывы, ветер в разрешении диспетчера и на панели погоды (как в Roblox)
+    s = patch(s, "  pos.addScaledVector(vel, dt);\n", "  pos.addScaledVector(vel, dt);\n  if (f.wind && !f.onGround) pos.addScaledVector(f.wind, dt);\n")
+    s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + WIND_JS)
+    s = patch(s, "    const k = (c) => keys.has(c);\n", "    windStep(dt); f.wind = windVec();\n    const k = (c) => keys.has(c);\n")
+    s = patch(s, "взлёт разрешён. Ветер штиль.`);", "взлёт разрешён. ${windPhrase(runwayFor(ap, flight.pos.x, flight.pos.z + 0))}`);")
+    s = patch(s, "°C</small>`; }", "°C · ${WIND.kts < 2 ? \"штиль\" : \"ветер \" + String(Math.round(WIND.dir)).padStart(3, \"0\") + \"° \" + Math.round(WIND.kts) + \" kt\"}</small>`; }")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

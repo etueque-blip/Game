@@ -8287,6 +8287,7 @@ export type Flight = {
 	brakes: boolean, reverse: boolean, spoilers: boolean,
 	inP: number, inR: number, inY: number,
 	vyExtra: number, lastVelY: number, vel: Vector3,
+	wind: Vector3?, -- снос ветром (stud/с, задаёт клиент); на земле не действует
 	onGround: boolean, airTime: number, crashed: boolean, crashReason: string?,
 	gload: number, damage: number, buffet: number, flapStress: number, gearStress: number, flapsDamaged: boolean, gearStuck: boolean,
 	events: { Event }, dbg: { [string]: number },
@@ -8539,8 +8540,19 @@ local function stepOnce(f: Flight, input: Input, dt: number)
 
 	f.vel = vel
 	f.lastVelY = vel.Y
-	f.pos = pos + vel * dt
+	-- ветер сносит самолёт в воздухе (воздушная скорость та же, меняется путевая)
+	local drift = if f.wind and not f.onGround then f.wind * dt else Vector3.zero
+	f.pos = pos + vel * dt + drift
 	f.dbg = { agl = agl, lift = lift, eff = eff, stall = stall, thrust = thrust, drag = drag, accel = accel, thrustMul = thrustMul }
+end
+
+-- Ветер: направление «откуда дует» (°) и сила (kt) → вектор сноса; боковая составляющая к полосе
+function FlightPhysics.windVector(dirDeg: number, kts: number): Vector3
+	local d = math.rad(dirDeg)
+	return Vector3.new(-math.sin(d), 0, math.cos(d)) * kts
+end
+function FlightPhysics.crosswind(dirDeg: number, kts: number, runwayHdg: number): number
+	return math.abs(kts * math.sin(math.rad(dirDeg - runwayHdg)))
 end
 
 -- Действия кнопок (шасси/закрылки/реверс). Возвращает текст подсказки и цвет.
@@ -10159,11 +10171,24 @@ end)
 if DAY_LENGTH_MIN > 0 then
 	local Lighting = game:GetService("Lighting")
 	Lighting.ClockTime = 10
+	-- ветер: общий для всех игроков, плавно меняется (атрибуты workspace WindDir / WindKts)
+	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0 }
+	wind.tDir, wind.tKts = wind.dir, wind.kts
 	task.spawn(function()
 		local last = os.clock()
 		while true do
 			task.wait(1)
 			local now = os.clock()
+			if now > wind.nextAt then
+				wind.tDir = (wind.dir + math.random(-70, 70)) % 360
+				wind.tKts = math.floor(math.random() ^ 1.6 * 25)
+				wind.nextAt = now + math.random(300, 600)
+			end
+			local dd = ((wind.tDir - wind.dir + 540) % 360) - 180
+			wind.dir = (wind.dir + math.clamp(dd, -0.4, 0.4)) % 360
+			wind.kts += math.clamp(wind.tKts - wind.kts, -0.04, 0.04)
+			workspace:SetAttribute("WindDir", math.round(wind.dir))
+			workspace:SetAttribute("WindKts", math.round(wind.kts * 10) / 10)
 			Lighting.ClockTime = (Lighting.ClockTime + (now - last) * 24 / (DAY_LENGTH_MIN * 60)) % 24
 			last = now
 			WorldBuilder.updateSky(Lighting.ClockTime)
@@ -11323,7 +11348,11 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 				return
 			end
 			if ap then
-				ui.atc(string.format("Вышка %s: %s, полоса %s, взлёт разрешён. Ветер штиль.", ap.code, callsign, runwayFor(ap, spawnCF.Position + spawnCF.LookVector * -100)))
+				local rw = runwayFor(ap, spawnCF.Position + spawnCF.LookVector * -100)
+				local wd = tonumber(workspace:GetAttribute("WindDir")) or 0
+				local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
+				local windTxt = if wk < 2 then "Ветер штиль." else string.format("Ветер %03d°, %d kt, боковой %d kt.", wd, math.round(wk), math.round(FlightPhysics.crosswind(wd, wk, (tonumber(rw) or 36) * 10)))
+				ui.atc(string.format("Вышка %s: %s, полоса %s, взлёт разрешён. %s", ap.code, callsign, rw, windTxt))
 			else
 				ui.atc(string.format("Подход: %s, наблюдаю вас на радаре, %d ft. Курс по навигации.", callsign, math.round(spawnCF.Position.Y * FT)))
 			end
@@ -11518,6 +11547,14 @@ RunService.PreSimulation:Connect(function(dt)
 		end
 	end
 	local prevPos = f.pos
+	-- ветер с сервера + порывы (каждый клиент считает порывы сам)
+	do
+		local wd = tonumber(workspace:GetAttribute("WindDir")) or 0
+		local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
+		local t = os.clock()
+		local gust = 1 + 0.25 * math.sin(t * 0.9) * math.sin(t * 0.37 + 1)
+		f.wind = FlightPhysics.windVector(wd, wk * gust)
+	end
 	FlightPhysics.step(f, input, dt)
 	if not f.crashed then
 		race.step(prevPos, f.pos, os.clock())
@@ -12622,7 +12659,7 @@ function Ui.new(cb: Callbacks)
 
 	-- гонка через кольца: таймер
 	-- погода и время: время суток по Lighting, температура за бортом по стандартной атмосфере
-	local wx = glass(root, { Size = UDim2.fromOffset(176, 50), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 290), Visible = false })
+	local wx = glass(root, { Size = UDim2.fromOffset(232, 50), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 290), Visible = false })
 	local wxTop = new("TextLabel", { Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(10, 4), BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, wx)
 	local wxBot = new("TextLabel", { Size = UDim2.new(1, -16, 0, 18), Position = UDim2.fromOffset(10, 26), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, wx)
 	function self.setWeather(altFt: number)
@@ -12642,7 +12679,9 @@ function Ui.new(cb: Callbacks)
 		end
 		wxTop.Text = string.format("%s  %s · %02d:%02d", icon, phase, math.floor(t), math.floor((t % 1) * 60))
 		local temp = math.max(-56.5, 15 - 1.98 * altFt / 1000)
-		wxBot.Text = string.format("за бортом %+d °C · ясно", math.round(temp))
+		local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
+		local wd = tonumber(workspace:GetAttribute("WindDir")) or 0
+		wxBot.Text = string.format("за бортом %+d °C · %s", math.round(temp), if wk < 2 then "штиль" else string.format("ветер %03d° %d kt", wd, math.round(wk)))
 	end
 
 	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 258), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = Color3.new(1, 1, 1), Text = "", Visible = false }, root)

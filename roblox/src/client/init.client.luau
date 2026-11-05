@@ -286,7 +286,11 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 				return
 			end
 			if ap then
-				ui.atc(string.format("Вышка %s: %s, полоса %s, взлёт разрешён. Ветер штиль.", ap.code, callsign, runwayFor(ap, spawnCF.Position + spawnCF.LookVector * -100)))
+				local rw = runwayFor(ap, spawnCF.Position + spawnCF.LookVector * -100)
+				local wd = tonumber(workspace:GetAttribute("WindDir")) or 0
+				local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
+				local windTxt = if wk < 2 then "Ветер штиль." else string.format("Ветер %03d°, %d kt, боковой %d kt.", wd, math.round(wk), math.round(FlightPhysics.crosswind(wd, wk, (tonumber(rw) or 36) * 10)))
+				ui.atc(string.format("Вышка %s: %s, полоса %s, взлёт разрешён. %s", ap.code, callsign, rw, windTxt))
 			else
 				ui.atc(string.format("Подход: %s, наблюдаю вас на радаре, %d ft. Курс по навигации.", callsign, math.round(spawnCF.Position.Y * FT)))
 			end
@@ -481,6 +485,14 @@ RunService.PreSimulation:Connect(function(dt)
 		end
 	end
 	local prevPos = f.pos
+	-- ветер с сервера + порывы (каждый клиент считает порывы сам)
+	do
+		local wd = tonumber(workspace:GetAttribute("WindDir")) or 0
+		local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
+		local t = os.clock()
+		local gust = 1 + 0.25 * math.sin(t * 0.9) * math.sin(t * 0.37 + 1)
+		f.wind = FlightPhysics.windVector(wd, wk * gust)
+	end
 	FlightPhysics.step(f, input, dt)
 	if not f.crashed then
 		race.step(prevPos, f.pos, os.clock())

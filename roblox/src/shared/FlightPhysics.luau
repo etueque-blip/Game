@@ -36,6 +36,7 @@ export type Flight = {
 	brakes: boolean, reverse: boolean, spoilers: boolean,
 	inP: number, inR: number, inY: number,
 	vyExtra: number, lastVelY: number, vel: Vector3,
+	wind: Vector3?, -- снос ветром (stud/с, задаёт клиент); на земле не действует
 	onGround: boolean, airTime: number, crashed: boolean, crashReason: string?,
 	gload: number, damage: number, buffet: number, flapStress: number, gearStress: number, flapsDamaged: boolean, gearStuck: boolean,
 	events: { Event }, dbg: { [string]: number },
@@ -288,8 +289,19 @@ local function stepOnce(f: Flight, input: Input, dt: number)
 
 	f.vel = vel
 	f.lastVelY = vel.Y
-	f.pos = pos + vel * dt
+	-- ветер сносит самолёт в воздухе (воздушная скорость та же, меняется путевая)
+	local drift = if f.wind and not f.onGround then f.wind * dt else Vector3.zero
+	f.pos = pos + vel * dt + drift
 	f.dbg = { agl = agl, lift = lift, eff = eff, stall = stall, thrust = thrust, drag = drag, accel = accel, thrustMul = thrustMul }
+end
+
+-- Ветер: направление «откуда дует» (°) и сила (kt) → вектор сноса; боковая составляющая к полосе
+function FlightPhysics.windVector(dirDeg: number, kts: number): Vector3
+	local d = math.rad(dirDeg)
+	return Vector3.new(-math.sin(d), 0, math.cos(d)) * kts
+end
+function FlightPhysics.crosswind(dirDeg: number, kts: number, runwayHdg: number): number
+	return math.abs(kts * math.sin(math.rad(dirDeg - runwayHdg)))
 end
 
 -- Действия кнопок (шасси/закрылки/реверс). Возвращает текст подсказки и цвет.
