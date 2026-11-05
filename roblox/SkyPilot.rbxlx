@@ -17062,6 +17062,12 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local pitchDeg = math.deg(math.asin(clamp(look.Y, -1, 1)))
 	local bankDeg = math.deg(math.atan2(-right.Y, up.Y))
 	ui.setAdi(pitchDeg, bankDeg)
+	ui.setTapes({
+		kt = f.speed, accel = f.dbg.accel or 0, stall = f.dbg.stall or c.stallKts, maxKts = c.maxKts,
+		flapLim = if f.flaps > 0 and not c.noFlaps then c.flapMaxKts else nil, vr = if f.onGround then c.vrKts else nil,
+		onGround = f.onGround, altFt = f.pos.Y * FT, groundFt = if (f.dbg.agl or math.huge) < 1e6 then (f.pos.Y - f.dbg.agl) * FT else nil,
+		vs = vsSmooth, aglFt = agl, metric = metric,
+	})
 	ui.setHeading(hdg)
 	ui.setWeather(f.pos.Y * FT)
 
@@ -18117,6 +18123,12 @@ local FONT_TITLE = Enum.Font.GothamBlack
 local Ui = {}
 Ui.Colors = C
 
+local function fmtNum(n: number): string
+	local s = tostring(math.round(math.abs(n)))
+	local out = s:reverse():gsub("(%d%d%d)", "%1 "):reverse():gsub("^ ", "")
+	return (if n < 0 then "−" else "") .. out
+end
+
 local function new(cls: string, props: { [string]: any }, parent: Instance?): any
 	local o = Instance.new(cls)
 	for k, v in props do
@@ -18599,6 +18611,7 @@ function Ui.new(cb: Callbacks)
 	-- ⚙ настройки: единицы, чувствительность, сложность (сохраняются атрибутами игрока на время сессии)
 	local metric = player:GetAttribute("Metric") == true
 	local sens = tonumber(player:GetAttribute("Sens")) or 1
+	local pfdOn = player:GetAttribute("Pfd") ~= false
 	function self.metric(): boolean
 		return metric
 	end
@@ -18653,8 +18666,14 @@ function Ui.new(cb: Callbacks)
 		player:SetAttribute("HardMode", hard)
 		hardLabel()
 	end)
-	para(sS, "Сложная: перегрузка G, повреждения, поломки закрылков и шасси, удар хвостом. Применяется со следующего полёта.", 5)
-	local sRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 6, ZIndex = 22 }, sS)
+	settingRow(5, "Ленты PFD", { "Вкл", "Выкл" }, function()
+		return if pfdOn then 1 else 2
+	end, function(i)
+		pfdOn = i == 1
+		player:SetAttribute("Pfd", pfdOn)
+	end)
+	para(sS, "Сложная: перегрузка G, повреждения, поломки закрылков и шасси, удар хвостом. Применяется со следующего полёта. Ленты PFD — шкалы скорости и высоты по бокам экрана, как в кабине.", 6)
+	local sRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 7, ZIndex = 22 }, sS)
 	local sClose = button(sRow, "Готово", { ZIndex = 23 })
 	primary(sClose)
 	sClose.Activated:Connect(function()
@@ -19463,6 +19482,180 @@ function Ui.new(cb: Callbacks)
 				end
 			end
 		end
+	end
+	-- ================= кабинные ленты (PFD): скорость слева (полосы сваливания/превышения, Vr, тренд), высота и вариометр справа
+	local TH, TCY = 250, 125
+	local WHITE = Color3.new(1, 1, 1)
+	local function tapeFrame(w: number, xOff: number): Frame
+		local fr = new("Frame", { Name = "PfdTape", Size = UDim2.fromOffset(w, TH), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, xOff, 0.5, -20), BackgroundColor3 = Color3.fromRGB(12, 18, 30), BackgroundTransparency = 0.55, ClipsDescendants = true, Visible = false }, root)
+		corner(fr, 12)
+		stroke(fr, WHITE, 0.86)
+		return fr
+	end
+	local function tickPool(parent: Instance, n: number, lineX: number, right: boolean)
+		local pool = {}
+		for i = 1, n do
+			local ln = new("Frame", { Size = UDim2.fromOffset(5, 1), AnchorPoint = Vector2.new(if right then 1 else 0, 0.5), BackgroundColor3 = WHITE, BackgroundTransparency = 0.25, BorderSizePixel = 0, Visible = false, ZIndex = 3 }, parent)
+			local lb = new("TextLabel", { Size = UDim2.fromOffset(52, 14), AnchorPoint = Vector2.new(if right then 1 else 0, 0.5), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = WHITE, TextXAlignment = if right then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left, Text = "", Visible = false, ZIndex = 3 }, parent)
+			pool[i] = { ln = ln, lb = lb }
+		end
+		return pool
+	end
+	local function readout(parent: Instance, x: number, w: number, right: boolean): TextLabel
+		local box = new("Frame", { Size = UDim2.fromOffset(w, 26), Position = UDim2.fromOffset(x, TCY - 13), BackgroundColor3 = Color3.fromRGB(5, 8, 15), BorderSizePixel = 0, ZIndex = 6 }, parent)
+		stroke(box, WHITE, 0.1)
+		corner(box, 3)
+		local tip = new("Frame", { Size = UDim2.fromOffset(12, 12), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(if right then 0 else 1, 0, 0.5, 0), Rotation = 45, BackgroundColor3 = Color3.fromRGB(5, 8, 15), BorderSizePixel = 0, ZIndex = 5 }, box)
+		stroke(tip, WHITE, 0.1)
+		return new("TextLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 17, TextColor3 = WHITE, Text = "0", ZIndex = 7 }, box)
+	end
+	local function unitLabel(parent: Instance, w: number, y: number, text: string, color: Color3?): TextLabel
+		return new("TextLabel", { Size = UDim2.fromOffset(w, 14), Position = UDim2.fromOffset(0, y), BackgroundTransparency = 1, Font = FONT, TextSize = 10, TextColor3 = color or WHITE, TextTransparency = if color then 0 else 0.4, Text = text, ZIndex = 4 }, parent)
+	end
+	-- скорость
+	local spdT = tapeFrame(80, -310)
+	local sBands = {}
+	for i, col in { C.red, C.amber, C.red, C.amber } do
+		sBands[i] = new("Frame", { Size = UDim2.fromOffset(6, 0), Position = UDim2.fromOffset(71, 0), BackgroundColor3 = col, BackgroundTransparency = if i == 4 then 0.25 else 0, BorderSizePixel = 0, Visible = false, ZIndex = 2 }, spdT)
+	end
+	local sTicks = tickPool(spdT, 26, 68, true)
+	local vrBug = new("Frame", { Size = UDim2.fromOffset(52, 2), AnchorPoint = Vector2.new(0, 0.5), BackgroundColor3 = Color3.fromRGB(61, 214, 245), BorderSizePixel = 0, Visible = false, ZIndex = 3 }, spdT)
+	new("TextLabel", { Size = UDim2.fromOffset(12, 14), Position = UDim2.fromOffset(-12, -6), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 12, TextColor3 = Color3.fromRGB(61, 214, 245), Text = "R", ZIndex = 3 }, vrBug)
+	local trend = new("Frame", { Size = UDim2.fromOffset(3, 0), BackgroundColor3 = Color3.fromRGB(224, 91, 216), BorderSizePixel = 0, Visible = false, ZIndex = 3 }, spdT)
+	local sRead = readout(spdT, 4, 50, false)
+	local sUnit = unitLabel(spdT, 80, TH - 16, "KT")
+	local sStall = unitLabel(spdT, 80, 4, "STALL", C.red)
+	sStall.Font = FONT_TITLE
+	-- высота и вариометр
+	local altT = tapeFrame(105, 310)
+	local ground = new("Frame", { Size = UDim2.fromOffset(76, 0), BackgroundColor3 = Color3.fromRGB(150, 95, 45), BackgroundTransparency = 0.25, BorderSizePixel = 0, Visible = false, ZIndex = 2 }, altT)
+	new("Frame", { Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = C.amber, BorderSizePixel = 0, ZIndex = 2 }, ground)
+	local aTicks = tickPool(altT, 26, 3, false)
+	local aRead = readout(altT, 12, 62, true)
+	local aUnit = unitLabel(altT, 76, TH - 16, "FT")
+	local VX, VW = 80, 23
+	new("Frame", { Size = UDim2.fromOffset(VW, TH - 28), Position = UDim2.fromOffset(VX, 14), BackgroundColor3 = Color3.fromRGB(5, 8, 15), BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 2 }, altT)
+	local function vsScale(v: number): number
+		return math.sign(v) * math.min(1, math.sqrt(math.abs(v) / 6000)) * (TCY - 20)
+	end
+	for _, v in { -6000, -2000, -1000, -500, 0, 500, 1000, 2000, 6000 } do
+		new("Frame", { Size = UDim2.fromOffset(if v == 0 then VW else 5, 1), Position = UDim2.fromOffset(VX, TCY - vsScale(v)), BackgroundColor3 = WHITE, BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 3 }, altT)
+	end
+	local needle = new("Frame", { Size = UDim2.fromOffset(VW, 3), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = C.green, BorderSizePixel = 0, ZIndex = 4 }, altT)
+	local vsNum = new("TextLabel", { Size = UDim2.fromOffset(60, 12), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 10, TextColor3 = C.green, Text = "", ZIndex = 4 }, altT)
+	hud:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not hud.Visible then
+			spdT.Visible = false
+			altT.Visible = false
+		end
+	end)
+	local trendS = 0
+	-- d: kt, accel (kt/с), stall, maxKts, flapLim?, vr? (на земле), onGround, altFt, groundFt?, vs (ft/min), aglFt, metric
+	function self.setTapes(d: any)
+		local show = hud.Visible and pfdOn
+		spdT.Visible = show
+		altT.Visible = show
+		if not show then
+			return
+		end
+		local metric = d.metric
+		-- скорость: 2.7 px на узел
+		local U, PPK = if metric then 1.852 else 1, 2.7
+		local function ySpd(kt: number): number
+			return TCY - (kt - d.kt) * PPK
+		end
+		local function band(fr: Frame, a: number, b: number, on: boolean)
+			local y0, y1 = math.clamp(ySpd(b), 0, TH), math.clamp(ySpd(a), 0, TH)
+			fr.Visible = on and y1 > y0
+			if fr.Visible then
+				fr.Position = UDim2.fromOffset(71, y0)
+				fr.Size = UDim2.fromOffset(6, y1 - y0)
+			end
+		end
+		band(sBands[1], 0, d.stall, not d.onGround)
+		band(sBands[2], d.stall, d.stall * 1.1, not d.onGround)
+		band(sBands[3], d.maxKts, d.maxKts * 3, true)
+		band(sBands[4], d.flapLim or 0, d.maxKts, d.flapLim ~= nil)
+		local step = if metric then 10 else 5
+		local sd = d.kt * U
+		local v = math.floor((sd - 60) / step) * step
+		for _, t in sTicks do
+			local yy = TCY - (v - sd) * PPK / U
+			local vis = v >= 0 and yy > 4 and yy < TH - 4
+			local major = v % (step * 4) == 0
+			t.ln.Visible = vis
+			t.lb.Visible = vis and major and math.abs(yy - TCY) > 15
+			if vis then
+				t.ln.Position = UDim2.fromOffset(68, yy)
+				t.ln.Size = UDim2.fromOffset(if major then 10 else 5, 1)
+				if t.lb.Visible then
+					t.lb.Position = UDim2.fromOffset(55, yy)
+					t.lb.Text = tostring(v)
+				end
+			end
+			v += step
+		end
+		vrBug.Visible = d.vr ~= nil and ySpd(d.vr or 0) > 6 and ySpd(d.vr or 0) < TH - 6
+		if vrBug.Visible then
+			vrBug.Position = UDim2.fromOffset(16, ySpd(d.vr))
+		end
+		trendS += (d.accel * 10 - trendS) * 0.08
+		trend.Visible = math.abs(trendS) > 2
+		if trend.Visible then
+			local ty = math.clamp(TCY - trendS * PPK, 6, TH - 6)
+			trend.Position = UDim2.fromOffset(49, math.min(ty, TCY))
+			trend.Size = UDim2.fromOffset(3, math.abs(TCY - ty))
+		end
+		sRead.Text = tostring(math.round(sd))
+		sUnit.Text = if metric then "КМ/Ч" else "KT"
+		sStall.Visible = not d.onGround and d.kt < d.stall * 1.1
+		-- высота: 600 ft (180 м) на половину ленты
+		local MU = if metric then 0.3048 else 1
+		local ad = d.altFt * MU
+		local ppu = if metric then 125 / 180 else 125 / 600
+		if d.groundFt then
+			local gy = TCY - (d.groundFt * MU - ad) * ppu
+			ground.Visible = gy < TH
+			if ground.Visible then
+				ground.Position = UDim2.fromOffset(0, math.max(0, gy))
+				ground.Size = UDim2.fromOffset(76, TH - math.max(0, gy))
+			end
+		else
+			ground.Visible = false
+		end
+		local astep, lab = if metric then 20 else 100, if metric then 100 else 200
+		local av = math.floor((ad - 700) / astep) * astep
+		for _, t in aTicks do
+			local yy = TCY - (av - ad) * ppu
+			local vis = yy > 4 and yy < TH - 4
+			local major = av % lab == 0
+			t.ln.Visible = vis
+			t.lb.Visible = vis and major and math.abs(yy - TCY) > 15
+			if vis then
+				t.ln.Position = UDim2.fromOffset(3, yy)
+				t.ln.Size = UDim2.fromOffset(if av % (lab * (if metric then 1 else 2.5)) == 0 then 10 else 5, 1)
+				if t.lb.Visible then
+					t.lb.Position = UDim2.fromOffset(16, yy)
+					t.lb.Text = fmtNum(av)
+				end
+			end
+			av += astep
+		end
+		aRead.Text = fmtNum(if metric then math.round(ad) else math.round(ad / 10) * 10)
+		aUnit.Text = if metric then "М" else "FT"
+		-- вариометр
+		local ny = TCY - vsScale(d.vs)
+		local x0, y0, x1, y1 = VX + VW, TCY, VX + 3, ny
+		local len = math.sqrt((x1 - x0) ^ 2 + (y1 - y0) ^ 2)
+		local col = if d.vs < -1500 and d.aglFt < 2500 then C.red else C.green
+		needle.Position = UDim2.fromOffset((x0 + x1) / 2, (y0 + y1) / 2)
+		needle.Size = UDim2.fromOffset(len, 3)
+		needle.Rotation = math.deg(math.atan2(y1 - y0, x1 - x0)) + 180
+		needle.BackgroundColor3 = col
+		vsNum.Visible = math.abs(d.vs) > 300
+		vsNum.TextColor3 = col
+		vsNum.Position = UDim2.fromOffset(62, if d.vs > 0 then 7 else TH - 7)
+		vsNum.Text = if metric then string.format("%.1f", d.vs * 0.00508) else tostring(math.round(d.vs / 100) * 100)
 	end
 	function self.setThrottleFill(v: number)
 		cells.thr.fill.Size = UDim2.fromScale(1, v)

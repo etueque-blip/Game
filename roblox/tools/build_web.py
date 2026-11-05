@@ -1022,6 +1022,8 @@ def main():
     _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from web_premium import add_premium
     s = add_premium(s, patch)
+    from web_pfd import add_pfd
+    s = add_pfd(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

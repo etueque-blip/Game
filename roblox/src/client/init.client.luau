@@ -691,6 +691,12 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local pitchDeg = math.deg(math.asin(clamp(look.Y, -1, 1)))
 	local bankDeg = math.deg(math.atan2(-right.Y, up.Y))
 	ui.setAdi(pitchDeg, bankDeg)
+	ui.setTapes({
+		kt = f.speed, accel = f.dbg.accel or 0, stall = f.dbg.stall or c.stallKts, maxKts = c.maxKts,
+		flapLim = if f.flaps > 0 and not c.noFlaps then c.flapMaxKts else nil, vr = if f.onGround then c.vrKts else nil,
+		onGround = f.onGround, altFt = f.pos.Y * FT, groundFt = if (f.dbg.agl or math.huge) < 1e6 then (f.pos.Y - f.dbg.agl) * FT else nil,
+		vs = vsSmooth, aglFt = agl, metric = metric,
+	})
 	ui.setHeading(hdg)
 	ui.setWeather(f.pos.Y * FT)
 
