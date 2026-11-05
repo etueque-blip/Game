@@ -1415,7 +1415,7 @@ function buildAirport(ap) {
   const grp = new THREE.Group(); grp.position.set(ap.cx, 0, ap.cz); grp.rotation.y = ap.rot ? Math.PI / 2 : 0; scene.add(grp);
   const L = ap.L, W = ap.W;
   const box = (sx, sy, sz, material, x, y, z, shadow) => mesh(grp, new THREE.BoxGeometry(sx, sy, sz), material, x, y, z, shadow);
-  const asphalt = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.92, metalness: 0 });
+  const asphalt = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.92, metalness: 0, envMap, envMapIntensity: 0 }); (window.__rwMats || (window.__rwMats = [])).push(asphalt);
   const taxi = new THREE.MeshStandardMaterial({ map: asphaltTex, color: lin(0xcfcfd2), roughness: 0.9 });
   const concrete = new THREE.MeshStandardMaterial({ map: concreteTex, roughness: 0.85 });
   const paint = std(0xf2f2f2, { rough: 0.6 }), yellow = std(0xf0c020, { rough: 0.6 });
@@ -2284,6 +2284,7 @@ function rainSky(dt) {
     rainLines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xc8d4e2, transparent: true, opacity: 0, depthWrite: false, fog: false }));
     rainLines.frustumCulled = false; scene.add(rainLines);
   }
+  if (window.__rwMats) { const w = clamp((r - 0.15) / 0.5, 0, 1); for (const m of window.__rwMats) { m.roughness = 0.92 - 0.72 * w; m.metalness = 0.3 * w; m.envMapIntensity = 0.9 * w; m.color.setScalar(1 - 0.35 * w); } }
   rainLines.visible = r > 0.05; rainLines.material.opacity = Math.min(0.55, r * 0.6);
   if (rainLines.visible) {
     const p = rainLines.geometry.attributes.position, a = p.array, fall = 160 * dt;
@@ -2694,7 +2695,7 @@ function frame(t) {
       if (u.fans) for (const r of u.fans) r.rotation.z += dt * (5 + f.throttle * 38);
       if (u.prop) { u.prop.rotation.z += dt * (8 + f.throttle * 70); u.disc.material.opacity = Math.min(0.18, f.throttle * 0.25); }
       gearAnim = clamp(gearAnim + (f.gear ? 1 : -1) * dt * 0.5, 0, 1);
-      u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02; if (u.cs) ctrlAnim(u.cs, f, dt); if (u.land) { const on = gearAnim > 0.5, nf = window.__nightF || 0; for (const sp of u.land.sprites) sp.material.opacity = on ? 0.95 : 0; for (const b of u.land.beams) b.material.opacity = on ? 0.1 * nf : 0; u.land.spot.intensity = on ? 30 * nf : 0; } if (u.doorsUp) u.doorsUp.visible = gearAnim < 0.05;
+      u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02; if (u.cs) ctrlAnim(u.cs, f, dt); if (f.onGround && f.speed > 35 && typeof RAIN !== 'undefined' && RAIN.v > 0.2 && u.mainGear && Math.random() < RAIN.v) for (const g of u.mainGear) spawnPuff(g.clone().applyQuaternion(f.att).add(f.pos).add(new V3(0, 0.5, 0)), 0xdfe6ee, f.cfg.diameter * 0.3, 1.1, f.cfg.diameter * 1.1, new V3(0, 0, 1).applyQuaternion(f.att).multiplyScalar(f.speed * 0.15).add(new V3(R(-4, 4), R(3, 7), 0)), 0.5 * RAIN.v); if (u.land) { const on = gearAnim > 0.5, nf = window.__nightF || 0; for (const sp of u.land.sprites) sp.material.opacity = on ? 0.95 : 0; for (const b of u.land.beams) b.material.opacity = on ? 0.1 * nf : 0; u.land.spot.intensity = on ? 30 * nf : 0; } if (u.doorsUp) u.doorsUp.visible = gearAnim < 0.05;
       // огни: навигация горит, строб/маяк мигают
       const tt = performance.now() / 1000;
       for (const l of u.lights) {

@@ -15611,7 +15611,7 @@ local function buildAirport(folder: Folder, ap: any)
 	local PAINT = Color3.fromRGB(242, 242, 242)
 	local YELLOW = Color3.fromRGB(240, 192, 32)
 
-	part(f, Vector3.new(W, 0.5, L), cf(0, 0.25, 0), ASPHALT, Enum.Material.Asphalt, true)
+	part(f, Vector3.new(W, 0.5, L), cf(0, 0.25, 0), ASPHALT, Enum.Material.Asphalt, true).Name = "RunwaySurface" -- в дождь блестит (клиент)
 	-- следы шин в зонах касания
 	for _, e in { -1, 1 } do
 		local m = part(f, Vector3.new(40, 0.02, 700), cf(0, 0.51, e * (L / 2 - 650)), Color3.fromRGB(20, 20, 20))
@@ -16569,6 +16569,38 @@ player.CharacterAdded:Connect(function()
 end)
 
 -- дым шин при касании
+-- брызги из-под колёс на мокрой полосе (дождь): эмиттеры на стойках, сила — от скорости
+local function sprayEmitters(m: Model): { ParticleEmitter }
+	local out = {}
+	local r = m.PrimaryPart
+	if not r then
+		return out
+	end
+	for _, a in r:GetChildren() do
+		if a:IsA("Attachment") and a.Name:sub(1, 8) == "MainGear" then
+			local e = a:FindFirstChild("Spray") :: ParticleEmitter?
+			if not e then
+				local pe = Instance.new("ParticleEmitter")
+				pe.Name = "Spray"
+				pe.Rate = 0
+				pe.Lifetime = NumberRange.new(0.6, 1.1)
+				pe.Speed = NumberRange.new(8, 16)
+				pe.SpreadAngle = Vector2.new(25, 25)
+				pe.EmissionDirection = Enum.NormalId.Back
+				pe.Acceleration = Vector3.new(0, -30, 0)
+				pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 4.5) })
+				pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 1) })
+				pe.Color = ColorSequence.new(Color3.fromRGB(220, 228, 236))
+				pe.LightEmission = 0.1
+				pe.Parent = a
+				e = pe
+			end
+			table.insert(out, e :: ParticleEmitter)
+		end
+	end
+	return out
+end
+
 local function tireSmoke(m: Model, cfg: any)
 	local r = m.PrimaryPart
 	if not r then
@@ -16687,6 +16719,13 @@ local function syncState(f: FlightPhysics.Flight)
 	end
 	Animator.setLocal(model, f.gear, f.flaps, f.throttle)
 	Animator.setInputs(f.inP, f.inR, f.inY)
+	if model then
+		local rainNow = tonumber(workspace:GetAttribute("Rain")) or 0
+		local rate = if f.onGround and rainNow > 0.2 and f.speed > 35 then math.min(70, f.speed * 0.4) * rainNow else 0
+		for _, e in sprayEmitters(model) do
+			e.Rate = rate
+		end
+	end
 end
 
 -- ===== физика: каждый шаг перед симуляцией Roblox
@@ -17033,6 +17072,7 @@ task.spawn(function()
 	local glass: { { p: BasePart, color: Color3, mat: Enum.Material } } = {}
 	local lamps: { BasePart } = {}
 	local rabbits: { BasePart } = {}
+	local runways: { { p: BasePart, color: Color3, mat: Enum.Material } } = {}
 	for _, d in worldFolder:GetDescendants() do
 		if d:IsA("BasePart") and d.Material == Enum.Material.Glass and d.Size.Y > 20 and d.Transparency < 0.5 then
 			table.insert(glass, { p = d, color = d.Color, mat = d.Material })
@@ -17040,6 +17080,8 @@ task.spawn(function()
 			table.insert(lamps, d)
 		elseif d:IsA("BasePart") and d.Name == "Rabbit" then
 			table.insert(rabbits, d)
+		elseif d:IsA("BasePart") and d.Name == "RunwaySurface" then
+			table.insert(runways, { p = d, color = d.Color, mat = d.Material })
 		end
 	end
 	-- ветроуказатели аэропортов: конус по ветру, при слабом ветре повисает
@@ -17073,6 +17115,22 @@ task.spawn(function()
 			end
 		end)
 	end
+	-- мокрые полосы в дождь: тёмный глянцевый асфальт с отражением
+	task.spawn(function()
+		local wet: boolean? = nil
+		while true do
+			local isWet = (tonumber(workspace:GetAttribute("Rain")) or 0) > 0.25
+			if isWet ~= wet then
+				wet = isWet
+				for _, r in runways do
+					r.p.Material = if isWet then Enum.Material.SmoothPlastic else r.mat
+					r.p.Reflectance = if isWet then 0.22 else 0
+					r.p.Color = if isWet then r.color:Lerp(Color3.new(0, 0, 0), 0.35) else r.color
+				end
+			end
+			task.wait(3)
+		end
+	end)
 	-- бегущие вспышки огней подхода: дважды в секунду от дальнего огня к полосе
 	if #rabbits > 0 then
 		task.spawn(function()

@@ -187,7 +187,7 @@ local function buildAirport(folder: Folder, ap: any)
 	local PAINT = Color3.fromRGB(242, 242, 242)
 	local YELLOW = Color3.fromRGB(240, 192, 32)
 
-	part(f, Vector3.new(W, 0.5, L), cf(0, 0.25, 0), ASPHALT, Enum.Material.Asphalt, true)
+	part(f, Vector3.new(W, 0.5, L), cf(0, 0.25, 0), ASPHALT, Enum.Material.Asphalt, true).Name = "RunwaySurface" -- в дождь блестит (клиент)
 	-- следы шин в зонах касания
 	for _, e in { -1, 1 } do
 		local m = part(f, Vector3.new(40, 0.02, 700), cf(0, 0.51, e * (L / 2 - 650)), Color3.fromRGB(20, 20, 20))

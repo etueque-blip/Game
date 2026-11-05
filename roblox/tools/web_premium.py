@@ -1281,6 +1281,11 @@ def add_premium(s, patch):
     s = patch(s, "  root.userData.strobe = finTop.clone()", CTRL_JS + "  root.userData.strobe = finTop.clone()")
     s = patch(s, "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02;", "u.gear.scale.y = Math.max(0.001, gearAnim); u.gear.visible = gearAnim > 0.02; if (u.cs) ctrlAnim(u.cs, f, dt);")
     s = patch(s, "function buildPlane(cfg, isStatic) {", CTRL_ANIM_JS + "function buildPlane(cfg, isStatic) {")
+    # мокрая полоса в дождь: глянец и отражение неба на асфальте полос, брызги из-под колёс на разбеге/пробеге
+    s = patch(s, "  const asphalt = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.92, metalness: 0 });",
+              "  const asphalt = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.92, metalness: 0, envMap, envMapIntensity: 0 }); (window.__rwMats || (window.__rwMats = [])).push(asphalt);")
+    s = patch(s, "  rainLines.visible = r > 0.05;", "  if (window.__rwMats) { const w = clamp((r - 0.15) / 0.5, 0, 1); for (const m of window.__rwMats) { m.roughness = 0.92 - 0.72 * w; m.metalness = 0.3 * w; m.envMapIntensity = 0.9 * w; m.color.setScalar(1 - 0.35 * w); } }\n  rainLines.visible = r > 0.05;")
+    s = patch(s, "if (u.cs) ctrlAnim(u.cs, f, dt);", "if (u.cs) ctrlAnim(u.cs, f, dt); if (f.onGround && f.speed > 35 && typeof RAIN !== 'undefined' && RAIN.v > 0.2 && u.mainGear && Math.random() < RAIN.v) for (const g of u.mainGear) spawnPuff(g.clone().applyQuaternion(f.att).add(f.pos).add(new V3(0, 0.5, 0)), 0xdfe6ee, f.cfg.diameter * 0.3, 1.1, f.cfg.diameter * 1.1, new V3(0, 0, 1).applyQuaternion(f.att).multiplyScalar(f.speed * 0.15).add(new V3(R(-4, 4), R(3, 7), 0)), 0.5 * RAIN.v);")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);
