@@ -493,6 +493,23 @@ function Ui.new(cb: Callbacks)
 	local bExit = button(navRow, "Выйти из самолёта", { ZIndex = 23, Visible = false, LayoutOrder = 1 })
 	local bAch = button(navRow, "🏆 Достижения", { ZIndex = 23, LayoutOrder = -1 })
 	local bDaily = button(navRow, "📋 Задания", { ZIndex = 23, LayoutOrder = -2 })
+	-- уровень сложности: «Обычный» — без перегрузки и поломок, «Сложный» — перегрузка G, повреждения, поломки
+	local hard = player:GetAttribute("HardMode") == true
+	local bHard = button(navRow, "", { ZIndex = 23, LayoutOrder = -3 })
+	local function hardLabel()
+		bHard.Text = if hard then "⚠ Сложно" else "Обычно"
+		bHard.TextColor3 = if hard then C.amber else C.fg
+	end
+	hardLabel()
+	bHard.Activated:Connect(function()
+		hard = not hard
+		player:SetAttribute("HardMode", hard)
+		hardLabel()
+		self.toast(if hard then "Сложный уровень: перегрузка G, повреждения и поломки включены" else "Обычный уровень: перегрузка и поломки выключены", if hard then "amber" else "green")
+	end)
+	function self.isHard(): boolean
+		return hard
+	end
 	local bBack = button(navRow, "Назад", { ZIndex = 23, LayoutOrder = 2 })
 	local bNext = button(navRow, "Далее →", { ZIndex = 23, LayoutOrder = 3 })
 	primary(bNext)
@@ -947,6 +964,9 @@ function Ui.new(cb: Callbacks)
 				if math.abs(wx - 5500) < 3200 and math.abs(wz + 9800) < 1000 then
 					col = Color3.fromRGB(30, 98, 140)
 				end
+				if wx > 21500 and wz > -22000 and wz < -4000 then
+					col = Color3.fromRGB(28, 98, 140)
+				end
 				new("Frame", { Size = UDim2.fromOffset(cell + 1, cell + 1), Position = UDim2.fromOffset(i * cell, j * cell), BackgroundColor3 = col, BorderSizePixel = 0, ZIndex = 23 }, mapF)
 			end
 		end
@@ -1207,6 +1227,10 @@ function Ui.new(cb: Callbacks)
 
 	-- указатель глиссады (ILS)
 	local ils = new("TextLabel", { Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 238), BackgroundColor3 = C.panelSolid, BackgroundTransparency = 0.1, Font = FONT_NUM, TextSize = 13, TextColor3 = C.amber, Text = "", Visible = false }, root)
+	function self.hideG()
+		gBox.Visible = false
+		vignette.BackgroundTransparency = 1
+	end
 	function self.hideLate()
 		gBox.Visible = false
 		paxBox.Visible = false

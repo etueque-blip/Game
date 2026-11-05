@@ -914,14 +914,14 @@ GLOAD_PHYS = r"""
   else { const acc = vel.clone().sub(f.vel).multiplyScalar(1 / dt); acc.y += G; f.gload += (clamp(acc.dot(up) / G, -15, 15) - f.gload) * Math.min(1, dt * 8); }
   const [gMax, gMin] = gLimits(c);
   if (!f.onGround) {
-    if (f.gload > gMax * 1.5 || f.gload < gMin * 1.5) return crash(f, `Разрушение конструкции: перегрузка ${f.gload.toFixed(1)} G (предел ${(f.gload > 0 ? gMax : gMin).toFixed(1)} G)`);
-    if (f.gload > gMax) f.damage += (f.gload - gMax) / gMax * dt * 1.5; else if (f.gload < gMin) f.damage += (gMin - f.gload) / Math.abs(gMin) * dt * 1.5;
+    if (HARD && (f.gload > gMax * 1.5 || f.gload < gMin * 1.5)) return crash(f, `Разрушение конструкции: перегрузка ${f.gload.toFixed(1)} G (предел ${(f.gload > 0 ? gMax : gMin).toFixed(1)} G)`);
+    if (HARD && f.gload > gMax) f.damage += (f.gload - gMax) / gMax * dt * 1.5; else if (HARD && f.gload < gMin) f.damage += (gMin - f.gload) / Math.abs(gMin) * dt * 1.5;
   }
-  if (f.speed > c.maxKts * 1.1) f.damage += (f.speed / c.maxKts - 1.1) * dt * 2;
+  if (HARD && f.speed > c.maxKts * 1.1) f.damage += (f.speed / c.maxKts - 1.1) * dt * 2;
   if (f.damage >= 1) return crash(f, "Разрушение конструкции: превышены ограничения самолёта");
-  if (f.flaps > 0 && f.speed > c.flapMaxKts * 1.15) { f.flapStress += dt; if (f.flapStress > 2 && !f.flapsDamaged) { f.flapsDamaged = true; f.flaps = 0; f.events.push({ type: "warn", text: "Закрылки повреждены скоростным напором — заблокированы" }); } } else f.flapStress = Math.max(0, f.flapStress - dt);
-  if (f.gear && !c.fixedGear && !f.onGround && f.speed > gearMaxKts(c) * 1.15) { f.gearStress += dt; if (f.gearStress > 3 && !f.gearStuck) { f.gearStuck = true; f.events.push({ type: "warn", text: "Шасси повреждено на скорости — заклинило в выпущенном положении" }); } } else f.gearStress = Math.max(0, f.gearStress - dt);
-  f.buffet = Math.max(f.onGround ? 0 : clamp((1.12 - f.speed / stall) / 0.12, 0, 1), clamp((f.speed / c.maxKts - 1) / 0.1, 0, 1), clamp((f.gload - gMax * 0.85) / (gMax * 0.2), 0, 1));
+  if (HARD && f.flaps > 0 && f.speed > c.flapMaxKts * 1.15) { f.flapStress += dt; if (f.flapStress > 2 && !f.flapsDamaged) { f.flapsDamaged = true; f.flaps = 0; f.events.push({ type: "warn", text: "Закрылки повреждены скоростным напором — заблокированы" }); } } else f.flapStress = Math.max(0, f.flapStress - dt);
+  if (HARD && f.gear && !c.fixedGear && !f.onGround && f.speed > gearMaxKts(c) * 1.15) { f.gearStress += dt; if (f.gearStress > 3 && !f.gearStuck) { f.gearStuck = true; f.events.push({ type: "warn", text: "Шасси повреждено на скорости — заклинило в выпущенном положении" }); } } else f.gearStress = Math.max(0, f.gearStress - dt);
+  f.buffet = Math.max(f.onGround ? 0 : clamp((1.12 - f.speed / stall) / 0.12, 0, 1), clamp((f.speed / c.maxKts - 1) / 0.1, 0, 1), HARD ? clamp((f.gload - gMax * 0.85) / (gMax * 0.2), 0, 1) : 0);
   f.vel = vel;"""
 
 GLOAD_LIMITS = r"""
@@ -941,10 +941,10 @@ def add_gload(s):
     s = patch(s, 'if (c.noFlaps) toast("У истребителя нет закрылков");', 'if (c.noFlaps) toast("У истребителя нет закрылков");\n    else if (f.flapsDamaged) toast("Закрылки повреждены и заблокированы", "var(--amber)");')
     s = patch(s, '  if (!f.onGround && f.speed < f.dbg.stall * 1.05) w = "STALL · СВАЛИВАНИЕ";',
               '  const [gMx, gMn] = gLimits(c);\n'
-              '  { const el = $("gm"); el.hidden = false; const bad = f.gload > gMx || f.gload < gMn, near = f.gload > gMx * 0.85 || f.gload < gMn * 0.85;\n'
+              '  { const el = $("gm"); el.hidden = !HARD; const bad = f.gload > gMx || f.gload < gMn, near = f.gload > gMx * 0.85 || f.gload < gMn * 0.85;\n'
               '    el.innerHTML = `<b style="color:${bad ? "var(--red)" : near ? "var(--amber)" : "var(--green)"}">${f.gload.toFixed(1)} G</b><small style="color:${f.damage > 0.3 ? "var(--red)" : f.damage > 0.005 ? "var(--amber)" : "var(--dim)"}">${f.damage > 0.005 ? "конструкция " + Math.max(0, Math.round((1 - f.damage) * 100)) + "%" : "+" + gMx + " / " + gMn}</small>`;\n'
-              '    const k = f.gload > 5 ? clamp((f.gload - 5) / 4, 0, 0.85) : f.gload < -2.5 ? clamp((-2.5 - f.gload) / 2, 0, 0.6) : 0; const v = $("gfx"); v.style.opacity = k; v.style.background = f.gload < 0 ? "radial-gradient(circle, rgba(120,0,0,.2) 20%, rgba(120,0,0,1) 75%)" : "radial-gradient(circle, rgba(0,0,0,.1) 15%, rgba(0,0,0,1) 70%)"; }\n'
-              '  if (!f.onGround && (f.gload > gMx * 0.9 || f.gload < gMn * 0.9)) w = `ПЕРЕГРУЗКА ${f.gload.toFixed(1)} G · ПРЕДЕЛ ${f.gload > 0 ? gMx : gMn}`;\n'
+              '    const k = f.gload > 5 ? clamp((f.gload - 5) / 4, 0, 0.85) : f.gload < -2.5 ? clamp((-2.5 - f.gload) / 2, 0, 0.6) : 0; const v = $("gfx"); v.style.opacity = HARD ? k : 0; v.style.background = f.gload < 0 ? "radial-gradient(circle, rgba(120,0,0,.2) 20%, rgba(120,0,0,1) 75%)" : "radial-gradient(circle, rgba(0,0,0,.1) 15%, rgba(0,0,0,1) 70%)"; }\n'
+              '  if (HARD && !f.onGround && (f.gload > gMx * 0.9 || f.gload < gMn * 0.9)) w = `ПЕРЕГРУЗКА ${f.gload.toFixed(1)} G · ПРЕДЕЛ ${f.gload > 0 ? gMx : gMn}`;\n'
               '  else if (!f.onGround && f.speed < f.dbg.stall * 1.05) w = "STALL · СВАЛИВАНИЕ";')
     s = patch(s, "      if (f.onGround && f.speed > 30) eye.y += (Math.random() - 0.5) * Math.min(0.6, f.speed / 400);",
               "      if (f.onGround && f.speed > 30) eye.y += (Math.random() - 0.5) * Math.min(0.6, f.speed / 400);\n      if (f.buffet > 0.02) eye.add(new V3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).multiplyScalar(f.buffet * clamp(c.length / 60, 0.6, 2)));")
@@ -1001,7 +1001,7 @@ def main():
     # удар хвостом при посадке (как в FlightPhysics.luau)
     s = patch(s, """    if (f.speed > 15 && f.airTime > 1) {
       const grade = fpm < 250 ? "Идеальная посадка!" : fpm < 600 ? "Хорошая посадка" : "Жёсткая посадка";""",
-              """    const tailStrike = pitchDeg > c.maxRotate + 2;
+              """    const tailStrike = HARD && pitchDeg > c.maxRotate + 2;
     if (tailStrike) { f.damage = Math.min(0.95, (f.damage || 0) + 0.35); f.events.push({ type: "warn", text: `Удар хвостом о полосу: тангаж ${pitchDeg.toFixed(0)}° (предел ${c.maxRotate}°) — повреждение` }); }
     if (f.speed > 15 && f.airTime > 1) {
       const grade = tailStrike ? "Жёсткая посадка" : fpm < 250 ? "Идеальная посадка!" : fpm < 600 ? "Хорошая посадка" : "Жёсткая посадка";""")

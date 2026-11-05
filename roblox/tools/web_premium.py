@@ -711,6 +711,7 @@ function buildMapBg() {
     const wx = -WORLD + (i + 0.5) / N * 2 * WORLD, wz = -WORLD + (j + 0.5) / N * 2 * WORLD, h = terrainH(wx, wz), k = (j * N + i) * 4;
     let col = h > 900 ? [236, 240, 246] : h > 350 ? [120 + h * 0.06, 118 + h * 0.05, 96 + h * 0.06] : [84 + h * 0.08, 132 - h * 0.03, 70];
     if (Math.abs(wx - 5500) < 3200 && Math.abs(wz + 9800) < 1000) col = [30, 98, 140];
+    if (wx > 21500 && wz > -22000 && wz < -4000) col = [28, 98, 140]; else if (wx > 21200 && wz > -22150 && wz < -3850) col = [226, 208, 160];
     img.data.set([col[0], col[1], col[2], 255], k);
   }
   x.putImageData(img, 0, 0); return c;
@@ -1104,6 +1105,17 @@ def add_premium(s, patch):
     # конденсационные следы с законцовок крыла при большой перегрузке / во влажном воздухе (дождь + закрылки)
     s = patch(s, "fps = 60, trailT = 0;", "fps = 60, trailT = 0, vaporT = 0;")
     s = patch(s, "      if (f.pos.y * FT > 18000 && trailT > 0.05 && f.throttle > 0.3) {", VAPOR_JS + "      if (f.pos.y * FT > 18000 && trailT > 0.05 && f.throttle > 0.3) {")
+    # уровень сложности: «Обычный» (без перегрузки и поломок) / «Сложный»; переключатель в меню, хранится в браузере
+    s = patch(s, "<script>window.__flightSeq = 0;</script>", "<script>window.__flightSeq = 0; var HARD = false; try { HARD = localStorage.getItem('skypilot.hard') === '1'; } catch (e) {}</script>")
+    s = patch(s, '<button class="tb" id="mHelp2">Клавиши</button>', '<button class="tb" id="mHard"></button><button class="tb" id="mHelp2">Клавиши</button>')
+    s = patch(s, '$("loading").hidden = true;', 'const hardLbl = () => { $("mHard").textContent = HARD ? "⚠ Сложность: сложная (перегрузка G)" : "Сложность: обычная"; $("mHard").setAttribute("aria-pressed", HARD); };\nhardLbl(); $("mHard").onclick = () => { HARD = !HARD; try { localStorage.setItem("skypilot.hard", HARD ? "1" : "0"); } catch (e) {} hardLbl(); toast(HARD ? "Сложный уровень: перегрузка G, повреждения и поломки включены" : "Обычный уровень: перегрузка и поломки выключены"); };\n$("loading").hidden = true;')
+    # поля и лесные рощи веб-версии не кладём в новое море на востоке
+    s = patch(s, "  const free = (x, z, pad) => avoid.every(([ax, az, r]) => Math.hypot(x - ax, z - az) > r + pad) && terrainH(x, z) < 1;",
+              "  const inSea = (x, z, pad) => x > 21500 - pad && z > -22000 - pad && z < -4000 + pad;\n  const free = (x, z, pad) => !inSea(x, z, pad) && avoid.every(([ax, az, r]) => Math.hypot(x - ax, z - az) > r + pad) && terrainH(x, z) < 1;")
+    s = patch(s, "    if (!avoid.every(([ax, az, r]) => Math.hypot(cx - ax, cz - az) > r + 900)) continue;",
+              "    if (inSea(cx, cz, 900) || !avoid.every(([ax, az, r]) => Math.hypot(cx - ax, cz - az) > r + 900)) continue;")
+    # новые хребты (как в World.luau и gen_cities.NEW_PEAKS)
+    s = patch(s, "function terrainH(x, z) {", "for (const [x, z, h, r] of [[-22000, -8000, 1300, 1100], [-21500, -5200, 1500, 1250], [-22300, -2400, 1100, 1000], [-21700, 300, 1600, 1300], [-22200, 3200, 1200, 1100], [-21600, 6000, 1400, 1200], [3500, 18500, 1200, 1100], [6000, 20000, 1500, 1250], [8500, 18800, 1000, 1000], [6000, -19500, 1300, 1200], [8500, -21500, 1000, 1000]]) peaks.push({ x, z, h, r });\nfunction terrainH(x, z) {")
     # геймпад в веб-версии (раньше работал только в Roblox)
     s = patch(s, "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };", "const touch = { x: 0, y: 0, rl: 0, rr: 0, brake: false };\n" + GAMEPAD_JS)
     s = patch(s, """    const k = (c) => keys.has(c);

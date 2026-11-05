@@ -282,6 +282,7 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 	model = m
 	root = m:WaitForChild("Root", 5) :: BasePart?
 	local f = FlightPhysics.new(cfg, spawnCF, mode == "air")
+	f.hard = ui.isHard()
 	flight = f
 	simulating = false
 	vsSmooth = 0
@@ -698,8 +699,12 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 	local ahead = f.pos + f.vel * 6
 	local terrainAhead = not f.onGround and f.vel.Y < -5 and ahead.Y < World.groundAt(ahead.X, ahead.Z) + 60
 	local gMax, gMin = FlightPhysics.limits(c)
-	ui.setG(f.gload, gMax, gMin, f.damage)
-	if not f.onGround and (f.gload > gMax * 0.9 or f.gload < gMin * 0.9) then
+	if f.hard then
+		ui.setG(f.gload, gMax, gMin, f.damage)
+	else
+		ui.hideG()
+	end
+	if f.hard and not f.onGround and (f.gload > gMax * 0.9 or f.gload < gMin * 0.9) then
 		w = string.format("ПЕРЕГРУЗКА %.1f G · ПРЕДЕЛ %.1f", f.gload, if f.gload > 0 then gMax else gMin)
 	elseif not f.onGround and f.speed < stall * 1.05 then
 		w = "STALL · СВАЛИВАНИЕ"

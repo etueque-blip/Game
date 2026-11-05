@@ -815,6 +815,98 @@ def samarkand():
     street_trees(cx, cz, half, 135, 67.5, "plane", zones, avenues=2)
 
 
+# ================================================================ ЗАГОРОД: море, деревни, леса (горы — NEW_PEAKS в World.luau и веб)
+NEW_PEAKS = [  # x, z, высота, радиус — те же в src/shared/World.luau и tools/web_premium.py
+    (-22000, -8000, 1300, 1100), (-21500, -5200, 1500, 1250), (-22300, -2400, 1100, 1000), (-21700, 300, 1600, 1300),
+    (-22200, 3200, 1200, 1100), (-21600, 6000, 1400, 1200), (3500, 18500, 1200, 1100), (6000, 20000, 1500, 1250),
+    (8500, 18800, 1000, 1000), (6000, -19500, 1300, 1200), (8500, -21500, 1000, 1000),
+]
+SEA = (21500, 24576, -22000, -4000)  # x0, x1, z0, z1 — море на востоке
+
+
+def countryside():
+    crng = random.Random(777)
+    CR = lambda a, b: crng.uniform(a, b)
+    W = 24576
+    airports = [(0, 0), (14000, -16000), (-9000, 15500), (11500, -9000), (14500, 6500), (-18800, 20500), (18000, 20500), (-19300, -20500)]
+    avoid = [(x + 600, z, 3300) for x, z in airports]
+    avoid += [(5500, -7500, 2400), (-4000, 12500, 2000), (10500, 3000, 1900), (-20500, 20500, 2000), (21000, 20500, 2000), (-21000, -20500, 1900)]
+    avoid += [(-6000, 5000, 1200), (8000, 6000, 1000), (-9000, -3000, 900), (3000, -14000, 1100), (18000, -6000, 1300), (5500, -9800, 3500)]
+    avoid += [(-13000, -9000, 5200), (-15500, 9000, 5000), (12500, 14000, 5000), (-4000, -20500, 4600), (20500, 2000, 4600)]
+    avoid += [(x, z, r * 2.6) for x, z, h, r in NEW_PEAKS]
+    def ok(x, z, pad=0):
+        if abs(x) > W - 1500 or abs(z) > W - 1500:
+            return False
+        if SEA[0] - 400 < x < SEA[1] and SEA[2] - 400 < z < SEA[3] + 400:
+            return False
+        return all((x - ax) ** 2 + (z - az) ** 2 > (ar + pad) ** 2 for ax, az, ar in avoid)
+    # море на востоке: гладь (Roblox — вода движка), песчаный пляж
+    x0, x1, z0, z1 = SEA
+    box(((x0 + x1) / 2, 0.53, (z0 + z1) / 2), (x1 - x0, 0.05, z1 - z0), c=(28, 98, 140), m="Glass", solid=False, refl=0.35)
+    box((x0 - 150, 0.12, (z0 + z1) / 2), (300, 0.2, z1 - z0 + 300), c=(226, 208, 160), m="Sand", solid=False)
+    for z in range(int(z0) + 400, int(z1) - 200, 700):  # пальмы на пляже
+        x = x0 - CR(60, 260)
+        vcyl(x, 0, z, 15, 1.5, c=(120, 92, 60), m="Wood", solid=False)
+        ell((x, 15, z), (6.5, 2.2, 6.5), c=(62, 120, 58), m="LeafyGrass", solid=False)
+    # деревни: дома со скатными крышами, деревья, поля
+    WALL = [(236, 228, 210), (222, 206, 180), (240, 238, 232), (210, 196, 172)]
+    ROOF = [(168, 70, 52), (120, 70, 50), (96, 102, 112), (150, 90, 60)]
+    villages = 0
+    for _ in range(400):
+        if villages >= 22:
+            break
+        vx, vz = CR(-W + 2500, W - 2500), CR(-W + 2500, W - 2500)
+        if not ok(vx, vz, 400):
+            continue
+        villages += 1
+        avoid.append((vx, vz, 700))
+        n = crng.randint(16, 26)
+        for _ in range(n):
+            hx, hz = vx + CR(-200, 200), vz + CR(-200, 200)
+            w, d, h = CR(22, 34), CR(16, 24), CR(10, 15)
+            box((hx, h / 2, hz), (w, h, d), c=crng.choice(WALL), m="Plaster")
+            rh, rc = d * 0.42, crng.choice(ROOF)
+            wedge((hx, h + rh / 2, hz - d / 4), (w + 1, rh, d / 2 + 0.5), c=rc, m="Brick", solid=False)
+            wedge((hx, h + rh / 2, hz + d / 4), (w + 1, rh, d / 2 + 0.5), (0, math.pi, 0), c=rc, m="Brick", solid=False)
+        # церковь или мечеть с башенкой
+        tx, tz = vx + CR(-40, 40), vz + CR(-40, 40)
+        box((tx, 9, tz), (22, 18, 30), c=(240, 236, 226), m="Plaster")
+        vcyl(tx, 18, tz - 10, 16, 6, c=(240, 236, 226), m="Plaster")
+        ball((tx, 36, tz - 10), 7, c=crng.choice([(60, 150, 170), (150, 150, 158), (190, 160, 80)]), m="Metal", solid=False)
+        # поля вокруг
+        for _ in range(crng.randint(3, 6)):
+            a, r = CR(0, math.tau), CR(330, 560)
+            box((vx + math.cos(a) * r, 0.08, vz + math.sin(a) * r), (CR(120, 240), 0.1, CR(90, 180)), crng.uniform(0, math.pi),
+                c=crng.choice([(196, 176, 92), (120, 150, 70), (150, 120, 76), (176, 186, 96)]), m="Grass", solid=False)
+        for _ in range(14):
+            a, r = CR(0, math.tau), CR(250, 330)
+            x, z = vx + math.cos(a) * r, vz + math.sin(a) * r
+            vcyl(x, 0, z, 6, 1.6, c=(96, 76, 54), m="Wood", solid=False)
+            ball((x, 10, z), CR(9, 13), c=crng.choice([(70, 125, 60), (82, 138, 66), (60, 112, 52)]), m="LeafyGrass", solid=False)
+    # леса: густые рощи лиственных и елей
+    forests = 0
+    for _ in range(600):
+        if forests >= 26:
+            break
+        fx, fz = CR(-W + 2000, W - 2000), CR(-W + 2000, W - 2000)
+        if not ok(fx, fz, 500):
+            continue
+        forests += 1
+        avoid.append((fx, fz, 600))
+        rad = CR(260, 480)
+        for _ in range(crng.randint(30, 44)):
+            a, r = CR(0, math.tau), rad * math.sqrt(crng.random())
+            x, z = fx + math.cos(a) * r, fz + math.sin(a) * r * 0.8
+            if crng.random() < 0.45:  # ель: тонкий ствол и вытянутая крона
+                h = CR(16, 24)
+                vcyl(x, 0, z, h * 0.35, 1.4, c=(84, 64, 46), m="Wood", solid=False)
+                ell((x, h * 0.62, z), (CR(4.5, 6), h * 0.42, CR(4.5, 6)), c=crng.choice([(40, 86, 52), (46, 96, 58), (36, 78, 48)]), m="LeafyGrass", solid=False)
+            else:
+                vcyl(x, 0, z, 7, 1.8, c=(96, 76, 54), m="Wood", solid=False)
+                ball((x, 12, z), CR(11, 16), c=crng.choice([(70, 125, 60), (82, 138, 66), (60, 112, 52), (92, 140, 64)]), m="LeafyGrass", solid=False)
+    print("countryside: villages", villages, "forests", forests)
+
+
 # ================================================================ ГОНКА ЧЕРЕЗ КОЛЬЦА
 RING_PATH = [
     (0, 300, -3500, 90, "Старт · Skyport"),
@@ -853,6 +945,7 @@ def main():
     istanbul()
     riyadh()
     samarkand()
+    countryside()
     data = {"props": props, "obstacles": obstacles, "pads": pads, "labels": labels, "rings": rings()}
     with open(os.path.join(ROOT, "tools", "cities.json"), "w") as f:
         json.dump(data, f, separators=(",", ":"))

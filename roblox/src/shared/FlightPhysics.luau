@@ -38,6 +38,7 @@ export type Flight = {
 	vyExtra: number, lastVelY: number, vel: Vector3,
 	wind: Vector3?, -- снос ветром (stud/с, задаёт клиент); на земле не действует
 	onGround: boolean, airTime: number, crashed: boolean, crashReason: string?,
+	hard: boolean?, -- «Сложный» уровень: перегрузка G, повреждения и поломки (на обычном — выключено)
 	gload: number, damage: number, buffet: number, flapStress: number, gearStress: number, flapsDamaged: boolean, gearStuck: boolean,
 	events: { Event }, dbg: { [string]: number },
 }
@@ -116,7 +117,7 @@ local function stepOnce(f: Flight, input: Input, dt: number)
 			return crash(f, string.format("Удар крылом о землю (крен %d°, тангаж %d°)", math.round(bankDeg), math.round(pitchDeg)))
 		end
 		-- удар хвостом: нос задран выше предела — повреждение (как в жизни), посадка считается жёсткой
-		local tailStrike = pitchDeg > c.maxRotate + 2
+		local tailStrike = f.hard == true and pitchDeg > c.maxRotate + 2
 		if tailStrike then
 			f.damage = math.min(0.95, f.damage + 0.35)
 			table.insert(f.events, { type = "warn", text = string.format("Удар хвостом о полосу: тангаж %d° (предел %d°) — повреждение", math.round(pitchDeg), c.maxRotate) })
@@ -246,7 +247,7 @@ local function stepOnce(f: Flight, input: Input, dt: number)
 		f.gload += (clamp(nz, -15, 15) - f.gload) * math.min(1, dt * 8)
 	end
 	local gMax, gMin = FlightPhysics.limits(c)
-	if not f.onGround then
+	if f.hard and not f.onGround then
 		if f.gload > gMax * 1.5 or f.gload < gMin * 1.5 then
 			return crash(f, string.format("Разрушение конструкции: перегрузка %.1f G (предел %.1f G)", f.gload, if f.gload > 0 then gMax else gMin))
 		end
@@ -256,14 +257,14 @@ local function stepOnce(f: Flight, input: Input, dt: number)
 			f.damage += (gMin - f.gload) / math.abs(gMin) * dt * 1.5
 		end
 	end
-	if f.speed > c.maxKts * 1.1 then
+	if f.hard and f.speed > c.maxKts * 1.1 then
 		f.damage += (f.speed / c.maxKts - 1.1) * dt * 2
 	end
 	if f.damage >= 1 then
 		return crash(f, "Разрушение конструкции: превышены ограничения самолёта")
 	end
 	-- скоростной напор ломает закрылки и шасси
-	if f.flaps > 0 and f.speed > c.flapMaxKts * 1.15 then
+	if f.hard and f.flaps > 0 and f.speed > c.flapMaxKts * 1.15 then
 		f.flapStress += dt
 		if f.flapStress > 2 and not f.flapsDamaged then
 			f.flapsDamaged, f.flaps = true, 0
@@ -272,7 +273,7 @@ local function stepOnce(f: Flight, input: Input, dt: number)
 	else
 		f.flapStress = math.max(0, f.flapStress - dt)
 	end
-	if f.gear and not c.fixedGear and not f.onGround and f.speed > FlightPhysics.gearMaxKts(c) * 1.15 then
+	if f.hard and f.gear and not c.fixedGear and not f.onGround and f.speed > FlightPhysics.gearMaxKts(c) * 1.15 then
 		f.gearStress += dt
 		if f.gearStress > 3 and not f.gearStuck then
 			f.gearStuck = true
@@ -284,7 +285,7 @@ local function stepOnce(f: Flight, input: Input, dt: number)
 	-- тряска: у сваливания, при превышении скорости и у предела перегрузки
 	local bStall = if f.onGround then 0 else clamp((1.12 - f.speed / stall) / 0.12, 0, 1)
 	local bSpeed = clamp((f.speed / c.maxKts - 1) / 0.1, 0, 1)
-	local bG = clamp((f.gload - gMax * 0.85) / (gMax * 0.2), 0, 1)
+	local bG = if f.hard then clamp((f.gload - gMax * 0.85) / (gMax * 0.2), 0, 1) else 0
 	f.buffet = math.max(bStall, bSpeed, bG)
 
 	f.vel = vel
