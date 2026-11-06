@@ -667,6 +667,7 @@ function Ui.new(cb: Callbacks)
 		{ "free", "Свободный полёт", "Любой самолёт, любой аэропорт. Посадки дают очки.", "✈" },
 		{ "career", "Рейс", "Вылет из одного аэропорта, посадка в другом: +1000 за выполненный рейс.", "⇄" },
 		{ "race", "Гонка колец", "13 колец: Дубай → Ташкент → Лондон и под Тауэрским мостом. +1500.", "◎" },
+		{ "landing", "Посадочный вызов", "Заход с 2,5 км, шасси и закрылки выпущены. Сядь мягко, по оси и у знаков — рекорд по аэропорту.", "🎯" },
 	} do
 		local c = card(modes, "mode", i)
 		photoBg(c, "mode_" .. m[1])
@@ -803,7 +804,7 @@ function Ui.new(cb: Callbacks)
 	selectAirportCard("from", "A")
 	local function launch()
 		hangar.Visible = false
-		local mode = if flow.mode == "race" then "race" else "runway:" .. flow.from
+		local mode = if flow.mode == "race" then "race" elseif flow.mode == "landing" then "approach:" .. flow.from else "runway:" .. flow.from
 		cb.onPick(flow.plane :: string, mode, if flow.mode == "career" then flow.to else nil, flow.livery)
 	end
 	bNext.Activated:Connect(function()

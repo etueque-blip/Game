@@ -1034,6 +1034,8 @@ def main():
     s = add_hangar(s, patch)
     from web_log import add_log
     s = add_log(s, patch)
+    from web_challenge import add_challenge
+    s = add_challenge(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

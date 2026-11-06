@@ -11,7 +11,7 @@ pcall(function()
 	store = DataStoreService:GetDataStore("SkyPilot_v1")
 end)
 
-type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean }, log: { any }, tot: { [string]: number } }
+type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean }, log: { any }, tot: { [string]: number }, chal: { [string]: number } }
 local function newTot(): { [string]: number }
 	return { flights = 0, time = 0, landings = 0, dist = 0, perfect = 0, crashes = 0 }
 end
@@ -30,7 +30,7 @@ local function stat(p: Player, name: string, value: number)
 end
 
 function Scores.get(p: Player): Data
-	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot() }
+	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {} }
 end
 
 local function refresh(p: Player)
@@ -57,6 +57,12 @@ local function refresh(p: Player)
 	if ok then
 		p:SetAttribute("Log", js)
 	end
+	local ch = {}
+	for k, v in d.chal do
+		table.insert(ch, k .. ":" .. v)
+	end
+	table.sort(ch)
+	p:SetAttribute("Chal", table.concat(ch, ","))
 end
 
 function Scores.load(p: Player)
@@ -68,7 +74,7 @@ function Scores.load(p: Player)
 		v.Parent = ls
 	end
 	ls.Parent = p
-	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot() }
+	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {} }
 	if store then
 		local ok, res = pcall(function()
 			return (store :: DataStore):GetAsync(key(p))
@@ -83,6 +89,13 @@ function Scores.load(p: Player)
 				for i, e in res.log do
 					if i <= 10 and type(e) == "table" then
 						table.insert(data.log, e)
+					end
+				end
+			end
+			if type(res.chal) == "table" then
+				for k, v in res.chal do
+					if type(k) == "string" and tonumber(v) then
+						data.chal[k] = math.clamp(tonumber(v) :: number, 0, 100)
 					end
 				end
 			end
@@ -172,6 +185,17 @@ function Scores.visit(p: Player, apId: string): number
 		n += 1
 	end
 	return n
+end
+
+-- рекорд посадочного вызова: true, если новый
+function Scores.challenge(p: Player, apId: string, score: number): boolean
+	local d = cache[p]
+	if not d or score <= (d.chal[apId] or 0) then
+		return false
+	end
+	d.chal[apId] = score
+	refresh(p)
+	return true
 end
 
 -- запись полёта в журнал (данные от клиента — только для показа, на очки не влияют)

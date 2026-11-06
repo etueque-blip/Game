@@ -430,6 +430,10 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 #altT { width: calc(min(250px, 46vh) * 0.42); left: calc(50% + min(27vw, 310px)); margin-left: calc(min(250px, 46vh) * -0.21); }
 @media (max-width: 560px) { #spdT, #altT { display: none; } }
 @media (max-height: 480px) { #spdT, #altT { transform: translateY(-42%); } }
+
+/* меню: 4 малые плитки в ряд (добавлен «Посадочный вызов») */
+.tiles { grid-template-columns: repeat(12, minmax(0, 1fr)); } .tile { grid-column: span 3; } .tile.big { grid-column: span 6; }
+@media (max-width: 760px) { .tile, .tile.big { grid-column: span 12; } }
 </style>
 
 <div id="app">
@@ -501,6 +505,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
         <button class="tile big" data-m="free" data-ph="mode_free"><span class="ic">✈</span><b>Свободный<br>полёт</b><small>Любой самолёт, любой из 8 аэропортов</small></button>
         <button class="tile big" data-m="career" data-ph="mode_career"><span class="ic">⇄</span><b>Режим<br>рейсов</b><small>Вылет из одного аэропорта и посадка в другом</small></button>
         <button class="tile" data-m="race" data-ph="mode_race"><span class="ic">◎</span><b>Гонка колец</b><small>13 колец: Дубай → Ташкент → Лондон</small></button>
+        <button class="tile" data-m="landing" data-ph="mode_free"><span class="ic">🎯</span><b>Посадочный<br>вызов</b><small>Заход с 2,5 км: сядь идеально, рекорд по аэропорту</small></button>
         <button class="tile" data-m="help" data-ph="news_airports"><span class="ic">⌨</span><b>Управление</b><small>Клавиши, телефон, геймпад</small></button>
         <button class="tile" data-m="spot" data-ph="news_tashkent"><span class="ic">⌖</span><b>Обзор<br>самолётов</b><small>Все 15 самолётов в ангаре</small></button>
       </div>
@@ -751,6 +756,7 @@ let gameMode = "free", flightDest = null, lastDest = null, parkBrake = false;
 function spawnFor(cfg, mode) {
   if (mode === "race") { const r = CITYDATA.rings[0], d = new V3(-Math.sin(r[4]), 0, -Math.cos(r[4])); return { pos: new V3(r[0], r[1], r[2]).addScaledVector(d, -1500), yaw: r[4], air: true }; }
   if (mode === "air") return { pos: new V3(0, 3000 / FT, 9000), yaw: 0, air: true };
+  if (mode.startsWith("approach:")) { const ap = AIRPORTS.find((a) => "approach:" + a.id === mode) || AIRPORTS[0], w = apToWorld(ap, 0, ap.L / 2 + 4800); return { pos: new V3(w.x, 0.5 + cfg.gearHeight + 267, w.z), yaw: ap.rot ? Math.PI / 2 : 0, air: true }; }
   const ap = AIRPORTS.find((a) => "runway:" + a.id === mode) || AIRPORTS[0];
   const w = apToWorld(ap, 0, ap.L / 2 - 140);
   return { pos: new V3(w.x, 0.5 + cfg.gearHeight, w.z), yaw: ap.rot ? Math.PI / 2 : 0, air: false };
@@ -1887,7 +1893,7 @@ function startFlight(cfg, mode) {
   lastCfg = cfg; lastMode = mode; fstatsReset(cfg); lastDest = flightDest; raceReset(); gateTarget = null; const __seq = ++window.__flightSeq; atcStart(mode);
   parkBrake = mode.startsWith("runway"); { const a0 = AIRPORTS.find((a) => "runway:" + a.id === mode); scoreFrom = a0 ? a0.id : null; } if (mode === "race") navIdx = 0;
   if (flightDest) { navIdx = AIRPORTS.findIndex((a) => a.id === flightDest) + 1; setTimeout(() => { if (__seq !== window.__flightSeq) return; const d = AIRPORTS[navIdx - 1]; toast("Рейс в " + d.code + " · " + d.title + " — навигация включена", "var(--magenta)"); }, 3200); }
-  flight = newFlight(cfg, mode);
+  flight = newFlight(cfg, mode); if (mode.startsWith("approach:")) approachSetup(flight);
   planeObj = buildPlane(cfg, false); scene.add(planeObj);
   gearAnim = flight.gear ? 1 : 0;
   camRot.copy(flight.att); camPos.copy(flight.pos);
@@ -1895,7 +1901,7 @@ function startFlight(cfg, mode) {
   $("hangar").hidden = true; $("menu").hidden = true; $("flow").hidden = true; $("crash").hidden = true; $("hud").hidden = false; $("adi").hidden = false; $("radar").hidden = false;
   $("planeName").textContent = cfg.name;
   addLog(`Старт: ${cfg.name}, ${mode === "air" ? "в воздухе" : "на полосе"}`);
-  toast(mode === "air" ? "Вы в воздухе на 3000 ft — аэропорт впереди" : "На полосе: тяга 100%, на Vr " + cfg.vrKts + " kt тяни на себя", "var(--magenta)");
+  toast(mode.startsWith("approach:") ? "🎯 Посадочный вызов: садись на полосу впереди — мягко, по оси и у посадочных знаков" : mode === "air" ? "Вы в воздухе на 3000 ft — аэропорт впереди" : "На полосе: тяга 100%, на Vr " + cfg.vrKts + " kt тяни на себя", "var(--magenta)");
   setThrottleUI(flight.throttle);
 }
 
@@ -2079,12 +2085,35 @@ function addScore(pts, label) {
 
 // ===== отчёт о посадке: оценка, вертикальная, скорость, перегрузка, отклонение от оси, очки
 let lrepT = null;
+
+// ===== посадочный вызов
+const CHAL = {}; try { Object.assign(CHAL, JSON.parse(localStorage.getItem("skypilot.chal") || "{}")); } catch (e) {}
+function approachSetup(f) {
+  const c = f.cfg; f.flaps = c.noFlaps ? 0 : 2; f.gear = true; f.throttle = 0.45;
+  f.speed = Math.round(c.stallKts * (1 - 0.07 * f.flaps) * 1.3); f.vel = new V3(0, 0, -1).applyQuaternion(f.att).multiplyScalar(f.speed); f.chalDone = false;
+}
+function chalScore(fpm, offM, zoneM) {
+  const a = fpm < 100 ? 50 : fpm < 200 ? 42 : fpm < 350 ? 32 : fpm < 600 ? 18 : 5;
+  const b = offM === null ? 0 : offM < 2 ? 30 : offM < 5 ? 24 : offM < 10 ? 16 : offM < 20 ? 8 : 0;
+  const z = zoneM < 30 ? 20 : zoneM < 80 ? 14 : zoneM < 150 ? 8 : 0;
+  return a + b + z;
+}
+function chalLanding(f, ap, fpm, offM) {
+  if (!f.mode || !f.mode.startsWith("approach:") || f.chalDone) return; f.chalDone = true;
+  const target = AIRPORTS.find((a) => "approach:" + a.id === f.mode);
+  if (!ap || !target || ap.id !== target.id) { setTimeout(() => toast("🎯 Вызов не засчитан: посадка не на ту полосу", "var(--amber)"), 900); return; }
+  const lz = ap.rot ? f.pos.x - ap.cx : f.pos.z - ap.cz, zoneM = Math.abs(lz - (ap.L / 2 - 300)) * 0.515;
+  const sc = chalScore(fpm, offM, zoneM), best = CHAL[ap.id] || 0, rec = sc > best;
+  if (rec) { CHAL[ap.id] = sc; try { localStorage.setItem("skypilot.chal", JSON.stringify(CHAL)); } catch (e) {} }
+  setTimeout(() => toast(`🎯 Посадочный вызов ${ap.code}: ${sc}/100 · касание ${Math.round(zoneM)} м от знаков` + (rec ? " · новый рекорд!" : ` · рекорд ${best}`), rec ? "var(--green)" : ""), 900);
+}
 function showLandingReport(f, ap, text, pts) {
   const fpm = (/(\d+) fpm/.exec(text) || [0, 0])[1] | 0;
   logLanding(text.startsWith("Идеальная") ? "perfect" : text.startsWith("Хорошая") ? "good" : "hard", fpm, ap ? ap.code : "");
   const grade = text.startsWith("Идеальная") ? ["Идеальная посадка", "#22c07a", "★"] : text.startsWith("Хорошая") ? ["Хорошая посадка", "#3ba7ff", "✓"] : ["Жёсткая посадка", "#f0a531", "!"];
   let off = null;
   if (ap) { const dx = f.pos.x - ap.cx, dz = f.pos.z - ap.cz; off = Math.abs(ap.rot ? -dz : dx) * 0.515; }
+  chalLanding(f, ap, fpm, off);
   const paxBonus = COMF.pax > 0 && ap && flightDest && ap.id === flightDest ? Math.floor(COMF.v * 5) : 0;
   if (paxBonus > 0) setTimeout(() => addScore(paxBonus, "комфорт пассажиров"), 1500);
   const el = $("lrep");
@@ -3055,7 +3084,7 @@ function renderFlow() {
     }
     const c = PLANES[FL.plane];
     prev.style.backgroundImage = c ? ph("plane_" + FL.plane) : ph("mode_" + (FL.mode === "race" ? "race" : FL.mode === "career" ? "career" : "free"));
-    $("fTitle").textContent = c ? c.name : FL.mode === "race" ? "Гонка колец" : FL.mode === "career" ? "Режим рейсов" : "Свободный полёт";
+    $("fTitle").textContent = c ? c.name : FL.mode === "race" ? "Гонка колец" : FL.mode === "career" ? "Режим рейсов" : FL.mode === "landing" ? "Посадочный вызов" : "Свободный полёт";
     if (c) $("fText").innerHTML = specHTML(c); else $("fText").textContent = "Выберите самолёт слева.";
   } else {
     const key = FL.step === "from" ? "from" : "to";
@@ -3084,7 +3113,7 @@ function flowNext() {
 function launchFlow() {
   gameMode = FL.mode; flightDest = FL.mode === "career" ? FL.to : null;
   $("flow").hidden = true;
-  startFlight(withLivery(PLANES[FL.plane]), FL.mode === "race" ? "race" : "runway:" + FL.from);
+  startFlight(withLivery(PLANES[FL.plane]), FL.mode === "race" ? "race" : (FL.mode === "landing" ? "approach:" : "runway:") + FL.from);
 }
 $("fNext").onclick = flowNext;
 $("fBack").onclick = () => { if (FL.step === "to") FL.step = "from"; else if (FL.step === "from") FL.step = "planes"; else return openMenu(); renderFlow(); };

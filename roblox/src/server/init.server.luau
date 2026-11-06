@@ -53,6 +53,8 @@ local AchievementRemote = remote("Achievement")
 local DailyRemote = remote("DailyTask")
 local TrickRemote = remote("Trick")
 local FlightLogRemote = remote("FlightLog")
+local ChallengeRemote = remote("Challenge")
+local Challenge = require(Shared:WaitForChild("Challenge"))
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -107,6 +109,13 @@ local function runwayId(mode: string): string?
 end
 
 local function pickSpawn(cfg: any, mode: string): (CFrame, boolean, string?)
+	local cid = Challenge.airportOf(mode)
+	if cid then
+		local ap = World.airportById(cid)
+		if ap then
+			return Challenge.spawn(ap, cfg), true, nil
+		end
+	end
 	if mode == "race" then
 		local r = World.CityData.rings[1]
 		local look = Vector3.new(-math.sin(r[5]), 0, -math.cos(r[5]))
@@ -200,7 +209,8 @@ local function startFlight(p: Player, planeId: any, mode: any, destination: any,
 	end
 	local cfg = PlaneConfigs.PLANES[planeId]
 	local rid = runwayId(mode)
-	if not cfg or not (mode == "air" or mode == "race" or (rid and World.airportById(rid))) then
+	local cid = Challenge.airportOf(mode)
+	if not cfg or not (mode == "air" or mode == "race" or (rid and World.airportById(rid)) or (cid and World.airportById(cid))) then
 		return
 	end
 	if destination ~= nil and (type(destination) ~= "string" or not World.airportById(destination) or destination == rid) then
@@ -238,7 +248,7 @@ local function startFlight(p: Player, planeId: any, mode: any, destination: any,
 	local model = PlaneBuilder.build(buildCfg, { seat = true, label = p.DisplayName })
 	model.Name = p.Name .. "_Plane"
 	model:SetAttribute("Owner", p.UserId)
-	model:SetAttribute("Gear", air == false or cfg.fixedGear == true)
+	model:SetAttribute("Gear", air == false or cfg.fixedGear == true or cid ~= nil)
 	model:SetAttribute("Flaps", 0)
 	model:SetAttribute("Throttle", if air then 0.7 else 0)
 	model:PivotTo(spawnCF)
@@ -252,7 +262,7 @@ local function startFlight(p: Player, planeId: any, mode: any, destination: any,
 	seat:Sit(hum)
 
 	local a: Active = {
-		model = model, root = root, cfgId = planeId, mode = if air then "air" else mode,
+		model = model, root = root, cfgId = planeId, mode = if cid then mode elseif air then "air" else mode,
 		started = now, lastLanding = 0, fromAirport = ap, destination = destination, ready = false, crashed = false, conns = {},
 	}
 	active[p] = a
@@ -327,6 +337,21 @@ TrickRemote.OnServerEvent:Connect(function(p, id)
 	a.trickPts += t.pts
 	Scores.add(p, t.pts, false)
 	Notify:FireClient(p, string.format("✈ %s · +%d", t.title, t.pts), "green")
+end)
+
+-- посадочный вызов: оценку считает клиент (видит касание), сервер хранит рекорд по аэропорту; только в этом режиме
+ChallengeRemote.OnServerEvent:Connect(function(p, apId, score)
+	local a = active[p]
+	if not a or type(apId) ~= "string" or type(score) ~= "number" or score ~= score then
+		return
+	end
+	if Challenge.airportOf(a.mode) ~= apId or a.challengeDone then
+		return
+	end
+	a.challengeDone = true
+	if Scores.challenge(p, apId, math.clamp(math.round(score), 0, 100)) then
+		Notify:FireClient(p, string.format("🎯 Новый рекорд посадочного вызова: %d/100", math.clamp(math.round(score), 0, 100)), "green")
+	end
 end)
 
 -- бортовой журнал: проверяем типы и обрезаем значения, не чаще раза в 3 с

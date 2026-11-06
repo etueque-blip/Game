@@ -33,6 +33,10 @@ local AchievementR = R("Achievement")
 local DailyR = R("DailyTask")
 local TrickR = R("Trick")
 local FlightLogR = R("FlightLog")
+local ChallengeR = R("Challenge")
+local Challenge = require(Shared:WaitForChild("Challenge"))
+local chalAp: string? = nil
+local chalDone = false
 local Aerobatics = require(Shared:WaitForChild("Aerobatics"))
 local acro = Aerobatics.new()
 -- цветной дым из хвоста (Y / кнопка ДЫМ): выкл → белый → красный → синий → зелёный → жёлтый
@@ -368,7 +372,12 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 	stopFlight()
 	model = m
 	root = m:WaitForChild("Root", 5) :: BasePart?
-	local f = FlightPhysics.new(cfg, spawnCF, mode == "air")
+	chalAp = Challenge.airportOf(mode)
+	chalDone = false
+	local f = FlightPhysics.new(cfg, spawnCF, mode == "air" or chalAp ~= nil)
+	if chalAp then
+		Challenge.setup(f)
+	end
 	f.hard = ui.isHard()
 	flight = f
 	simulating = false
@@ -430,7 +439,7 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 			end)
 		end
 	end
-	ui.toast(if lastMode == "race" then "Гонка: впереди голубое кольцо — пролети сквозь него" elseif mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: отпусти тормоз (пробел), тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
+	ui.toast(if lastMode == "race" then "Гонка: впереди голубое кольцо — пролети сквозь него" elseif chalAp then "🎯 Посадочный вызов: садись на полосу впереди — мягко, по оси и у посадочных знаков" elseif mode == "air" then "Вы в воздухе на 3000 ft — аэропорт впереди" else string.format("На полосе: отпусти тормоз (пробел), тяга 100%% (Shift), на Vr %d kt тяни на себя (S)", cfg.vrKts), "magenta")
 	ClientReady:FireServer(m)
 end)
 
@@ -543,6 +552,23 @@ local function handleEvents(f: FlightPhysics.Flight)
 					end
 					if g == "perfect" then
 						fstats.perfect += 1
+					end
+				end
+				if chalAp and not chalDone then
+					chalDone = true
+					if ap and ap.id == chalAp then
+						local zone = Challenge.zoneM(ap, f.pos)
+						local sc = Challenge.score(fpmV, offM, zone)
+						local bestS = tostring(player:GetAttribute("Chal") or ""):match(ap.id .. ":(%d+)")
+						local best = tonumber(bestS) or 0
+						task.delay(0.9, function()
+							ui.toast(string.format("🎯 Посадочный вызов %s: %d/100 · касание %d м от знаков", ap.code, sc, math.round(zone)) .. (if sc > best then " · новый рекорд!" else string.format(" · рекорд %d", best)), if sc > best then "green" else nil)
+						end)
+						ChallengeR:FireServer(ap.id, sc)
+					else
+						task.delay(0.9, function()
+							ui.toast("🎯 Вызов не засчитан: посадка не на ту полосу", "amber")
+						end)
 					end
 				end
 				ui.landingReport({
