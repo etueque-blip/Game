@@ -1243,3 +1243,157 @@ ui.showHangar = function(on: boolean?)
 end
 
 ui.showHangar(true)
+
+-- ===== 3D-кабина для вида «кабина» (как в веб-версии, tools/web_cockpit.py): козырёк, приборная панель
+-- с четырьмя экранами (авиагоризонт, навигация, двигатели, сводка), рама окон, пульт с рычагами тяги
+do
+	local cam = workspace.CurrentCamera
+	local folder = Instance.new("Model")
+	folder.Name = "SkyPilotCockpit"
+	local parts: { { p: BasePart, off: CFrame } } = {}
+	local function cpart(size: Vector3, off: CFrame, color: Color3, mat: Enum.Material?): BasePart
+		local p = Instance.new("Part")
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+		p.Size = size
+		p.Color = color
+		p.Material = mat or Enum.Material.SmoothPlastic
+		p.Parent = folder
+		table.insert(parts, { p = p, off = off })
+		return p
+	end
+	local PANEL, FRAME, TRIM = Color3.fromRGB(38, 43, 51), Color3.fromRGB(52, 58, 68), Color3.fromRGB(74, 81, 92)
+	local tilt = CFrame.Angles(-0.28, 0, 0)
+	local panelCF = CFrame.new(0, -0.655, -1.25) * tilt
+	cpart(Vector3.new(3.2, 0.5, 0.06), panelCF, PANEL)
+	cpart(Vector3.new(3.2, 0.05, 0.22), CFrame.new(0, -0.37, -1.1) * CFrame.Angles(0.08, 0, 0), FRAME)
+	cpart(Vector3.new(0.1, 1.8, 0.1), CFrame.new(-1.38, 0.2, -1.15) * CFrame.Angles(0, 0, 0.22), FRAME)
+	cpart(Vector3.new(0.1, 1.8, 0.1), CFrame.new(1.38, 0.2, -1.15) * CFrame.Angles(0, 0, -0.22), FRAME)
+	cpart(Vector3.new(3.4, 0.14, 0.1), CFrame.new(0, 0.74, -1.12), FRAME)
+	cpart(Vector3.new(0.5, 0.22, 0.5), CFrame.new(0, -0.86, -0.95), PANEL)
+	local levers: { { p: BasePart, x: number } } = {}
+	for _, x in { -0.08, 0.08 } do
+		local l = cpart(Vector3.new(0.05, 0.2, 0.05), CFrame.new(x, -0.66, -0.95), TRIM)
+		table.insert(levers, { p = l, x = x })
+	end
+	-- экраны: часть с SurfaceGui на передней грани
+	local function screen(x: number): Frame
+		cpart(Vector3.new(0.38, 0.38, 0.02), panelCF * CFrame.new(x, -0.02, 0.04), TRIM)
+		local s = cpart(Vector3.new(0.33, 0.33, 0.01), panelCF * CFrame.new(x, -0.02, 0.05), Color3.new(0, 0, 0))
+		local sg = Instance.new("SurfaceGui")
+		sg.Face = Enum.NormalId.Back -- задняя грань детали смотрит на пилота (+Z камеры)
+		sg.CanvasSize = Vector2.new(256, 256)
+		sg.LightInfluence = 0
+		sg.Parent = s
+		local bg = Instance.new("Frame")
+		bg.Size = UDim2.fromScale(1, 1)
+		bg.BackgroundColor3 = Color3.fromRGB(5, 8, 15)
+		bg.BorderSizePixel = 0
+		bg.Parent = sg
+		return bg
+	end
+	local function label(parent: Instance, pos: UDim2, size: UDim2, text: string, color: Color3, ts: number, font: Enum.Font?): TextLabel
+		local t = Instance.new("TextLabel")
+		t.Position, t.Size = pos, size
+		t.BackgroundTransparency = 1
+		t.Font = font or Enum.Font.RobotoMono
+		t.TextSize = ts
+		t.TextColor3 = color
+		t.Text = text
+		t.Parent = parent
+		return t
+	end
+	-- 1) авиагоризонт
+	local pfd = screen(-0.92)
+	local cg = Instance.new("CanvasGroup")
+	cg.Size = UDim2.fromScale(1, 1)
+	cg.BackgroundTransparency = 1
+	cg.Parent = pfd
+	local hz = Instance.new("Frame")
+	hz.Size = UDim2.fromOffset(700, 700)
+	hz.AnchorPoint = Vector2.new(0.5, 0.5)
+	hz.Position = UDim2.fromScale(0.5, 0.5)
+	hz.BackgroundTransparency = 1
+	hz.Parent = cg
+	for i, col in { Color3.fromRGB(47, 111, 191), Color3.fromRGB(122, 82, 50) } do
+		local h = Instance.new("Frame")
+		h.Size = UDim2.new(1, 0, 0.5, 0)
+		h.Position = UDim2.fromScale(0, (i - 1) * 0.5)
+		h.BackgroundColor3 = col
+		h.BorderSizePixel = 0
+		h.Parent = hz
+	end
+	local line = Instance.new("Frame")
+	line.Size = UDim2.new(1, 0, 0, 3)
+	line.Position = UDim2.new(0, 0, 0.5, -1)
+	line.BackgroundColor3 = Color3.new(1, 1, 1)
+	line.BorderSizePixel = 0
+	line.Parent = hz
+	for _, x in { -46, 46 } do
+		local w = Instance.new("Frame")
+		w.Size = UDim2.fromOffset(56, 6)
+		w.AnchorPoint = Vector2.new(0.5, 0.5)
+		w.Position = UDim2.new(0.5, x, 0.5, 0)
+		w.BackgroundColor3 = Color3.fromRGB(255, 191, 60)
+		w.BorderSizePixel = 0
+		w.ZIndex = 3
+		w.Parent = pfd
+	end
+	-- 2) навигация: курс и ветер
+	local nd = screen(-0.5)
+	local ndHdg = label(nd, UDim2.fromOffset(0, 40), UDim2.new(1, 0, 0, 70), "000°", Color3.fromRGB(224, 91, 216), 60)
+	label(nd, UDim2.fromOffset(0, 112), UDim2.new(1, 0, 0, 20), "КУРС", Color3.fromRGB(143, 160, 184), 16, Enum.Font.GothamBold)
+	local ndWind = label(nd, UDim2.fromOffset(0, 170), UDim2.new(1, 0, 0, 30), "", Color3.fromRGB(61, 214, 245), 22)
+	-- 3) двигатели
+	local eng = screen(0.5)
+	local n1 = label(eng, UDim2.fromOffset(0, 30), UDim2.new(1, 0, 0, 60), "", Color3.fromRGB(61, 220, 132), 44)
+	label(eng, UDim2.fromOffset(0, 92), UDim2.new(1, 0, 0, 20), "N1 %", Color3.fromRGB(143, 160, 184), 16, Enum.Font.GothamBold)
+	local engGear = label(eng, UDim2.fromOffset(0, 150), UDim2.new(1, 0, 0, 30), "", Color3.fromRGB(61, 220, 132), 22)
+	local engFlaps = label(eng, UDim2.fromOffset(0, 190), UDim2.new(1, 0, 0, 30), "", Color3.fromRGB(61, 214, 245), 22)
+	-- 4) сводка
+	local info = screen(0.92)
+	local infoRows: { TextLabel } = {}
+	for i, k in { "СКОР", "ВЫС", "ВЕРТ" } do
+		label(info, UDim2.fromOffset(10, 20 + (i - 1) * 75), UDim2.fromOffset(70, 40), k, Color3.fromRGB(143, 160, 184), 16, Enum.Font.GothamBold)
+		infoRows[i] = label(info, UDim2.fromOffset(80, 20 + (i - 1) * 75), UDim2.fromOffset(170, 40), "", Color3.new(1, 1, 1), 34)
+	end
+	folder.Parent = cam
+	local shown = true
+	local function setShown(on: boolean)
+		if shown ~= on then
+			shown = on
+			folder.Parent = if on then workspace.CurrentCamera else nil
+		end
+	end
+	setShown(false)
+	RunService:BindToRenderStep("SkyPilotCockpit", Enum.RenderPriority.Camera.Value + 3, function()
+		local f = flight
+		local on = f ~= nil and not f.crashed and not photoMode and cameraRig ~= nil and cameraRig.mode == 2
+		setShown(on)
+		if not on or not f then
+			return
+		end
+		local ccf = workspace.CurrentCamera.CFrame
+		for _, e in parts do
+			e.p.CFrame = ccf * e.off
+		end
+		for _, l in levers do
+			l.p.CFrame = ccf * CFrame.new(l.x, -0.75, -0.95) * CFrame.Angles(-0.6 + f.throttle * 1.1, 0, 0) * CFrame.new(0, 0.1, 0)
+		end
+		local look, right, up = f.att.LookVector, f.att.RightVector, f.att.UpVector
+		local pitch = math.deg(math.asin(math.clamp(look.Y, -1, 1)))
+		local bank = math.deg(math.atan2(-right.Y, up.Y))
+		local th = math.rad(-bank)
+		local t = math.clamp(pitch, -40, 40) * 3.2
+		hz.Rotation = -bank
+		hz.Position = UDim2.new(0.5, -math.sin(th) * t, 0.5, math.cos(th) * t)
+		ndHdg.Text = string.format("%03d°", math.round(World.headingDeg(look)) % 360)
+		ndWind.Text = string.format("ВЕТЕР %03d° / %d kt", math.round(tonumber(workspace:GetAttribute("WindDir")) or 0), math.round(tonumber(workspace:GetAttribute("WindKts")) or 0))
+		n1.Text = if f.reverse then "REV" else string.format("%d  %d", math.round(22 + f.throttle * 76), math.round(22 + f.throttle * 76))
+		engGear.Text = if f.gear then "ШАССИ ▼ ▼ ▼" else "ШАССИ УБРАНО"
+		engFlaps.Text = "ЗАКРЫЛКИ " .. (if f.cfg.noFlaps then "—" else tostring(f.flaps))
+		local metric = ui.metric()
+		infoRows[1].Text = tostring(math.round(f.speed * (if metric then 1.852 else 1))) .. (if metric then " км/ч" else " kt")
+		infoRows[2].Text = fmt(f.pos.Y * FT * (if metric then 0.3048 else 1)) .. (if metric then " м" else " ft")
+		infoRows[3].Text = tostring(math.round(vsSmooth / 10) * 10)
+	end)
+end
