@@ -14707,6 +14707,7 @@ for _, ap in World.AIRPORTS do
 	addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1000, 1000, 0.49, "apron")
 	addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1500, -1000, 0.49, "apron")
 	addLocalRect(ap, W / 2 + 880, W / 2 + 1320, -700, 700, 0.49, "landside") -- терминал, дорога, парковка
+	addLocalRect(ap, W / 2 + 700, W / 2 + 1130, 1000, 1520, 0.49, "apron") -- грузовой терминал
 end
 
 -- Города (Дубай, Лондон, Ташкент) — данные из tools/gen_cities.py, общие с веб-версией
@@ -14790,6 +14791,7 @@ for _, ap in World.AIRPORTS do
 	World.addLocalObstacle(ap, tx + 20, 560, 48, 48, 150) -- вышка
 	World.addLocalObstacle(ap, W / 2 + 790, -1130, 170, 210, 135) -- ангары
 	World.addLocalObstacle(ap, W / 2 + 790, -1370, 170, 210, 135)
+	World.addLocalObstacle(ap, W / 2 + 1010, 1260, 200, 260, 32) -- грузовой терминал
 	for _, p in ap.parked do
 		local c = PlaneConfigs.PLANES[p[1]]
 		local lx = W / 2 + 760 - c.length / 2
@@ -16375,6 +16377,52 @@ local function buildAirport(folder: Folder, ap: any)
 			sl.Color = Color3.fromRGB(255, 226, 180)
 			sl.Enabled = false
 			sl.Parent = lamp
+		end
+	end
+	-- грузовой терминал (как в веб-версии, tools/web_cargo.py): склад с восемью доками и вывеской,
+	-- площадка, ряды авиаконтейнеров, тягач с тележками, погрузчик-платформа
+	do
+		local CX, CZ = W / 2 + 1010, 1260
+		local YEL = Color3.fromRGB(242, 190, 40)
+		local ULD = { Color3.fromRGB(196, 201, 207), Color3.fromRGB(47, 95, 168), Color3.fromRGB(212, 106, 42), Color3.fromRGB(154, 160, 168) }
+		part(f, Vector3.new(430, 0.2, 520), cf(W / 2 + 915, 0.53, CZ), Color3.fromRGB(165, 165, 160), Enum.Material.Concrete)
+		part(f, Vector3.new(200, 30, 260), cf(CX, 15, CZ), Color3.fromRGB(217, 221, 226), Enum.Material.Concrete, true)
+		part(f, Vector3.new(204, 2, 264), cf(CX, 31, CZ), Color3.fromRGB(107, 116, 128), Enum.Material.Metal)
+		for k = 0, 7 do
+			local z = CZ - 105 + k * 30
+			part(f, Vector3.new(1, 14, 22), cf(CX - 100.6, 7.5, z), Color3.fromRGB(43, 48, 56), Enum.Material.Metal)
+			part(f, Vector3.new(1.2, 2, 24), cf(CX - 100.8, 15.5, z), YEL)
+			part(f, Vector3.new(6, 1.2, 22), cf(CX - 103, 1.2, z), Color3.fromRGB(80, 86, 94), Enum.Material.Concrete)
+		end
+		local sign = part(f, Vector3.new(1, 11, 90), cf(CX - 101, 24, CZ), Color3.fromRGB(31, 79, 154))
+		textDecal(sign, Enum.NormalId.Left, "CARGO TERMINAL", Color3.new(1, 1, 1), Color3.fromRGB(31, 79, 154))
+		local n = 0
+		for r = 0, 3 do
+			for k = 0, 8 do
+				if (r * 9 + k) % 7 ~= 3 then
+					local x, z = W / 2 + 735 + r * 30, CZ - 170 + k * 14
+					for t = 0, (if (r + k) % 3 == 0 then 1 else 0) do
+						part(f, Vector3.new(9, 0.6, 9), cf(x, 0.9 + t * 8.2, z), Color3.fromRGB(48, 52, 58))
+						n += 1
+						part(f, Vector3.new(9, 7.4, 9), cf(x, 4.9 + t * 8.2, z), ULD[(n - 1) % 4 + 1], Enum.Material.Metal)
+					end
+				end
+			end
+		end
+		local tz, tx0 = CZ + 120, W / 2 + 760
+		part(f, Vector3.new(8, 3, 5), cf(tx0, 2, tz), YEL)
+		part(f, Vector3.new(3, 2.5, 5), cf(tx0 + 1.5, 4.6, tz), Color3.fromRGB(40, 48, 56), Enum.Material.Glass)
+		for k = 1, 3 do
+			local x = tx0 - 3 - k * 11
+			part(f, Vector3.new(10, 0.8, 9), cf(x, 1.8, tz), Color3.fromRGB(120, 126, 134), Enum.Material.Metal)
+			part(f, Vector3.new(9, 7.4, 9), cf(x, 6, tz), ULD[k % 4 + 1], Enum.Material.Metal)
+		end
+		local kx, kz = CX - 120, CZ - 75
+		part(f, Vector3.new(14, 2, 10), cf(kx, 1.8, kz), YEL)
+		part(f, Vector3.new(14, 1, 10), cf(kx, 10, kz), YEL)
+		part(f, Vector3.new(9, 7.4, 9), cf(kx, 14.7, kz), ULD[2], Enum.Material.Metal)
+		for _, s in { -1, 1 } do
+			part(f, Vector3.new(15, 0.8, 0.8), cf(kx, 6, kz + s * 4.6) * CFrame.Angles(0, 0, s * 0.55), Color3.fromRGB(80, 86, 94), Enum.Material.Metal)
 		end
 	end
 	-- пожарная станция, топливный склад, указатели рулёжек, ветроуказатель (конус поворачивает клиент по ветру)
