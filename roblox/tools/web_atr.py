@@ -34,4 +34,6 @@ def add_atr(s, patch):
               'mainGear.push(leg(-mainX, mainZ, tp ? 1 : 2, big || tp ? 2 : 1), leg(mainX, mainZ, tp ? 1 : 2, big || tp ? 2 : 1));\n'
               '  if (tp) for (const s of [-1, 1]) { const sg = new THREE.SphereGeometry(1, 20, 12); sg.scale(Rr * 0.4, Rr * 0.34, L * 0.09); add(body, sg, std(col.body, { metal: 0.2, rough: 0.35 }), true).position.set(s * Rr * 0.88, -Rr * 0.72, mainZ); }')
     s = patch(s, 'if (c.id === "F16") return 0; if (c.engines === "prop") return 3;', 'if (c.id === "F16") return 0; if (c.engines === "prop") return 3; if (c.engines === "turboprop2") return 70;')
+    s = patch(s, 'Авиасимулятор · 14 самолётов', 'Авиасимулятор · 15 самолётов')
+    s = patch(s, 'Все 14 самолётов в ангаре', 'Все 15 самолётов в ангаре')
     return s

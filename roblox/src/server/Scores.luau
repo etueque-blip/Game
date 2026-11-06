@@ -2,6 +2,7 @@
 -- Очки и статистика игрока (leaderstats + DataStore, если включён доступ к API).
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 
 local Scores = {}
 
@@ -10,7 +11,10 @@ pcall(function()
 	store = DataStoreService:GetDataStore("SkyPilot_v1")
 end)
 
-type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean } }
+type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean }, log: { any }, tot: { [string]: number } }
+local function newTot(): { [string]: number }
+	return { flights = 0, time = 0, landings = 0, dist = 0, perfect = 0, crashes = 0 }
+end
 local cache: { [Player]: Data } = {}
 
 local function key(p: Player): string
@@ -26,7 +30,7 @@ local function stat(p: Player, name: string, value: number)
 end
 
 function Scores.get(p: Player): Data
-	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {} }
+	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot() }
 end
 
 local function refresh(p: Player)
@@ -46,6 +50,13 @@ local function refresh(p: Player)
 		table.insert(dn, id)
 	end
 	p:SetAttribute("Daily", tostring(d.dailyKey) .. ":" .. table.concat(dn, ","))
+	-- бортовой журнал: последние 10 полётов и итоги (окно «📒» в ангаре)
+	local ok, js = pcall(function()
+		return HttpService:JSONEncode({ log = d.log, tot = d.tot })
+	end)
+	if ok then
+		p:SetAttribute("Log", js)
+	end
 end
 
 function Scores.load(p: Player)
@@ -57,7 +68,7 @@ function Scores.load(p: Player)
 		v.Parent = ls
 	end
 	ls.Parent = p
-	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {} }
+	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot() }
 	if store then
 		local ok, res = pcall(function()
 			return (store :: DataStore):GetAsync(key(p))
@@ -68,6 +79,18 @@ function Scores.load(p: Player)
 			data.best = tonumber(res.best) or 0
 			data.flights = tonumber(res.flights) or 0
 			data.dailyKey = tonumber(res.dailyKey) or 0
+			if type(res.log) == "table" then
+				for i, e in res.log do
+					if i <= 10 and type(e) == "table" then
+						table.insert(data.log, e)
+					end
+				end
+			end
+			if type(res.tot) == "table" then
+				for k in data.tot do
+					data.tot[k] = tonumber(res.tot[k]) or 0
+				end
+			end
 			for _, field in { "ach", "visited", "daily" } do
 				if type(res[field]) == "table" then
 					for k, v in res[field] do
@@ -149,6 +172,29 @@ function Scores.visit(p: Player, apId: string): number
 		n += 1
 	end
 	return n
+end
+
+-- запись полёта в журнал (данные от клиента — только для показа, на очки не влияют)
+function Scores.logFlight(p: Player, e: { [string]: any })
+	local d = cache[p]
+	if not d then
+		return
+	end
+	table.insert(d.log, 1, e)
+	while #d.log > 10 do
+		table.remove(d.log)
+	end
+	local t = d.tot
+	t.flights += 1
+	t.time += e.t
+	t.landings += e.l
+	t.dist = math.round((t.dist + e.d) * 10) / 10
+	t.perfect += e.perfect or 0
+	if e.r == "crash" then
+		t.crashes += 1
+	end
+	e.perfect = nil
+	refresh(p)
 end
 
 function Scores.flight(p: Player)

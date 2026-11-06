@@ -32,6 +32,7 @@ local GateParked = R("GateParked")
 local AchievementR = R("Achievement")
 local DailyR = R("DailyTask")
 local TrickR = R("Trick")
+local FlightLogR = R("FlightLog")
 local Aerobatics = require(Shared:WaitForChild("Aerobatics"))
 local acro = Aerobatics.new()
 -- цветной дым из хвоста (Y / кнопка ДЫМ): выкл → белый → красный → синий → зелёный → жёлтый
@@ -279,6 +280,7 @@ end
 
 -- объявлена заранее: кнопка «Выйти из самолёта» (onExit) вызывает её раньше определения ниже
 local stopFlight: () -> ()
+local logFlight: (result: string) -> ()
 local photoMode, photoPrevCam = false, 1
 ui = Ui.new({
 	onPick = requestFlight,
@@ -310,6 +312,7 @@ end)
 cameraRig = CameraRig.new(ui)
 
 function stopFlight()
+	logFlight("ok")
 	if photoMode then
 		photoMode = false
 		cameraRig.mode = photoPrevCam
@@ -333,15 +336,30 @@ end
 -- статистика полёта для экрана крушения
 local Comfort = require(Shared:WaitForChild("Comfort"))
 local comfort = 100
-local fstats = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = 0, lastPos = nil :: Vector3? }
+local fstats: any = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = 0, lastPos = nil :: Vector3?, bestG = "", bestF = 0, where = "", perfect = 0, logged = false }
 local function playerPoints(): number
 	local ls = Players.LocalPlayer:FindFirstChild("leaderstats")
 	local v = ls and ls:FindFirstChild("Очки")
 	return if v and v:IsA("IntValue") then v.Value else 0
 end
 
+-- бортовой журнал: итог полёта уходит на сервер один раз (при крушении, выходе или новом полёте)
+local GRADE_RANK = { perfect = 3, good = 2, hard = 1 }
+function logFlight(result: string)
+	if fstats.logged or fstats.plane == "" or (fstats.time < 5 and fstats.landings == 0) then
+		return
+	end
+	fstats.logged = true
+	FlightLogR:FireServer({
+		p = fstats.plane, r = result, t = math.round(fstats.time), d = math.round(fstats.dist * World.METERS_PER_STUD / 100) / 10,
+		a = math.round(fstats.maxAlt), l = fstats.landings, g = fstats.bestG, f = fstats.bestF, pts = math.max(0, playerPoints() - fstats.startPts),
+		w = fstats.where, perfect = fstats.perfect,
+	})
+end
+
 FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: string, spawnCF: CFrame)
-	fstats = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = playerPoints(), lastPos = nil }
+	logFlight("ok")
+	fstats = { time = 0, dist = 0, maxAlt = 0, maxKts = 0, maxG = 1, landings = 0, points = 0, plane = "", startPts = playerPoints(), lastPos = nil, bestG = "", bestF = 0, where = "", perfect = 0, logged = false }
 	comfort = 100
 	local cfg = PlaneConfigs.PLANES[planeId]
 	if not cfg or not m then
@@ -512,6 +530,21 @@ local function handleEvents(f: FlightPhysics.Flight)
 				if offM and offM < 2 then
 					claimAch("center")
 				end
+				do
+					local g = ev.grade or "hard"
+					if (GRADE_RANK[g] or 0) > (GRADE_RANK[fstats.bestG] or 0) then
+						fstats.bestG = g
+					end
+					if fstats.bestF == 0 or fpmV < fstats.bestF then
+						fstats.bestF = fpmV
+					end
+					if ap then
+						fstats.where = ap.code
+					end
+					if g == "perfect" then
+						fstats.perfect += 1
+					end
+				end
 				ui.landingReport({
 					grade = ev.grade or "hard", fpm = fpmV, kts = f.speed, g = f.gload, offM = offM,
 					pts = if ap then (if fpmV < 120 then 400 elseif fpmV < 250 then 300 elseif fpmV < 600 then 150 else 50) else 0,
@@ -560,6 +593,7 @@ local function handleEvents(f: FlightPhysics.Flight)
 		elseif ev.type == "crash" then
 			ui.toast("💥 " .. ev.text, "red")
 			addLog("КРУШЕНИЕ: " .. ev.text)
+			logFlight("crash")
 			crashPose = FlightPhysics.pose(f)
 			crashTimer = 1.8
 			apTarget = nil

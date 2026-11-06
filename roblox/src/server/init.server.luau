@@ -52,6 +52,7 @@ local GateParked = remote("GateParked")
 local AchievementRemote = remote("Achievement")
 local DailyRemote = remote("DailyTask")
 local TrickRemote = remote("Trick")
+local FlightLogRemote = remote("FlightLog")
 remotes.Parent = ReplicatedStorage
 
 WorldBuilder.build()
@@ -326,6 +327,26 @@ TrickRemote.OnServerEvent:Connect(function(p, id)
 	a.trickPts += t.pts
 	Scores.add(p, t.pts, false)
 	Notify:FireClient(p, string.format("✈ %s · +%d", t.title, t.pts), "green")
+end)
+
+-- бортовой журнал: проверяем типы и обрезаем значения, не чаще раза в 3 с
+local logAt: { [Player]: number } = {}
+FlightLogRemote.OnServerEvent:Connect(function(p, e)
+	if type(e) ~= "table" or os.clock() - (logAt[p] or -1e9) < 3 then
+		return
+	end
+	logAt[p] = os.clock()
+	local function num(v: any, hi: number): number
+		local n = tonumber(v) or 0
+		return if n ~= n then 0 else math.clamp(math.round(n * 10) / 10, 0, hi)
+	end
+	local g = if e.g == "perfect" or e.g == "good" or e.g == "hard" then e.g else ""
+	Scores.logFlight(p, {
+		p = string.sub(tostring(e.p or ""), 1, 40), r = if e.r == "crash" then "crash" else "ok",
+		t = math.round(num(e.t, 86400)), d = num(e.d, 100000), a = math.round(num(e.a, 100000)), l = math.round(num(e.l, 99)),
+		g = g, f = math.round(num(e.f, 9999)), pts = math.round(num(e.pts, 1e7)), w = string.sub(tostring(e.w or ""), 1, 24),
+		ts = os.time(), perfect = math.round(num(e.perfect, 99)),
+	})
 end)
 
 -- задания дня: принимаем только сегодняшние и только во время полёта

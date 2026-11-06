@@ -1032,6 +1032,8 @@ def main():
     s = add_storm(s, patch)
     from web_hangar import add_hangar
     s = add_hangar(s, patch)
+    from web_log import add_log
+    s = add_log(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

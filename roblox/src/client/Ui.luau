@@ -501,6 +501,7 @@ function Ui.new(cb: Callbacks)
 	local bExit = button(navRow, "Выйти из самолёта", { ZIndex = 23, Visible = false, LayoutOrder = 1 })
 	local bAch = button(navRow, "🏆 Достижения", { ZIndex = 23, LayoutOrder = -1 })
 	local bDaily = button(navRow, "📋 Задания", { ZIndex = 23, LayoutOrder = -2 })
+	local bLog = button(navRow, "📒", { ZIndex = 23, LayoutOrder = -5 }) -- бортовой журнал (коротко: ряд кнопок узкий)
 	-- уровень сложности: «Обычный» — без перегрузки и поломок, «Сложный» — перегрузка G, повреждения, поломки
 	local hard = player:GetAttribute("HardMode") == true
 	local bHard = button(navRow, "", { ZIndex = 23, LayoutOrder = -3 })
@@ -1016,6 +1017,86 @@ function Ui.new(cb: Callbacks)
 	bDaily.Activated:Connect(function()
 		renderDaily()
 		dO.Visible = true
+	end)
+
+	-- 📒 бортовой журнал: итоги пилота и последние 10 полётов (атрибут Log от сервера, JSON)
+	local lgO, lgS = overlay("FlightLog", 640)
+	h2(lgS, "📒 Бортовой журнал", nil, 1)
+	local lgTot = new("Frame", { Size = UDim2.new(1, 0, 0, 120), BackgroundTransparency = 1, LayoutOrder = 2, ZIndex = 22 }, lgS)
+	new("UIGridLayout", { CellSize = UDim2.new(1 / 3, -6, 0, 56), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, lgTot)
+	local lgCells: { TextLabel } = {}
+	for i, k in { "ПОЛЁТОВ", "НАЛЁТ", "ПОСАДОК", "ПРОЙДЕНО", "ИДЕАЛЬНЫХ", "КРУШЕНИЙ" } do
+		local cbox = new("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.95, LayoutOrder = i, ZIndex = 23 }, lgTot)
+		corner(cbox, 12)
+		stroke(cbox)
+		lgCells[i] = new("TextLabel", { Size = UDim2.new(1, -20, 0, 26), Position = UDim2.fromOffset(10, 6), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 19, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "0", ZIndex = 24 }, cbox)
+		new("TextLabel", { Size = UDim2.new(1, -20, 0, 14), Position = UDim2.fromOffset(10, 34), BackgroundTransparency = 1, Font = FONT, TextSize = 10, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = k, ZIndex = 24 }, cbox)
+	end
+	local lgList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 300), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 3, ZIndex = 22 }, lgS)
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, lgList)
+	new("UIPadding", { PaddingRight = UDim.new(0, 6) }, lgList)
+	local lgRowF = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, lgS)
+	local lgClose = button(lgRowF, "Закрыть", { ZIndex = 23 })
+	primary(lgClose)
+	lgClose.Activated:Connect(function()
+		lgO.Visible = false
+	end)
+	local GRADE_TXT = { perfect = "★ идеальная", good = "✓ хорошая", hard = "! жёсткая" }
+	local function nfmt(n: number): string
+		return fmtNum(n)
+	end
+	local function renderLog()
+		local data: any = nil
+		pcall(function()
+			data = game:GetService("HttpService"):JSONDecode(tostring(player:GetAttribute("Log") or ""))
+		end)
+		local tot = (data and data.tot) or {}
+		local list = (data and data.log) or {}
+		local tt = tonumber(tot.time) or 0
+		lgCells[1].Text = tostring(tonumber(tot.flights) or 0)
+		lgCells[2].Text = string.format("%d ч %02d мин", math.floor(tt / 3600), math.floor(tt / 60) % 60)
+		lgCells[3].Text = tostring(tonumber(tot.landings) or 0)
+		lgCells[4].Text = nfmt(tonumber(tot.dist) or 0) .. " км"
+		lgCells[5].Text = tostring(tonumber(tot.perfect) or 0)
+		lgCells[6].Text = tostring(tonumber(tot.crashes) or 0)
+		for _, ch in lgList:GetChildren() do
+			if ch:IsA("Frame") then
+				ch:Destroy()
+			end
+		end
+		if #list == 0 then
+			local e = new("Frame", { Size = UDim2.new(1, 0, 0, 50), BackgroundTransparency = 1, ZIndex = 23 }, lgList)
+			new("TextLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 14, TextColor3 = C.dim, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = "Пока пусто. Слетай — здесь появятся твои полёты: время, расстояние, посадки и очки.", ZIndex = 24 }, e)
+		end
+		for i, e in list do
+			local crash = e.r == "crash"
+			local row = new("Frame", { Size = UDim2.new(1, 0, 0, 54), BackgroundColor3 = Color3.fromRGB(24, 32, 50), BackgroundTransparency = 0.2, LayoutOrder = i, ZIndex = 23 }, lgList)
+			corner(row, 12)
+			new("UIStroke", { Color = if crash then C.red else C.line, Transparency = if crash then 0.5 else 0.86, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, row)
+			new("TextLabel", { Size = UDim2.fromOffset(36, 54), BackgroundTransparency = 1, Font = FONT, TextSize = 20, Text = if crash then "💥" elseif (tonumber(e.l) or 0) > 0 then "🛬" else "✈", ZIndex = 24 }, row)
+			new("TextLabel", { Size = UDim2.new(1, -140, 0, 20), Position = UDim2.fromOffset(42, 7), BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = tostring(e.p or "") .. (if e.w and e.w ~= "" then " · " .. e.w else ""), ZIndex = 24 }, row)
+			local t = tonumber(e.t) or 0
+			local l = tonumber(e.l) or 0
+			local bits = {
+				os.date("%d.%m %H:%M", tonumber(e.ts) or 0), string.format("%d:%02d в воздухе", math.floor(t / 60), t % 60),
+				string.format("%.1f км", tonumber(e.d) or 0), nfmt(tonumber(e.a) or 0) .. " ft",
+				l .. " " .. (if l == 1 then "посадка" elseif l >= 2 and l <= 4 then "посадки" else "посадок"),
+			}
+			if e.g and GRADE_TXT[e.g] then
+				table.insert(bits, GRADE_TXT[e.g] .. (if (tonumber(e.f) or 0) > 0 then " " .. tostring(e.f) .. " fpm" else ""))
+			end
+			new("TextLabel", { Size = UDim2.new(1, -140, 0, 16), Position = UDim2.fromOffset(42, 29), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Text = table.concat(bits, " · "), ZIndex = 24 }, row)
+			new("TextLabel", { Size = UDim2.fromOffset(90, 54), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 0), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 16, TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Right, Text = "+" .. nfmt(tonumber(e.pts) or 0), ZIndex = 24 }, row)
+		end
+	end
+	player:GetAttributeChangedSignal("Log"):Connect(function()
+		if lgO.Visible then
+			renderLog()
+		end
+	end)
+	bLog.Activated:Connect(function()
+		renderLog()
+		lgO.Visible = true
 	end)
 
 	-- карта мира (K): фон по рельефу (строится при первом открытии), аэропорты, города, самолёт

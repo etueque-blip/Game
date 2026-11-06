@@ -496,13 +496,13 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
   <div class="overlay" id="menu">
     <div class="mwrap">
-      <header class="brand"><span class="mark">✈</span><div><b>SKY PILOT</b><small>Авиасимулятор · 14 самолётов · 8 аэропортов · 6 городов</small></div><span class="chip" id="mChip"></span></header>
+      <header class="brand"><span class="mark">✈</span><div><b>SKY PILOT</b><small>Авиасимулятор · 15 самолётов · 8 аэропортов · 6 городов</small></div><span class="chip" id="mChip"></span></header>
       <div class="tiles">
         <button class="tile big" data-m="free" data-ph="mode_free"><span class="ic">✈</span><b>Свободный<br>полёт</b><small>Любой самолёт, любой из 8 аэропортов</small></button>
         <button class="tile big" data-m="career" data-ph="mode_career"><span class="ic">⇄</span><b>Режим<br>рейсов</b><small>Вылет из одного аэропорта и посадка в другом</small></button>
         <button class="tile" data-m="race" data-ph="mode_race"><span class="ic">◎</span><b>Гонка колец</b><small>13 колец: Дубай → Ташкент → Лондон</small></button>
         <button class="tile" data-m="help" data-ph="news_airports"><span class="ic">⌨</span><b>Управление</b><small>Клавиши, телефон, геймпад</small></button>
-        <button class="tile" data-m="spot" data-ph="news_tashkent"><span class="ic">⌖</span><b>Обзор<br>самолётов</b><small>Все 14 самолётов в ангаре</small></button>
+        <button class="tile" data-m="spot" data-ph="news_tashkent"><span class="ic">⌖</span><b>Обзор<br>самолётов</b><small>Все 15 самолётов в ангаре</small></button>
       </div>
       <div class="mh">Что нового</div>
       <div class="news">
@@ -512,7 +512,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
         <div class="ncard" data-ph="news_airports"><b>8 аэропортов</b><i>Стамбул, Эр-Рияд, Самарканд и другие</i></div>
         <div class="ncard" data-ph="mode_race"><b>Гонка колец</b><i>Под Тауэрским мостом</i></div>
       </div>
-      <div class="mbar"><button class="tb primary" id="mPlay">Полёт</button><button class="tb" id="mSet">⚙ Настройки</button><button class="tb" id="mHard"></button><button class="tb" id="mHelp2">Клавиши</button><button class="tb" id="mDaily">📋 Задания дня</button><button class="tb" id="mAch">🏆 Достижения</button><span class="who" id="mBest"></span></div>
+      <div class="mbar"><button class="tb primary" id="mPlay">Полёт</button><button class="tb" id="mSet">⚙ Настройки</button><button class="tb" id="mHard"></button><button class="tb" id="mHelp2">Клавиши</button><button class="tb" id="mDaily">📋 Задания дня</button><button class="tb" id="mLog">📒 Журнал</button><button class="tb" id="mAch">🏆 Достижения</button><span class="who" id="mBest"></span></div>
     </div>
   </div>
   <div class="overlay" id="flow" hidden>
@@ -559,6 +559,23 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
       <div class="row"><button class="tb primary" id="dailyClose">Понятно</button></div>
     </div>
   </div>
+  <div class="overlay" id="logO" style="z-index:40" hidden>
+    <div class="sheet">
+      <h2>📒 Бортовой журнал</h2>
+      <div class="logtot" id="logTot"></div>
+      <div class="loglist" id="logList"></div>
+      <div class="row"><button class="tb primary" id="logClose">Закрыть</button></div>
+    </div>
+  </div>
+  <style>.logtot { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 12px; }
+  .logtot div { background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+  .logtot b { display: block; font-family: var(--f-mono, ui-monospace, monospace); font-size: 20px; } .logtot small { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .loglist { display: grid; gap: 6px; max-height: min(46vh, 380px); overflow: auto; padding-right: 4px; }
+  .logrow { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; background: rgba(24,32,50,0.75); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+  .logrow .ic { font-size: 20px; text-align: center; } .logrow .t { font-weight: 700; font-size: 14px; } .logrow .s { color: var(--dim); font-size: 12px; margin-top: 2px; }
+  .logrow .p { font-weight: 800; color: var(--gold); font-size: 15px; } .logrow.crash { border-color: rgba(255,77,94,0.45); }
+  .logempty { color: var(--dim); font-size: 14px; padding: 18px 4px; }
+  @media (max-width: 560px) { .logtot { grid-template-columns: repeat(2, 1fr); } }</style>
   <div class="overlay" id="setO" style="z-index:40" hidden>
     <div class="sheet">
       <h2>⚙ Настройки</h2>
@@ -1883,6 +1900,7 @@ function startFlight(cfg, mode) {
 }
 
 function doCrash(reason) {
+  logFlight("crash");
   soundCrash(); updateSound(null);
   addLog("КРУШЕНИЕ: " + reason);
   const p = planeObj; scene.remove(p);
@@ -2063,6 +2081,7 @@ function addScore(pts, label) {
 let lrepT = null;
 function showLandingReport(f, ap, text, pts) {
   const fpm = (/(\d+) fpm/.exec(text) || [0, 0])[1] | 0;
+  logLanding(text.startsWith("Идеальная") ? "perfect" : text.startsWith("Хорошая") ? "good" : "hard", fpm, ap ? ap.code : "");
   const grade = text.startsWith("Идеальная") ? ["Идеальная посадка", "#22c07a", "★"] : text.startsWith("Хорошая") ? ["Хорошая посадка", "#3ba7ff", "✓"] : ["Жёсткая посадка", "#f0a531", "!"];
   let off = null;
   if (ap) { const dx = f.pos.x - ap.cx, dz = f.pos.z - ap.cz; off = Math.abs(ap.rot ? -dz : dx) * 0.515; }
@@ -2145,7 +2164,33 @@ function paxTouchdown(text) { const fpm = (/(\d+) fpm/.exec(text) || [0, 0])[1] 
 function paxStars(v) { const n = v >= 90 ? 5 : v >= 70 ? 4 : v >= 50 ? 3 : v >= 30 ? 2 : 1; return "★".repeat(n) + "☆".repeat(5 - n); }
 // ===== статистика полёта и совет после крушения (как Guide.crashTip в Roblox)
 const FST = { time: 0, dist: 0, maxAlt: 0, maxKts: 0, maxG: 1, landings: 0, startPts: 0, plane: "", lx: null, lz: 0 };
-function fstatsReset(cfg) { paxReset(cfg); Object.assign(FST, { time: 0, dist: 0, maxAlt: 0, maxKts: 0, maxG: 1, landings: 0, startPts: SCORE.points, plane: cfg.name, lx: null, lz: 0 }); }
+
+// ===== бортовой журнал
+const LOGB = { list: [], tot: { flights: 0, time: 0, landings: 0, dist: 0, perfect: 0, crashes: 0 } };
+try { const j = JSON.parse(localStorage.getItem("skypilot.log") || "null"); if (j && Array.isArray(j.list)) { LOGB.list = j.list.slice(0, 10); Object.assign(LOGB.tot, j.tot || {}); } } catch (e) {}
+const GRADE_RANK = { perfect: 3, good: 2, hard: 1 }, GRADE_TXT = { perfect: "★ идеальная", good: "✓ хорошая", hard: "! жёсткая" };
+function logLanding(g, fpm, where) { if ((GRADE_RANK[g] || 0) > (GRADE_RANK[FST.bestG] || 0)) FST.bestG = g; if (!FST.bestF || fpm < FST.bestF) FST.bestF = fpm; if (where) FST.where = where; if (g === "perfect") FST.perfect = (FST.perfect || 0) + 1; }
+function logFlight(result) {
+  if (FST.logged || !FST.plane || (FST.time < 5 && !FST.landings)) return; FST.logged = true;
+  const e = { p: FST.plane, r: result, t: Math.round(FST.time), d: Math.round(FST.dist * 0.515 / 100) / 10, a: Math.round(FST.maxAlt), l: FST.landings, g: FST.bestG || "", f: FST.bestF || 0, pts: Math.max(0, SCORE.points - FST.startPts), w: FST.where || "", ts: Date.now() };
+  LOGB.list.unshift(e); LOGB.list.length = Math.min(LOGB.list.length, 10);
+  const T = LOGB.tot; T.flights++; T.time += e.t; T.landings += e.l; T.dist = Math.round((T.dist + e.d) * 10) / 10; T.perfect += FST.perfect || 0; if (result === "crash") T.crashes++;
+  try { localStorage.setItem("skypilot.log", JSON.stringify(LOGB)); } catch (er) {}
+}
+const fmtHM = (s) => Math.floor(s / 3600) + " ч " + String(Math.floor(s / 60) % 60).padStart(2, "0") + " мин";
+const fmtMS = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+function renderLog() {
+  const T = LOGB.tot, cell = (v, k) => `<div><b>${v}</b><small>${k}</small></div>`;
+  $("logTot").innerHTML = cell(T.flights, "полётов") + cell(fmtHM(T.time), "налёт") + cell(T.landings, "посадок") + cell(fmt(T.dist) + " км", "пройдено") + cell(T.perfect, "идеальных") + cell(T.crashes, "крушений");
+  $("logList").innerHTML = LOGB.list.length ? LOGB.list.map((e) => {
+    const d = new Date(e.ts), when = String(d.getDate()).padStart(2, "0") + "." + String(d.getMonth() + 1).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    const bits = [fmtMS(e.t) + " в воздухе", e.d.toFixed(1) + " км", fmt(e.a) + " ft", e.l + " " + (e.l === 1 ? "посадка" : e.l >= 2 && e.l <= 4 ? "посадки" : "посадок")];
+    if (e.g) bits.push(GRADE_TXT[e.g] + (e.f ? " " + e.f + " fpm" : ""));
+    return `<div class="logrow${e.r === "crash" ? " crash" : ""}"><div class="ic">${e.r === "crash" ? "💥" : e.l ? "🛬" : "✈"}</div><div><div class="t">${e.p}${e.w ? " · " + e.w : ""}</div><div class="s">${when} · ${bits.join(" · ")}</div></div><div class="p">+${fmt(e.pts)}</div></div>`;
+  }).join("") : `<div class="logempty">Пока пусто. Слетай — здесь появятся твои полёты: время, расстояние, посадки и очки.</div>`;
+}
+addEventListener("beforeunload", () => logFlight("ok"));
+function fstatsReset(cfg) { logFlight("ok"); paxReset(cfg); Object.assign(FST, { bestG: "", bestF: 0, where: "", perfect: 0, logged: false, time: 0, dist: 0, maxAlt: 0, maxKts: 0, maxG: 1, landings: 0, startPts: SCORE.points, plane: cfg.name, lx: null, lz: 0 }); }
 function fstatsFrame(f, dt) { paxFrame(f, dt); dailyFrame(f);
   if (!f.onGround) FST.time += dt;
   if (FST.lx !== null) FST.dist += Math.hypot(f.pos.x - FST.lx, f.pos.z - FST.lz);
@@ -3071,6 +3116,7 @@ function renderSettings() {
 }
 $("mSet").onclick = () => { renderSettings(); $("setO").hidden = false; }; $("setClose").onclick = () => ($("setO").hidden = true);
 $("photoSave").onclick = savePhoto; $("photoExit").onclick = () => togglePhoto(false); $("bHelp") && $("bHelp").insertAdjacentHTML("beforebegin", '<button class="tb" id="bPhoto">📷 Фото</button>'); $("bPhoto") && ($("bPhoto").onclick = () => togglePhoto());
+$("mLog").onclick = () => { renderLog(); $("logO").hidden = false; }; $("logClose").onclick = () => ($("logO").hidden = true);
 $("loading").hidden = true;
 requestAnimationFrame(frame);
 try { navigator.wakeLock && navigator.wakeLock.request("screen").catch(() => {}); } catch (e) {}
