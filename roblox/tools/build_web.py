@@ -1030,6 +1030,8 @@ def main():
     s = add_atr(s, patch)
     from web_storm import add_storm
     s = add_storm(s, patch)
+    from web_hangar import add_hangar
+    s = add_hangar(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

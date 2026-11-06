@@ -16262,20 +16262,84 @@ local function buildAirport(folder: Folder, ap: any)
 	roofT.Material = Enum.Material.Metal
 	roofT.Parent = f
 	neon(f, Vector3.new(3, 3, 3), cf(tx + 20, 152, 560), Color3.fromRGB(255, 48, 48))
-	-- ангары с арочной крышей
-	for _, z in { -1130, -1370 } do
+	-- ангары техобслуживания (как в веб-версии, tools/web_hangar.py): открытые ворота, полая арочная крыша из панелей,
+	-- задняя стена-полукруг, сдвинутые створки, светлый пол с разметкой, лампы, внутри самолёт на обслуживании со стремянками
+	do
 		local HW = Color3.fromRGB(183, 190, 200)
-		part(f, Vector3.new(170, 30, 210), cf(W / 2 + 790, 15, z), HW, Enum.Material.Metal, true)
-		local roof = Instance.new("Part")
-		roof.Shape = Enum.PartType.Cylinder
-		roof.Anchored = true
-		roof.Size = Vector3.new(210, 170, 170)
-		-- цилиндр вдоль длины ангара (локальная Z), половина торчит над стенами
-		roof.CFrame = cf(W / 2 + 790, 30, z) * CFrame.Angles(0, math.pi / 2, 0)
-		roof.Color = HW
-		roof.Material = Enum.Material.Metal
-		roof.Parent = f
-		part(f, Vector3.new(1, 28, 180), cf(W / 2 + 704.5, 15, z), Color3.fromRGB(74, 82, 94), Enum.Material.Metal)
+		local YEL = Color3.fromRGB(242, 190, 40)
+		local R0, N, HX = 105, 12, W / 2 + 790
+		local pw = 2 * R0 * math.sin(math.pi / N / 2) + 0.6
+		for _, h in { { -1130, "B737" }, { -1370, "A220" } } do
+			local z, pid = h[1], h[2]
+			for _, s in { -1, 1 } do
+				part(f, Vector3.new(170, 30, 2), cf(HX, 15, z + s * R0), HW, Enum.Material.Metal, true)
+			end
+			for i = 0, N - 1 do
+				local th = -math.pi / 2 + (i + 0.5) * math.pi / N
+				part(f, Vector3.new(170, 2, pw), cf(HX, 30 + R0 * math.cos(th), z + R0 * math.sin(th)) * CFrame.Angles(th, 0, 0), HW, Enum.Material.Metal, true)
+			end
+			part(f, Vector3.new(2, 30, 210), cf(HX + 85, 15, z), HW, Enum.Material.Metal, true)
+			-- задняя стена: диск, нижняя половина уходит под землю
+			local back = part(f, Vector3.new(2, R0 * 2, R0 * 2), cf(HX + 85, 30, z), HW, Enum.Material.Metal, true)
+			back.Shape = Enum.PartType.Cylinder
+			-- фронтон над воротами (полосы по форме арки) и боковые стойки
+			local y0 = 92
+			while y0 < 30 + R0 do
+				local half = math.sqrt(math.max(0, R0 * R0 - (y0 - 30) ^ 2))
+				if half > 1 then
+					part(f, Vector3.new(2, 3.5, half * 2), cf(HX - 85, y0 + 1.75, z), HW, Enum.Material.Metal, true)
+				end
+				y0 += 3.5
+			end
+			for _, s in { -1, 1 } do
+				for _, zc in { 88.5, 95.5, 102 } do
+					local hh = 30 + math.sqrt(math.max(0, R0 * R0 - (zc + 3.5) ^ 2))
+					part(f, Vector3.new(2, hh, 7), cf(HX - 85, hh / 2, z + s * zc), HW, Enum.Material.Metal, true)
+				end
+				-- створки ворот, сдвинутые к краям
+				for k = 0, 2 do
+					local dx, dz = HX - 87 - k * 1.6, z + s * (96 - k * 3)
+					part(f, Vector3.new(1, 84, 24), cf(dx, 42.5, dz), Color3.fromRGB(211, 216, 222), Enum.Material.Metal, true)
+					part(f, Vector3.new(1.1, 4, 24), cf(dx, 12, dz), Color3.fromRGB(31, 79, 154))
+				end
+			end
+			part(f, Vector3.new(1.5, 4, 172), cf(HX - 86, 92, z), Color3.fromRGB(74, 82, 94), Enum.Material.Metal)
+			-- пол, разметка, лампы
+			part(f, Vector3.new(166, 0.2, 206), cf(HX, 0.58, z), Color3.fromRGB(205, 209, 214), Enum.Material.SmoothPlastic)
+			for _, s in { -1, 1 } do
+				part(f, Vector3.new(150, 0.05, 1.2), cf(HX, 0.7, z + s * 80), YEL)
+			end
+			for _, zo in { -50, 0, 50 } do
+				local lamp = neon(f, Vector3.new(150, 0.6, 2.4), cf(HX, 30 + math.sqrt(R0 * R0 - zo * zo) - 3, z + zo), Color3.fromRGB(255, 244, 220))
+				if zo == 0 then
+					local pl = Instance.new("PointLight")
+					pl.Range = 60
+					pl.Brightness = 1.2
+					pl.Color = Color3.fromRGB(255, 240, 215)
+					pl.Parent = lamp
+				end
+			end
+			-- самолёт на обслуживании (носом к воротам) и стремянки
+			local c = PlaneConfigs.PLANES[pid]
+			local m = PlaneBuilder.build(c, { static = true })
+			m:PivotTo(cf(HX - 10, 0.5 + c.gearHeight, z, math.pi / 2))
+			m.Parent = f
+			local sx = HX - 10 - c.length * 0.03
+			for _, s in { -1, 1 } do
+				local sz = z + s * c.span * 0.17
+				part(f, Vector3.new(10, 1, 9), cf(sx, 7, sz), YEL)
+				for _, a in { -4, 4 } do
+					for _, bb in { -3.5, 3.5 } do
+						part(f, Vector3.new(0.6, 7, 0.6), cf(sx + a, 3.5, sz + bb), YEL)
+					end
+				end
+			end
+			local nx = HX - 10 - c.length * 0.5 + 6
+			part(f, Vector3.new(7, 1, 7), cf(nx, c.gearHeight + 0.5, z + c.diameter * 0.7), YEL)
+			for k = 0, 3 do
+				part(f, Vector3.new(7, 0.5, 2), cf(nx, 0.5 + (k + 0.5) * (c.gearHeight / 4), z + c.diameter * 0.7 + 4 + k * 2), YEL)
+			end
+		end
 	end
 	-- стоящие самолёты
 	for _, p in ap.parked do
