@@ -1042,6 +1042,8 @@ def main():
     s = add_mist(s, patch)
     from web_cargo import add_cargo
     s = add_cargo(s, patch)
+    from web_route import add_route
+    s = add_route(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

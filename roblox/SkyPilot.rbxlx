@@ -17647,6 +17647,21 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 		vs = vsSmooth, aglFt = agl, metric = metric,
 	})
 	ui.setHeading(hdg)
+	do -- полоса маршрута (только рейс: аэропорт вылета → назначения)
+		local fromId = lastMode and lastMode:match("^runway:(%u)$")
+		local from, to = fromId and World.airportById(fromId), lastDest and World.airportById(lastDest)
+		if from and to and not f.crashed then
+			local total = (Vector2.new(to.cx, to.cz) - Vector2.new(from.cx, from.cz)).Magnitude
+			local rem = (Vector2.new(to.cx, to.cz) - Vector2.new(f.pos.X, f.pos.Z)).Magnitude
+			ui.setRoute({
+				from = from.code, to = to.code, frac = math.clamp(1 - rem / math.max(1, total), 0, 1), km = rem * World.METERS_PER_STUD / 1000,
+				eta = if f.speed > 20 then rem / f.speed else nil,
+				tod = if not f.onGround and f.pos.Y * FT > 2000 and rem < 4500 and rem > 1500 then "↘ пора снижаться" elseif rem < 1500 then "заход на посадку" else nil,
+			})
+		else
+			ui.setRoute(nil)
+		end
+	end
 	ui.setWeather(f.pos.Y * FT)
 
 	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
@@ -20591,6 +20606,38 @@ function Ui.new(cb: Callbacks)
 		vsNum.Position = UDim2.fromOffset(62, if d.vs > 0 then 7 else TH - 7)
 		vsNum.Text = if metric then string.format("%.1f", d.vs * 0.00508) else tostring(math.round(d.vs / 100) * 100)
 	end
+	-- полоса маршрута в режиме рейсов (как в веб-версии, tools/web_route.py): ВЫЛЕТ ——✈—— НАЗНАЧЕНИЕ, остаток, прибытие
+	local route = glass(root, { Size = UDim2.fromOffset(520, 62), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14), Visible = false })
+	local rFrom = new("TextLabel", { Size = UDim2.fromOffset(60, 24), Position = UDim2.fromOffset(14, 8), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 17, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, route)
+	local rTo = new("TextLabel", { Size = UDim2.fromOffset(60, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 8), BackgroundTransparency = 1, Font = FONT_TITLE, TextSize = 17, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Right, Text = "" }, route)
+	local rTrack = new("Frame", { Size = UDim2.new(1, -168, 0, 4), Position = UDim2.fromOffset(84, 18), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.86, BorderSizePixel = 0 }, route)
+	corner(rTrack, 2)
+	local rFill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.magenta, BorderSizePixel = 0 }, rTrack)
+	corner(rFill, 2)
+	new("UIGradient", { Color = ColorSequence.new(Color3.fromRGB(59, 167, 255), Color3.fromRGB(61, 220, 132)) }, rFill)
+	local rPl = new("TextLabel", { Size = UDim2.fromOffset(20, 20), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5), BackgroundTransparency = 1, Font = FONT, TextSize = 17, Rotation = 90, TextColor3 = C.fg, Text = "✈" }, rTrack)
+	local rRem = new("TextLabel", { Size = UDim2.new(0.4, 0, 0, 16), Position = UDim2.fromOffset(14, 38), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = "" }, route)
+	local rTod = new("TextLabel", { Size = UDim2.new(0.3, 0, 0, 16), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 38), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.amber, Text = "" }, route)
+	local rEta = new("TextLabel", { Size = UDim2.new(0.4, 0, 0, 16), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 38), BackgroundTransparency = 1, Font = FONT_NUM, TextSize = 12, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Right, Text = "" }, route)
+	-- d: from, to (коды), frac 0..1, km, eta (с) или nil, tod (подсказка) или nil
+	function self.setRoute(d: any?)
+		route.Visible = d ~= nil and hud.Visible
+		if not d then
+			return
+		end
+		route.Position = if touch.active then UDim2.new(0.5, 0, 0, 260) else UDim2.new(0.5, 0, 1, -14)
+		rFrom.Text, rTo.Text = d.from, d.to
+		rFill.Size = UDim2.fromScale(d.frac, 1)
+		rPl.Position = UDim2.fromScale(d.frac, 0.5)
+		rRem.Text = string.format("осталось %s км", if d.km < 10 then string.format("%.1f", d.km) else tostring(math.round(d.km)))
+		rEta.Text = if d.eta then string.format("прибытие через %d:%02d", math.floor(d.eta / 60), math.floor(d.eta % 60)) else "на земле"
+		rTod.Text = d.tod or ""
+	end
+	hud:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not hud.Visible then
+			route.Visible = false
+		end
+	end)
 	function self.setThrottleFill(v: number)
 		cells.thr.fill.Size = UDim2.fromScale(1, v)
 		setThrottleUI(v)

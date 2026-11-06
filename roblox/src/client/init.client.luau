@@ -822,6 +822,21 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 		vs = vsSmooth, aglFt = agl, metric = metric,
 	})
 	ui.setHeading(hdg)
+	do -- полоса маршрута (только рейс: аэропорт вылета → назначения)
+		local fromId = lastMode and lastMode:match("^runway:(%u)$")
+		local from, to = fromId and World.airportById(fromId), lastDest and World.airportById(lastDest)
+		if from and to and not f.crashed then
+			local total = (Vector2.new(to.cx, to.cz) - Vector2.new(from.cx, from.cz)).Magnitude
+			local rem = (Vector2.new(to.cx, to.cz) - Vector2.new(f.pos.X, f.pos.Z)).Magnitude
+			ui.setRoute({
+				from = from.code, to = to.code, frac = math.clamp(1 - rem / math.max(1, total), 0, 1), km = rem * World.METERS_PER_STUD / 1000,
+				eta = if f.speed > 20 then rem / f.speed else nil,
+				tod = if not f.onGround and f.pos.Y * FT > 2000 and rem < 4500 and rem > 1500 then "↘ пора снижаться" elseif rem < 1500 then "заход на посадку" else nil,
+			})
+		else
+			ui.setRoute(nil)
+		end
+	end
 	ui.setWeather(f.pos.Y * FT)
 
 	-- навигация (во время гонки — на следующее кольцо), радар, таймер гонки
