@@ -182,6 +182,12 @@ local ui: any
 local cameraRig: any
 local controls: any
 
+-- аварийная тренировка (отказ двигателя): состояние текущего полёта, как в веб-версии (tools/web_fail.py)
+local engRestart = 0
+local ef = { t = 0, at = 0, side = 0, done = false }
+local function engCount(c: any): number
+	return if c.engines == "wing4" then 4 elseif c.engines == "wing2" or c.engines == "tail2" or c.engines == "turboprop2" then 2 else 1
+end
 local function onAction(a: string)
 	if a == "hangar" then
 		ui.showHangar()
@@ -199,6 +205,12 @@ local function onAction(a: string)
 				cameraRig.mode = photoPrevCam
 			end
 			ui.setPhoto(photoMode)
+		end
+		return
+	elseif a == "restart" then
+		if flight and ((flight :: any).engOut or 0) > 0 and engRestart <= 0 then
+			engRestart = 4
+			ui.toast("Перезапуск двигателя…", "amber")
 		end
 		return
 	elseif a == "smoke" then
@@ -374,6 +386,8 @@ FlightStarted.OnClientEvent:Connect(function(m: Model, planeId: string, mode: st
 	root = m:WaitForChild("Root", 5) :: BasePart?
 	chalAp = Challenge.airportOf(mode)
 	chalDone = false
+	ef = { t = 0, at = 60 + math.random() * 120, side = 0, done = false }
+	engRestart = 0
 	local f = FlightPhysics.new(cfg, spawnCF, mode == "air" or chalAp ~= nil)
 	if chalAp then
 		Challenge.setup(f)
@@ -554,6 +568,9 @@ local function handleEvents(f: FlightPhysics.Flight)
 						fstats.perfect += 1
 					end
 				end
+				if ap and ((f :: any).engOut or 0) > 0 then
+					claimAch("one_engine")
+				end
 				if chalAp and not chalDone then
 					chalDone = true
 					if ap and ap.id == chalAp then
@@ -719,6 +736,80 @@ RunService.PreSimulation:Connect(function(dt)
 		input.p = math.clamp(input.p * sens, -1, 1)
 		input.r = math.clamp(input.r * sens, -1, 1)
 		input.y = math.clamp(input.y * sens, -1, 1)
+	end
+	do -- отказ двигателя: тяга падает, самолёт уводит в сторону отказавшего, дым, перезапуск (J)
+		local fa = f :: any
+		local n = engCount(f.cfg)
+		if ui.failTraining() and n >= 2 and not f.crashed then
+			if (fa.engOut or 0) == 0 and not ef.done then
+				if not f.onGround and (f.dbg.agl or 0) * FT > 1500 then
+					ef.t += dt
+				end
+				if ef.t >= ef.at then
+					fa.engOut = 1 / n
+					ef.side = if math.random() < 0.5 then -1 else 1
+					ui.toast(string.format("🔥 ОТКАЗ ДВИГАТЕЛЯ %d · J — перезапуск", if ef.side < 0 then 1 else n), "red")
+					local best, bd = nil, math.huge
+					for _, ap in World.AIRPORTS do
+						local d = (Vector2.new(ap.cx, ap.cz) - Vector2.new(f.pos.X, f.pos.Z)).Magnitude
+						if d < bd then
+							best, bd = ap, d
+						end
+					end
+					if best then
+						ui.atc(string.format("Mayday принят. Ближайший аэропорт %s, полоса свободна, заход по готовности.", best.code))
+					end
+					-- дым из отказавшего двигателя
+					local eng = model and model:FindFirstChild("Engines")
+					local pick: BasePart? = nil
+					if eng and model and model.PrimaryPart then
+						for _, p in eng:GetChildren() do
+							if p:IsA("BasePart") and p.Name == "Nacelle" then
+								local lx = model.PrimaryPart.CFrame:PointToObjectSpace(p.Position).X
+								if math.sign(lx) == ef.side and (not pick or math.abs(lx) < math.abs(model.PrimaryPart.CFrame:PointToObjectSpace((pick :: BasePart).Position).X)) then
+									pick = p
+								end
+							end
+						end
+					end
+					if pick then
+						local pe = Instance.new("ParticleEmitter")
+						pe.Name = "FailSmoke"
+						pe.Texture = "rbxasset://textures/particles/smoke_main.dds"
+						pe.Color = ColorSequence.new(Color3.fromRGB(70, 72, 78))
+						pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+						pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, f.cfg.diameter * 0.25), NumberSequenceKeypoint.new(1, f.cfg.diameter * 1.4) })
+						pe.Lifetime = NumberRange.new(2.5, 3.5)
+						pe.Rate = 18
+						pe.Speed = NumberRange.new(1, 3)
+						pe.EmissionDirection = Enum.NormalId.Back
+						pe.Parent = pick
+					end
+				end
+			end
+			if (fa.engOut or 0) > 0 then
+				input.y = math.clamp(input.y + ef.side * 0.22 * f.throttle, -1, 1)
+				if engRestart > 0 then
+					engRestart -= dt
+					if engRestart <= 0 then
+						if math.random() < 0.7 then
+							fa.engOut = 0
+							ef.done = true
+							ui.toast("✅ Двигатель перезапущен", "green")
+							if model then
+								for _, d in model:GetDescendants() do
+									if d.Name == "FailSmoke" then
+										d:Destroy()
+									end
+								end
+							end
+						else
+							ui.toast("Перезапуск не удался — попробуй ещё (J)", "amber")
+						end
+					end
+				end
+			end
+		end
 	end
 	FlightPhysics.step(f, input, dt)
 	if not f.crashed then
@@ -932,6 +1023,8 @@ local function updateHud(f: FlightPhysics.Flight, dt: number, now: number)
 		w = "PULL UP · ТЯНИ ВВЕРХ"
 	elseif not f.onGround and not f.gear and dAgl < 250 and f.vel.Y < 0 then
 		w, col = "ВЫПУСТИ ШАССИ", Ui.Colors.amber
+	elseif ((f :: any).engOut or 0) > 0 then
+		w, col = "ОТКАЗ ДВИГАТЕЛЯ · J — ПЕРЕЗАПУСК", Ui.Colors.amber
 	elseif f.flaps > 0 and f.speed > c.flapMaxKts then
 		w, col = "ЗАКРЫЛКИ: ПРЕВЫШЕНИЕ", Ui.Colors.amber
 	elseif f.speed > c.maxKts * 1.02 then
@@ -1403,7 +1496,10 @@ do
 		hz.Position = UDim2.new(0.5, -math.sin(th) * t, 0.5, math.cos(th) * t)
 		ndHdg.Text = string.format("%03d°", math.round(World.headingDeg(look)) % 360)
 		ndWind.Text = string.format("ВЕТЕР %03d° / %d kt", math.round(tonumber(workspace:GetAttribute("WindDir")) or 0), math.round(tonumber(workspace:GetAttribute("WindKts")) or 0))
-		n1.Text = if f.reverse then "REV" else string.format("%d  %d", math.round(22 + f.throttle * 76), math.round(22 + f.throttle * 76))
+		local n1v = math.round(22 + f.throttle * 76)
+		local dead = ((f :: any).engOut or 0) > 0
+		n1.Text = if f.reverse then "REV" elseif dead then (if ef.side < 0 then string.format("0  %d", n1v) else string.format("%d  0", n1v)) else string.format("%d  %d", n1v, n1v)
+		n1.TextColor3 = if dead then Color3.fromRGB(229, 72, 77) else Color3.fromRGB(61, 220, 132)
 		engGear.Text = if f.gear then "ШАССИ ▼ ▼ ▼" else "ШАССИ УБРАНО"
 		engFlaps.Text = "ЗАКРЫЛКИ " .. (if f.cfg.noFlaps then "—" else tostring(f.flaps))
 		local metric = ui.metric()

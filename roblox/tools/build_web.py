@@ -1044,6 +1044,8 @@ def main():
     s = add_cargo(s, patch)
     from web_route import add_route
     s = add_route(s, patch)
+    from web_fail import add_fail
+    s = add_fail(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

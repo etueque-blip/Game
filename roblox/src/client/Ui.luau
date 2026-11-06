@@ -524,6 +524,10 @@ function Ui.new(cb: Callbacks)
 	local metric = player:GetAttribute("Metric") == true
 	local sens = tonumber(player:GetAttribute("Sens")) or 1
 	local pfdOn = player:GetAttribute("Pfd") ~= false
+	local failOn = player:GetAttribute("FailTrain") == true
+	function self.failTraining(): boolean
+		return failOn
+	end
 	function self.metric(): boolean
 		return metric
 	end
@@ -584,8 +588,14 @@ function Ui.new(cb: Callbacks)
 		pfdOn = i == 1
 		player:SetAttribute("Pfd", pfdOn)
 	end)
-	para(sS, "Сложная: перегрузка G, повреждения, поломки закрылков и шасси, удар хвостом. Применяется со следующего полёта. Ленты PFD — шкалы скорости и высоты по бокам экрана, как в кабине.", 6)
-	local sRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 7, ZIndex = 22 }, sS)
+	settingRow(6, "Аварийная тренировка", { "Выкл", "Вкл" }, function()
+		return if failOn then 2 else 1
+	end, function(i)
+		failOn = i == 2
+		player:SetAttribute("FailTrain", failOn)
+	end)
+	para(sS, "Сложная: перегрузка G, повреждения, поломки закрылков и шасси, удар хвостом. Применяется со следующего полёта. Ленты PFD — шкалы скорости и высоты по бокам экрана, как в кабине. Аварийная тренировка: на многомоторных самолётах в полёте откажет один двигатель (J — перезапуск).", 7)
+	local sRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 8, ZIndex = 22 }, sS)
 	local sClose = button(sRow, "Готово", { ZIndex = 23 })
 	primary(sClose)
 	sClose.Activated:Connect(function()

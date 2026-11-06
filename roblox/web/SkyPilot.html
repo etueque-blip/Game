@@ -524,7 +524,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
       </div>
       <div class="mh">Что нового</div>
       <div class="news">
-        <div class="ncard" data-ph="mode_race"><span class="tag">Новое</span><b>🏆 Достижения</b><i>12 целей: мягкая посадка, все аэропорты, Ас на F-16…</i></div>
+        <div class="ncard" data-ph="mode_race"><span class="tag">Новое</span><b>🏆 Достижения</b><i>13 целей: мягкая посадка, все аэропорты, Ас на F-16…</i></div>
         <div class="ncard" data-ph="mode_career"><b>Перегрузка G и fly-by-wire</b><i>Пределы конструкции, тряска, поломки закрылков и шасси</i></div>
         <div class="ncard" data-ph="plane_A380"><b>Boeing, Airbus, Gulfstream</b><i>14 настоящих моделей и 6 ливрей</i></div>
         <div class="ncard" data-ph="news_airports"><b>8 аэропортов</b><i>Стамбул, Эр-Рияд, Самарканд и другие</i></div>
@@ -846,8 +846,8 @@ function physicsStep1(f, input, dt) {
   const eff = clamp(f.speed / (stall * 1.1), 0.15, 1);
   const ceil = c.ceilingFt / FT;
   const thrustMul = clamp((ceil - pos.y) / (0.15 * ceil), 0.05, 1);
-  let thrust = c.thrust * f.throttle * thrustMul;
-  if (f.reverse) thrust = -c.thrust * 0.45 * f.throttle;
+  let thrust = c.thrust * f.throttle * thrustMul * (1 - (f.engOut || 0));
+  if (f.reverse) thrust = -c.thrust * 0.45 * f.throttle * (1 - (f.engOut || 0));
   const dragK = c.thrust / (c.maxKts * c.maxKts);
   const dragMul = 1 + 0.12 * f.flaps + ((f.gear && !c.fixedGear) ? 0.15 : 0);
   const vr = c.vrKts * (1 - 0.04 * f.flaps);
@@ -1955,7 +1955,7 @@ function doCrash(reason) {
 
 // ============================================================ INPUT
 const keys = new Set();
-const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar", KeyN: "nav", Space: "park", KeyI: "guide", KeyX: "spoiler", KeyK: "map", KeyH: "photo", KeyY: "smoke" };
+const KEYMAP_ONCE = { KeyG: "gear", KeyF: "flapDn", KeyR: "flapUp", KeyT: "rev", KeyZ: "idle", KeyV: "cam", KeyM: "hangar", KeyN: "nav", Space: "park", KeyI: "guide", KeyX: "spoiler", KeyK: "map", KeyH: "photo", KeyY: "smoke", KeyJ: "restart" };
 addEventListener("keydown", (e) => {
   if (e.repeat) { keys.add(e.code); return; }
   keys.add(e.code);
@@ -2022,6 +2022,7 @@ function action(a) {
     else { f.flaps = clamp(f.flaps + (a === "flapDn" ? 1 : -1), 0, 3); toast("Закрылки: " + f.flaps); }
   } else if (a === "rev") {
     if (f.onGround) { f.reverse = !f.reverse; toast(f.reverse ? "Реверс включён, добавь тягу" : "Реверс выключен", "var(--amber)"); } else toast("Реверс только на земле");
+  } else if (a === "restart") { failRestart();
   } else if (a === "smoke") { smokeIdx = (smokeIdx + 1) % SMOKE.length; toast(SMOKE[smokeIdx] ? "Дым: " + SMOKE[smokeIdx][1] + " · Y — сменить цвет" : "Дым выключен", SMOKE[smokeIdx] ? "var(--green)" : "");
   } else if (a === "spoiler") { f.spoilers = !f.spoilers; toast(f.spoilers ? "Интерцепторы выпущены" : "Интерцепторы убраны", f.spoilers ? "var(--amber)" : ""); addLog(f.spoilers ? "Интерцепторы" : "Интерцепторы убраны");
   } else if (a === "idle") { f.throttle = 0; setThrottleUI(0); }
@@ -2148,6 +2149,7 @@ function showLandingReport(f, ap, text, pts) {
   let off = null;
   if (ap) { const dx = f.pos.x - ap.cx, dz = f.pos.z - ap.cz; off = Math.abs(ap.rot ? -dz : dx) * 0.515; }
   chalLanding(f, ap, fpm, off);
+  if (ap && f.engOut > 0) achUnlock("one_engine");
   const paxBonus = COMF.pax > 0 && ap && flightDest && ap.id === flightDest ? Math.floor(COMF.v * 5) : 0;
   if (paxBonus > 0) setTimeout(() => addScore(paxBonus, "комфорт пассажиров"), 1500);
   const el = $("lrep");
@@ -2167,7 +2169,7 @@ const ACH = [
   ["route", "🧳", "Рейс выполнен", "Долети до аэропорта назначения в режиме рейсов", 500], ["ten", "🔟", "Десять посадок", "Соверши 10 посадок", 500],
   ["airports", "🌍", "Все аэропорты", "Сядь во всех 8 аэропортах", 2000], ["high", "🛰", "Стратосфера", "Поднимись выше 35 000 ft", 300],
   ["night", "🌙", "Ночной пилот", "Посади самолёт ночью", 400], ["race", "🏁", "Гонщик", "Пройди все кольца гонки", 500],
-  ["ace", "⚡", "Ас", "Выдержи 8 G на F-16", 400], ["heavy", "🐘", "Тяжеловес", "Посади Airbus A380 или Boeing 747", 300],
+  ["ace", "⚡", "Ас", "Выдержи 8 G на F-16", 400], ["heavy", "🐘", "Тяжеловес", "Посади Airbus A380 или Boeing 747", 300], ["one_engine", "🔥", "Один мотор", "Посади самолёт с отказавшим двигателем", 600],
 ];
 const ACHS = (() => { try { const d = JSON.parse(localStorage.getItem("skypilot.ach") || "{}"); return { ids: d.ids || [], visited: d.visited || [] }; } catch (e) { return { ids: [], visited: [] }; } })();
 function achSave() { try { localStorage.setItem("skypilot.ach", JSON.stringify(ACHS)); } catch (e) {} }
@@ -2910,10 +2912,9 @@ let cockpit = null; const ckTex = [];
 function ckCanvas(draw) { const c = document.createElement("canvas"); c.width = c.height = 256; const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; ckTex.push({ c, t, draw }); return t; }
 function ckEng(g, f) {
   g.fillStyle = "#05080f"; g.fillRect(0, 0, 256, 256); g.textAlign = "center"; g.textBaseline = "middle";
-  const n1 = f.reverse ? 70 : 22 + f.throttle * 76;
-  for (const [cx, lab] of [[70, "ДВ 1"], [186, "ДВ 2"]]) {
+  for (const [cx, lab] of [[70, "ДВ 1"], [186, "ДВ 2"]]) { const dead = f.engOut > 0 && ((EF.side < 0) === (cx < 128)), n1 = dead ? 0 : (f.reverse ? 70 : 22 + f.throttle * 76);
     g.lineWidth = 10; g.strokeStyle = "#1d2633"; g.beginPath(); g.arc(cx, 92, 48, Math.PI * 0.75, Math.PI * 2.25); g.stroke();
-    g.strokeStyle = f.reverse ? "#f5a524" : "#3ddc84"; g.beginPath(); g.arc(cx, 92, 48, Math.PI * 0.75, Math.PI * (0.75 + 1.5 * n1 / 100)); g.stroke();
+    g.strokeStyle = dead ? "#e5484d" : f.reverse ? "#f5a524" : "#3ddc84"; g.beginPath(); g.arc(cx, 92, 48, Math.PI * 0.75, Math.PI * (0.75 + 1.5 * n1 / 100)); g.stroke();
     g.fillStyle = "#fff"; g.font = "700 26px ui-monospace, Menlo, monospace"; g.fillText(n1.toFixed(0), cx, 94); g.fillStyle = "#8fa0b8"; g.font = "600 15px ui-sans-serif, system-ui"; g.fillText(lab + " N1 %", cx, 156);
   }
   g.font = "700 20px ui-monospace, Menlo, monospace"; g.fillStyle = f.gear ? "#3ddc84" : "#8fa0b8"; g.fillText(f.gear ? "ШАССИ ▼ ▼ ▼" : "ШАССИ УБРАНО", 128, 196);
@@ -2965,6 +2966,25 @@ function drawRoute(f) {
   $("rEta").innerHTML = eta === null ? "на земле" : `прибытие через <b>${Math.floor(eta / 60)}:${String(Math.floor(eta % 60)).padStart(2, "0")}</b>`;
   $("rTod").textContent = tod ? "↘ пора снижаться" : rem < 1500 ? "заход на посадку" : "";
 }
+
+// ===== аварийная тренировка: отказ двигателя
+var FAIL = false; try { FAIL = localStorage.getItem("skypilot.fail") === "1"; } catch (e) {}
+const EF = { seq: -1, t: 0, at: 0, side: 0, restart: 0, done: false, smokeK: 0 };
+const engCount = (c) => c.engines === "wing4" ? 4 : (c.engines === "wing2" || c.engines === "tail2" || c.engines === "turboprop2") ? 2 : 1;
+function failTick(f, dt, input) {
+  if (EF.seq !== window.__flightSeq) { EF.seq = window.__flightSeq; EF.t = 0; EF.at = 60 + Math.random() * 120; EF.side = 0; EF.restart = 0; EF.done = false; f.engOut = 0; }
+  const n = engCount(f.cfg); if (!FAIL || n < 2 || f.crashed) return;
+  if (!f.engOut && !EF.done) { if (!f.onGround && f.dbg.agl * FT > 1500) EF.t += dt;
+    if (EF.t >= EF.at) { f.engOut = 1 / n; EF.side = Math.random() < 0.5 ? -1 : 1; toast("🔥 ОТКАЗ ДВИГАТЕЛЯ " + (EF.side < 0 ? 1 : n) + " · J — перезапуск", "var(--red)"); addLog("Отказ двигателя");
+      const ap = AIRPORTS.slice().sort((a, b) => Math.hypot(a.cx - f.pos.x, a.cz - f.pos.z) - Math.hypot(b.cx - f.pos.x, b.cz - f.pos.z))[0]; atc(`Mayday принят. Ближайший аэропорт ${ap.code}, полоса свободна, заход по готовности.`); } }
+  if (f.engOut > 0) {
+    input.y = clamp(input.y + EF.side * 0.22 * f.throttle, -1, 1);
+    if (EF.restart > 0) { EF.restart -= dt; if (EF.restart <= 0) { if (Math.random() < 0.7) { f.engOut = 0; EF.done = true; toast("✅ Двигатель перезапущен", "var(--green)"); } else toast("Перезапуск не удался — попробуй ещё (J)", "var(--amber)"); } }
+    const u = planeObj && planeObj.userData; if (u && u.engines && u.engines.length && (EF.smokeK = (EF.smokeK + 1) % 3) === 0) { const e = u.engines[EF.side < 0 ? 0 : Math.floor(u.engines.length / 2)];
+      spawnPuff(e.clone().applyQuaternion(f.att).add(f.pos), 0x45484e, f.cfg.diameter * 0.25, 3, f.cfg.diameter * 1.4, new V3(R(-1, 1), R(0, 2), R(-1, 1)), 0.6); }
+  }
+}
+function failRestart() { if (flight && flight.engOut > 0 && EF.restart <= 0) { EF.restart = 4; toast("Перезапуск двигателя…", "var(--amber)"); } }
 function updateHUD(f) {
   const c = f.cfg;
   const look = new V3(0, 0, -1).applyQuaternion(f.att), right = new V3(1, 0, 0).applyQuaternion(f.att), up = new V3(0, 1, 0).applyQuaternion(f.att);
@@ -3005,6 +3025,7 @@ function updateHUD(f) {
   else if (!f.onGround && f.speed < f.dbg.stall * 1.05) w = "STALL · СВАЛИВАНИЕ";
   else if (!f.onGround && f.dbg.agl < 400 && f.vel.y < -25) w = "PULL UP · ТЯНИ ВВЕРХ";
   else if (!f.onGround && !f.gear && f.dbg.agl < 250 && f.vel.y < 0) { w = "ВЫПУСТИ ШАССИ"; col = "var(--amber)"; }
+  else if (f.engOut > 0) { w = "ОТКАЗ ДВИГАТЕЛЯ · J — ПЕРЕЗАПУСК"; col = "var(--amber)"; }
   else if (f.flaps > 0 && f.speed > c.flapMaxKts) { w = "ЗАКРЫЛКИ: ПРЕВЫШЕНИЕ"; col = "var(--amber)"; }
   const el = $("warn"); el.textContent = w && (performance.now() % 600 < 420) ? w : ""; el.style.color = col;
   if (!$("debug").hidden) {
@@ -3054,6 +3075,7 @@ function frame(t) {
       brakes: k("KeyB") || touch.brake || PAD.brake || (parkBrake && f.onGround),
     };
     const __prev = f.pos.clone();
+    failTick(f, dt, input);
     physicsStep(f, input, dt);
     achFrame(f); fstatsFrame(f, dt);
     if (!f.crashed) raceStep(__prev, f.pos);
@@ -3257,6 +3279,7 @@ function renderSettings() {
   const rows = [["Единицы", ["kt · ft", "км/ч · м"], () => (METRIC ? 1 : 0), (i) => { METRIC = i === 1; try { localStorage.setItem("skypilot.metric", METRIC ? "1" : "0"); } catch (e) {} }],
     ["Чувствительность", ["Низкая", "Обычная", "Высокая"], () => (SENS < 0.9 ? 0 : SENS > 1.1 ? 2 : 1), (i) => { SENS = [0.7, 1, 1.3][i]; try { localStorage.setItem("skypilot.sens", String(SENS)); } catch (e) {} }],
     ["Ленты PFD", ["Вкл", "Выкл"], () => (PFD ? 0 : 1), (i) => { PFD = i === 0; try { localStorage.setItem("skypilot.pfd", PFD ? "1" : "0"); } catch (e) {} }],
+    ["Аварийная тренировка", ["Выкл", "Вкл"], () => (FAIL ? 1 : 0), (i) => { FAIL = i === 1; try { localStorage.setItem("skypilot.fail", FAIL ? "1" : "0"); } catch (e) {} }],
     ["Сложность", ["Обычная", "Сложная (G)"], () => (HARD ? 1 : 0), (i) => { HARD = i === 1; try { localStorage.setItem("skypilot.hard", HARD ? "1" : "0"); } catch (e) {} if (typeof hardLbl === "function") hardLbl(); }]];
   const box = $("setRows"); box.innerHTML = "";
   for (const [label, opts, get, set] of rows) {

@@ -18,6 +18,7 @@ Achievements.LIST: { Ach } = {
 	{ id = "race", icon = "🏁", title = "Гонщик", desc = "Пройди все кольца гонки", reward = 500 },
 	{ id = "ace", icon = "⚡", title = "Ас", desc = "Выдержи 8 G на F-16", reward = 400, client = true },
 	{ id = "heavy", icon = "🐘", title = "Тяжеловес", desc = "Посади Airbus A380 или Boeing 747", reward = 300 },
+	{ id = "one_engine", icon = "🔥", title = "Один мотор", desc = "Посади самолёт с отказавшим двигателем", reward = 600, client = true },
 }
 
 Achievements.BY_ID = {} :: { [string]: Ach }

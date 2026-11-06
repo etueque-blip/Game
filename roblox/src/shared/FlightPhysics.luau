@@ -145,9 +145,11 @@ local function stepOnce(f: Flight, input: Input, dt: number)
 	local eff = clamp(f.speed / (stall * 1.1), 0.15, 1)
 	local ceil = c.ceilingFt / FT
 	local thrustMul = clamp((ceil - pos.Y) / (0.15 * ceil), 0.05, 1)
-	local thrust = c.thrust * f.throttle * thrustMul
+	-- engOut: доля отказавших двигателей (аварийная тренировка), как в веб-версии
+	local alive = 1 - ((f :: any).engOut or 0)
+	local thrust = c.thrust * f.throttle * thrustMul * alive
 	if f.reverse then
-		thrust = -c.thrust * 0.45 * f.throttle
+		thrust = -c.thrust * 0.45 * f.throttle * alive
 	end
 	local retractGear = f.gear and not c.fixedGear
 	local dragK = c.thrust / (c.maxKts * c.maxKts)
