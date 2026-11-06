@@ -1038,6 +1038,8 @@ def main():
     s = add_challenge(s, patch)
     from web_cockpit import add_cockpit
     s = add_cockpit(s, patch)
+    from web_mist import add_mist
+    s = add_mist(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

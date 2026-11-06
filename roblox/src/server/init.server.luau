@@ -590,7 +590,7 @@ if DAY_LENGTH_MIN > 0 then
 	local Lighting = game:GetService("Lighting")
 	Lighting.ClockTime = 10
 	-- ветер: общий для всех игроков, плавно меняется (атрибуты workspace WindDir / WindKts)
-	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0, rain = 0, rainT = 0, rainAt = os.clock() + 120 }
+	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0, rain = 0, rainT = 0, rainAt = os.clock() + 120, mistDay = math.random() < 0.6, mist = 0, lastClock = 0 }
 	wind.tDir, wind.tKts = wind.dir, wind.kts
 	task.spawn(function()
 		local last = os.clock()
@@ -616,7 +616,16 @@ if DAY_LENGTH_MIN > 0 then
 			workspace:SetAttribute("Rain", math.round(wind.rain * 100) / 100)
 			Lighting.ClockTime = (Lighting.ClockTime + (now - last) * 24 / (DAY_LENGTH_MIN * 60)) % 24
 			last = now
-			WorldBuilder.updateSky(Lighting.ClockTime, wind.rain)
+			-- утренний туман: в 60% дней с рассвета до ~9:00, сильнее всего в 6:50 (как в веб-версии, tools/web_mist.py)
+			local clock = Lighting.ClockTime
+			if wind.lastClock < 3.5 and clock >= 3.5 then
+				wind.mistDay = math.random() < 0.6
+			end
+			wind.lastClock = clock
+			local mistT = if wind.mistDay then math.clamp(1 - math.abs(clock - 6.8) / 2.3, 0, 1) else 0
+			wind.mist += math.clamp(mistT - wind.mist, -0.004, 0.004)
+			workspace:SetAttribute("Mist", math.round(wind.mist * 100) / 100)
+			WorldBuilder.updateSky(Lighting.ClockTime, wind.rain, wind.mist)
 		end
 	end)
 end

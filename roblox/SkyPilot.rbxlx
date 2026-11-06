@@ -15557,7 +15557,7 @@ if DAY_LENGTH_MIN > 0 then
 	local Lighting = game:GetService("Lighting")
 	Lighting.ClockTime = 10
 	-- ветер: общий для всех игроков, плавно меняется (атрибуты workspace WindDir / WindKts)
-	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0, rain = 0, rainT = 0, rainAt = os.clock() + 120 }
+	local wind = { dir = math.random(0, 359), kts = math.random(3, 12), tDir = 0, tKts = 0, nextAt = 0, rain = 0, rainT = 0, rainAt = os.clock() + 120, mistDay = math.random() < 0.6, mist = 0, lastClock = 0 }
 	wind.tDir, wind.tKts = wind.dir, wind.kts
 	task.spawn(function()
 		local last = os.clock()
@@ -15583,7 +15583,16 @@ if DAY_LENGTH_MIN > 0 then
 			workspace:SetAttribute("Rain", math.round(wind.rain * 100) / 100)
 			Lighting.ClockTime = (Lighting.ClockTime + (now - last) * 24 / (DAY_LENGTH_MIN * 60)) % 24
 			last = now
-			WorldBuilder.updateSky(Lighting.ClockTime, wind.rain)
+			-- утренний туман: в 60% дней с рассвета до ~9:00, сильнее всего в 6:50 (как в веб-версии, tools/web_mist.py)
+			local clock = Lighting.ClockTime
+			if wind.lastClock < 3.5 and clock >= 3.5 then
+				wind.mistDay = math.random() < 0.6
+			end
+			wind.lastClock = clock
+			local mistT = if wind.mistDay then math.clamp(1 - math.abs(clock - 6.8) / 2.3, 0, 1) else 0
+			wind.mist += math.clamp(mistT - wind.mist, -0.004, 0.004)
+			workspace:SetAttribute("Mist", math.round(wind.mist * 100) / 100)
+			WorldBuilder.updateSky(Lighting.ClockTime, wind.rain, wind.mist)
 		end
 	end)
 end
@@ -16031,7 +16040,7 @@ local function mix(a: Color3, b: Color3, t: number): Color3
 end
 
 -- цвет атмосферы, облаков и общий оттенок по времени суток: голубой день, тёплый закат, синяя ночь
-function WorldBuilder.updateSky(clock: number, rain: number?)
+function WorldBuilder.updateSky(clock: number, rain: number?, mist: number?)
 	local r = math.clamp(rain or 0, 0, 1)
 	local elev = math.sin((clock - 6) / 24 * math.pi * 2)
 	local day = math.clamp(elev * 3 + 0.25, 0, 1)
@@ -16045,6 +16054,14 @@ function WorldBuilder.updateSky(clock: number, rain: number?)
 		-- дождь: серая плотная дымка, хуже видимость
 		atm.Color = mix(atm.Color, Color3.fromRGB(150, 156, 166):Lerp(Color3.fromRGB(30, 34, 44), 1 - day), r * 0.75)
 		atm.Density = 0.28 + r * 0.22
+		-- утренний туман: молочная плотная дымка у земли (с высотой атмосфера движка сама редеет)
+		local m = math.clamp(mist or 0, 0, 1)
+		if m > 0 then
+			atm.Color = mix(atm.Color, Color3.fromRGB(223, 227, 232):Lerp(Color3.fromRGB(60, 64, 72), 1 - day), m * 0.7)
+			atm.Density = math.min(0.75, atm.Density + m * 0.36)
+			atm.Haze = atm.Haze + m * 2.5
+			atm.Glare = atm.Glare * (1 - 0.7 * m)
+		end
 	end
 	if clouds then
 		clouds.Color = mix(mix(mix(Color3.fromRGB(60, 66, 88), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 186, 150), dusk * 0.6), Color3.fromRGB(110, 116, 126), r * 0.7)
@@ -19076,7 +19093,7 @@ function Ui.new(cb: Callbacks)
 		local temp = math.max(-56.5, 15 - 1.98 * altFt / 1000)
 		local wk = tonumber(workspace:GetAttribute("WindKts")) or 0
 		local wd = tonumber(workspace:GetAttribute("WindDir")) or 0
-		wxBot.Text = string.format("за бортом %+d °C · %s", math.round(temp), (if wk < 2 then "штиль" else string.format("ветер %03d° %d kt", wd, math.round(wk))) .. (if (tonumber(workspace:GetAttribute("Rain")) or 0) > 0.6 then " · ливень" elseif (tonumber(workspace:GetAttribute("Rain")) or 0) > 0.15 then " · дождь" else ""))
+		wxBot.Text = string.format("за бортом %+d °C · %s", math.round(temp), (if wk < 2 then "штиль" else string.format("ветер %03d° %d kt", wd, math.round(wk))) .. (if (tonumber(workspace:GetAttribute("Rain")) or 0) > 0.6 then " · ливень" elseif (tonumber(workspace:GetAttribute("Rain")) or 0) > 0.15 then " · дождь" else "") .. (if (tonumber(workspace:GetAttribute("Mist")) or 0) > 0.3 then " · туман" else ""))
 	end
 
 	local raceTag = new("TextLabel", { Size = UDim2.fromOffset(170, 24), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -2, 0, 258), BackgroundColor3 = C.magenta, Font = FONT_NUM, TextSize = 13, TextColor3 = Color3.new(1, 1, 1), Text = "", Visible = false }, root)

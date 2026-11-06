@@ -95,7 +95,7 @@ local function mix(a: Color3, b: Color3, t: number): Color3
 end
 
 -- цвет атмосферы, облаков и общий оттенок по времени суток: голубой день, тёплый закат, синяя ночь
-function WorldBuilder.updateSky(clock: number, rain: number?)
+function WorldBuilder.updateSky(clock: number, rain: number?, mist: number?)
 	local r = math.clamp(rain or 0, 0, 1)
 	local elev = math.sin((clock - 6) / 24 * math.pi * 2)
 	local day = math.clamp(elev * 3 + 0.25, 0, 1)
@@ -109,6 +109,14 @@ function WorldBuilder.updateSky(clock: number, rain: number?)
 		-- дождь: серая плотная дымка, хуже видимость
 		atm.Color = mix(atm.Color, Color3.fromRGB(150, 156, 166):Lerp(Color3.fromRGB(30, 34, 44), 1 - day), r * 0.75)
 		atm.Density = 0.28 + r * 0.22
+		-- утренний туман: молочная плотная дымка у земли (с высотой атмосфера движка сама редеет)
+		local m = math.clamp(mist or 0, 0, 1)
+		if m > 0 then
+			atm.Color = mix(atm.Color, Color3.fromRGB(223, 227, 232):Lerp(Color3.fromRGB(60, 64, 72), 1 - day), m * 0.7)
+			atm.Density = math.min(0.75, atm.Density + m * 0.36)
+			atm.Haze = atm.Haze + m * 2.5
+			atm.Glare = atm.Glare * (1 - 0.7 * m)
+		end
 	end
 	if clouds then
 		clouds.Color = mix(mix(mix(Color3.fromRGB(60, 66, 88), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 186, 150), dusk * 0.6), Color3.fromRGB(110, 116, 126), r * 0.7)
