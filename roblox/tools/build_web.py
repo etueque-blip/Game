@@ -1048,6 +1048,8 @@ def main():
     s = add_fail(s, patch)
     from web_crj import add_crj
     s = add_crj(s, patch)
+    from web_rainbow import add_rainbow
+    s = add_rainbow(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

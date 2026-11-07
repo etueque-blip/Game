@@ -1084,6 +1084,78 @@ do
 	end)
 end
 
+-- ===== радуга после дождя (как в веб-версии, tools/web_rainbow.py): если днём шёл дождь (> 0.4) и стих (< 0.15),
+-- на ~2 минуты напротив солнца — дуга радиусом 42° из семи цветных полос (только у себя на экране)
+do
+	local Lighting = game:GetService("Lighting")
+	local COLORS = { Color3.fromRGB(255, 60, 60), Color3.fromRGB(255, 150, 40), Color3.fromRGB(255, 230, 60), Color3.fromRGB(80, 220, 90), Color3.fromRGB(60, 150, 255), Color3.fromRGB(70, 80, 220), Color3.fromRGB(150, 70, 210) }
+	local D = 1500
+	local R = D * math.tan(math.rad(42))
+	local band = D * math.tan(math.rad(2.4)) / #COLORS
+	local SEG = 26
+	local model = Instance.new("Model")
+	model.Name = "SkyPilotRainbow"
+	local segs: { { p: BasePart, off: CFrame } } = {}
+	for ci, col in COLORS do
+		local r = R - (ci - 1) * band
+		for i = 0, SEG - 1 do
+			local a0 = math.rad(-12) + (i + 0.5) * math.rad(204) / SEG
+			local len = 2 * r * math.sin(math.rad(204) / SEG / 2) + 2
+			local p = Instance.new("Part")
+			p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+			p.Material = Enum.Material.Neon
+			p.Color = col
+			p.Size = Vector3.new(band, len, 1)
+			p.Transparency = 1
+			p.Parent = model
+			table.insert(segs, { p = p, off = CFrame.new(math.cos(a0) * r, math.sin(a0) * r, 0) * CFrame.Angles(0, 0, a0) })
+		end
+	end
+	local armed, t, acc, alpha = false, 0, 0, -1
+	RunService.RenderStepped:Connect(function(dt)
+		local rain = tonumber(workspace:GetAttribute("Rain")) or 0
+		local sun = Lighting:GetSunDirection()
+		if rain > 0.4 then
+			armed = true
+		end
+		if armed and rain < 0.15 and sun.Y > 0.05 then
+			armed = false
+			t = 120
+		end
+		if t > 0 then
+			t -= dt
+		end
+		local a = math.clamp(math.min(t / 15, (120 - t) / 10), 0, 1) * math.clamp(sun.Y * 4, 0, 1) * (1 - (tonumber(workspace:GetAttribute("Mist")) or 0))
+		if a <= 0.01 then
+			if model.Parent then
+				model.Parent = nil
+				alpha = -1
+			end
+			return
+		end
+		if not model.Parent then
+			model.Parent = workspace.CurrentCamera
+		end
+		acc += dt
+		if acc < 0.2 and math.abs(a - alpha) < 0.03 then
+			return
+		end
+		acc = 0
+		local cam = workspace.CurrentCamera.CFrame.Position
+		local frame = CFrame.lookAt(cam - sun * D, cam)
+		local tr = 1 - 0.32 * a
+		for _, e in segs do
+			e.p.CFrame = frame * e.off
+			if math.abs(a - alpha) >= 0.03 then
+				e.p.Transparency = tr
+			end
+		end
+		if math.abs(a - alpha) >= 0.03 then
+			alpha = a
+		end
+	end)
+end
+
 -- ===== гроза: в ливень (Rain > 0.6) раз в 6–20 с молния в 1–5 км от камеры — ломаный разряд с ветками,
 -- вспышка неба (ColorCorrection) и гром с задержкой по расстоянию; как в веб-версии (tools/web_storm.py). Только у себя на экране.
 do
