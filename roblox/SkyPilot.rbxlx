@@ -13200,7 +13200,9 @@ local Comfort = {}
 
 -- сколько пассажиров на борту (0 — у истребителя)
 function Comfort.passengers(c: any): number
-	if c.id == "F16" then
+	if c.pax then
+		return c.pax
+	elseif c.id == "F16" then
 		return 0
 	elseif c.engines == "prop" then
 		return 3
@@ -14320,9 +14322,11 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	local function leg(x: number, z: number, wheels: number, bogie: boolean?)
 		local top = -D * 0.35
 		cylY(ctx, "Strut", top - wheelY, math.max(0.25, wheelR * 0.35), Vector3.new(x, (top + wheelY) / 2, z), METAL, gearFolder)
-		local rows = if bogie then { -wheelR * 1.15, wheelR * 1.15 } else { 0 }
+		-- у Boeing 777 тележки на шесть колёс (три пары подряд)
+		local triple = bogie and cfg.id == "B777"
+		local rows = if triple then { -wheelR * 2.3, 0, wheelR * 2.3 } elseif bogie then { -wheelR * 1.15, wheelR * 1.15 } else { 0 }
 		if bogie then
-			block(ctx, "Bogie", Vector3.new(wheelW * 0.5, wheelR * 0.4, wheelR * 3.2), CFrame.new(x, wheelY, z), METAL, Enum.Material.Metal, gearFolder)
+			block(ctx, "Bogie", Vector3.new(wheelW * 0.5, wheelR * 0.4, wheelR * (if triple then 5.6 else 3.2)), CFrame.new(x, wheelY, z), METAL, Enum.Material.Metal, gearFolder)
 		end
 		for _, dzz in rows do
 			for k = 1, wheels do
@@ -14576,6 +14580,9 @@ local PLANES: { [string]: any } = {
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1f6f8b"), tail = Color3.fromHex("13485a"), engine = Color3.fromHex("c4c8ce") } },
 	B777 = { name = "Boeing 777-300ER", cls = "Широкофюзеляжный лайнер", length = 270, diameter = 23, span = 240, chord = 38, wing = "low", wingPos = 0.46, sweep = 31, dihedral = 6, engines = "wing2", engineD = 14, engineLen = 24, tail = "conventional", hstabSpan = 82, finHeight = 46, finSweep = 40, gearLen = 8, windows = true, thrust = 5.5, maxKts = 490, stallKts = 132, vrKts = 155, flapMaxKts = 230, pitchRate = 0.32, rollRate = 0.7, yawRate = 0.19, turnBoost = 2, groundSteer = 0.42, brakeDecel = 8, stallSink = 62, maxRotate = 11, ceilingFt = 43000, maxTouchdownFpm = 1250,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("c0392b"), tail = Color3.fromHex("1c2f5e"), engine = Color3.fromHex("c4c8ce") } },
+	-- региональный джет: двигатели в хвосте, Т-оперение (как в веб-версии, tools/web_crj.py)
+	CRJ900 = { name = "Bombardier CRJ900", cls = "Региональный джет", length = 129, diameter = 9.6, span = 89, chord = 12, wing = "low", wingPos = 0.55, sweep = 26, dihedral = 3, engines = "tail2", engineD = 4.2, engineLen = 12, tail = "T", hstabSpan = 30, finHeight = 18, finSweep = 42, gearLen = 4, windows = true, winglets = true, pax = 90, thrust = 6.3, maxKts = 470, stallKts = 112, vrKts = 135, flapMaxKts = 230, pitchRate = 0.48, rollRate = 1.05, yawRate = 0.28, turnBoost = 2.1, groundSteer = 0.55, brakeDecel = 8, stallSink = 50, maxRotate = 12, ceilingFt = 41000, maxTouchdownFpm = 1150,
+		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("0f7a8a"), tail = Color3.fromHex("0b5560"), engine = Color3.fromHex("f3f5f8") } },
 	-- турбовинтовой региональный: высокоплан, Т-оперение, два мотора с шестилопастными винтами (как в веб-версии, tools/web_atr.py)
 	ATR72 = { name = "ATR 72-600", cls = "Турбовинтовой региональный", length = 97, diameter = 9.5, span = 97, chord = 8.5, wing = "high", wingPos = 0.47, sweep = 0, dihedral = 1.5, engines = "turboprop2", engineD = 4.2, engineLen = 15, tail = "T", hstabSpan = 27, finHeight = 16, finSweep = 32, gearLen = 3, windows = true, thrust = 5.4, maxKts = 280, stallKts = 85, vrKts = 102, flapMaxKts = 180, pitchRate = 0.55, rollRate = 1.1, yawRate = 0.3, turnBoost = 2.2, groundSteer = 0.6, brakeDecel = 7, stallSink = 40, maxRotate = 12, ceilingFt = 25000, maxTouchdownFpm = 1150,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1f5fbf"), tail = Color3.fromHex("1f5fbf"), engine = Color3.fromHex("f3f5f8") } },
@@ -14583,7 +14590,7 @@ local PLANES: { [string]: any } = {
 		colors = { body = Color3.fromHex("8e98a3"), accent = Color3.fromHex("6b737d"), tail = Color3.fromHex("78808a"), engine = Color3.fromHex("3c3c41") } },
 }
 
-local ORDER = { "C172", "ATR72", "LEAR75", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "F16" }
+local ORDER = { "C172", "ATR72", "LEAR75", "CRJ900", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "F16" }
 
 for id, c in PLANES do
 	c.id = id
@@ -14617,6 +14624,7 @@ return {
 		news_tashkent = "",
 		plane_C172 = "",
 		plane_ATR72 = "",
+		plane_CRJ900 = "",
 		plane_A220 = "",
 		plane_B777 = "",
 		plane_LEAR75 = "",
@@ -19753,7 +19761,7 @@ function Ui.new(cb: Callbacks)
 	local cats = {
 		{ "BOEING", { "B737", "B787", "B777", "B747" } },
 		{ "AIRBUS", { "A220", "A320", "A330", "A350", "A380" } },
-		{ "GULFSTREAM · BOMBARDIER · LEARJET", { "G650", "GL7500", "LEAR75" } },
+		{ "GULFSTREAM · BOMBARDIER · LEARJET", { "G650", "GL7500", "CRJ900", "LEAR75" } },
 		{ "ATR · ТУРБОВИНТОВЫЕ", { "ATR72" } },
 		{ "CESSNA", { "C172" } },
 		{ "ВОЕННЫЕ", { "F16" } },

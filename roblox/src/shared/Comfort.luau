@@ -6,7 +6,9 @@ local Comfort = {}
 
 -- сколько пассажиров на борту (0 — у истребителя)
 function Comfort.passengers(c: any): number
-	if c.id == "F16" then
+	if c.pax then
+		return c.pax
+	elseif c.id == "F16" then
 		return 0
 	elseif c.engines == "prop" then
 		return 3

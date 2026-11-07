@@ -596,9 +596,11 @@ function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, 
 	local function leg(x: number, z: number, wheels: number, bogie: boolean?)
 		local top = -D * 0.35
 		cylY(ctx, "Strut", top - wheelY, math.max(0.25, wheelR * 0.35), Vector3.new(x, (top + wheelY) / 2, z), METAL, gearFolder)
-		local rows = if bogie then { -wheelR * 1.15, wheelR * 1.15 } else { 0 }
+		-- у Boeing 777 тележки на шесть колёс (три пары подряд)
+		local triple = bogie and cfg.id == "B777"
+		local rows = if triple then { -wheelR * 2.3, 0, wheelR * 2.3 } elseif bogie then { -wheelR * 1.15, wheelR * 1.15 } else { 0 }
 		if bogie then
-			block(ctx, "Bogie", Vector3.new(wheelW * 0.5, wheelR * 0.4, wheelR * 3.2), CFrame.new(x, wheelY, z), METAL, Enum.Material.Metal, gearFolder)
+			block(ctx, "Bogie", Vector3.new(wheelW * 0.5, wheelR * 0.4, wheelR * (if triple then 5.6 else 3.2)), CFrame.new(x, wheelY, z), METAL, Enum.Material.Metal, gearFolder)
 		end
 		for _, dzz in rows do
 			for k = 1, wheels do

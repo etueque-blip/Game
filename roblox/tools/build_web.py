@@ -1046,6 +1046,8 @@ def main():
     s = add_route(s, patch)
     from web_fail import add_fail
     s = add_fail(s, patch)
+    from web_crj import add_crj
+    s = add_crj(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)
