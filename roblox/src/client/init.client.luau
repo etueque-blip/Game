@@ -1120,6 +1120,36 @@ do
 	end)
 end
 
+-- ===== фотоохота: в фото-режиме объект в центре кадра — сообщаем серверу (он проверит и начислит)
+do
+	local Landmarks = require(Shared:WaitForChild("Landmarks"))
+	local PhotoR = R("Photo")
+	local sent: { [string]: boolean } = {}
+	local acc = 0
+	RunService.RenderStepped:Connect(function(dt)
+		if not photoMode or not flight then
+			return
+		end
+		acc += dt
+		if acc < 0.4 then
+			return
+		end
+		acc = 0
+		local have: { [string]: boolean } = {}
+		for id in string.gmatch(tostring(Players.LocalPlayer:GetAttribute("Photos") or ""), "[^,]+") do
+			have[id] = true
+		end
+		for id in sent do
+			have[id] = true
+		end
+		local l = Landmarks.inFrame(workspace.CurrentCamera.CFrame, have)
+		if l then
+			sent[l.id] = true
+			PhotoR:FireServer(l.id)
+		end
+	end)
+end
+
 -- ===== обзорные радары аэропортов: антенна вращается (~10 об/мин)
 do
 	local dishes: { { p: BasePart, pivot: CFrame, off: CFrame } } = {}

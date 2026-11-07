@@ -54,6 +54,8 @@ local DailyRemote = remote("DailyTask")
 local TrickRemote = remote("Trick")
 local FlightLogRemote = remote("FlightLog")
 local ChallengeRemote = remote("Challenge")
+local PhotoRemote = remote("Photo")
+local Landmarks = require(Shared:WaitForChild("Landmarks"))
 local Challenge = require(Shared:WaitForChild("Challenge"))
 remotes.Parent = ReplicatedStorage
 
@@ -351,6 +353,26 @@ ChallengeRemote.OnServerEvent:Connect(function(p, apId, score)
 	a.challengeDone = true
 	if Scores.challenge(p, apId, math.clamp(math.round(score), 0, 100)) then
 		Notify:FireClient(p, string.format("🎯 Новый рекорд посадочного вызова: %d/100", math.clamp(math.round(score), 0, 100)), "green")
+	end
+end)
+
+-- фотоохота: клиент сообщает, что объект в кадре; сервер проверяет, что самолёт рядом (с запасом на камеру-орбиту)
+PhotoRemote.OnServerEvent:Connect(function(p, id)
+	local a = active[p]
+	local l = type(id) == "string" and Landmarks.BY_ID[id]
+	if not a or a.crashed or not l or not a.root then
+		return
+	end
+	if (a.root.Position - Vector3.new(l.x, l.y, l.z)).Magnitude > Landmarks.RANGE + 600 then
+		return
+	end
+	local new, n = Scores.photo(p, id)
+	if new then
+		Scores.add(p, Landmarks.REWARD, false)
+		Notify:FireClient(p, string.format("📸 В кадре: %s (%s) · +%d · %d/%d", l.name, l.city, Landmarks.REWARD, n, #Landmarks.LIST), "green")
+		if n >= 10 then
+			award(p, "photographer")
+		end
 	end
 end)
 

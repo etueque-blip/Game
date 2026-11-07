@@ -11,7 +11,7 @@ pcall(function()
 	store = DataStoreService:GetDataStore("SkyPilot_v1")
 end)
 
-type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean }, log: { any }, tot: { [string]: number }, chal: { [string]: number } }
+type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean }, log: { any }, tot: { [string]: number }, chal: { [string]: number }, photos: { [string]: boolean } }
 local function newTot(): { [string]: number }
 	return { flights = 0, time = 0, landings = 0, dist = 0, perfect = 0, crashes = 0 }
 end
@@ -30,7 +30,7 @@ local function stat(p: Player, name: string, value: number)
 end
 
 function Scores.get(p: Player): Data
-	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {} }
+	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {}, photos = {} }
 end
 
 local function refresh(p: Player)
@@ -63,6 +63,12 @@ local function refresh(p: Player)
 	end
 	table.sort(ch)
 	p:SetAttribute("Chal", table.concat(ch, ","))
+	local ph = {}
+	for k in d.photos do
+		table.insert(ph, k)
+	end
+	table.sort(ph)
+	p:SetAttribute("Photos", table.concat(ph, ","))
 end
 
 function Scores.load(p: Player)
@@ -74,7 +80,7 @@ function Scores.load(p: Player)
 		v.Parent = ls
 	end
 	ls.Parent = p
-	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {} }
+	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {}, photos = {} }
 	if store then
 		local ok, res = pcall(function()
 			return (store :: DataStore):GetAsync(key(p))
@@ -104,7 +110,7 @@ function Scores.load(p: Player)
 					data.tot[k] = tonumber(res.tot[k]) or 0
 				end
 			end
-			for _, field in { "ach", "visited", "daily" } do
+			for _, field in { "ach", "visited", "daily", "photos" } do
 				if type(res[field]) == "table" then
 					for k, v in res[field] do
 						if type(k) == "string" and v == true then
@@ -185,6 +191,21 @@ function Scores.visit(p: Player, apId: string): number
 		n += 1
 	end
 	return n
+end
+
+-- фотоохота: true, если достопримечательность снята впервые; второе значение — сколько всего
+function Scores.photo(p: Player, id: string): (boolean, number)
+	local d = cache[p]
+	if not d or d.photos[id] then
+		return false, 0
+	end
+	d.photos[id] = true
+	local n = 0
+	for _ in d.photos do
+		n += 1
+	end
+	refresh(p)
+	return true, n
 end
 
 -- рекорд посадочного вызова: true, если новый

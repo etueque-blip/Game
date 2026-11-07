@@ -503,6 +503,7 @@ function Ui.new(cb: Callbacks)
 	local bAch = button(navRow, "🏆 Достижения", { ZIndex = 23, LayoutOrder = -1 })
 	local bDaily = button(navRow, "📋 Задания", { ZIndex = 23, LayoutOrder = -2 })
 	local bLog = button(navRow, "📒", { ZIndex = 23, LayoutOrder = -5 }) -- бортовой журнал (коротко: ряд кнопок узкий)
+	local bHunt = button(navRow, "📸", { ZIndex = 23, LayoutOrder = -6 }) -- фотоохота
 	-- уровень сложности: «Обычный» — без перегрузки и поломок, «Сложный» — перегрузка G, повреждения, поломки
 	local hard = player:GetAttribute("HardMode") == true
 	local bHard = button(navRow, "", { ZIndex = 23, LayoutOrder = -3 })
@@ -1112,6 +1113,52 @@ function Ui.new(cb: Callbacks)
 	bLog.Activated:Connect(function()
 		renderLog()
 		lgO.Visible = true
+	end)
+
+	-- 📸 фотоохота: коллекция достопримечательностей (атрибут Photos от сервера)
+	local LandmarksM = require(Shared:WaitForChild("Landmarks"))
+	local hO, hS = overlay("PhotoHunt", 660)
+	h2(hS, "📸 Фотоохота", nil, 1)
+	local hSub = para(hS, "", 2)
+	local hGrid = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 360), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 3, ZIndex = 22 }, hS)
+	new("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 62), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, hGrid)
+	local hCells: { [string]: { box: Frame, ic: TextLabel, st: UIStroke } } = {}
+	for i, l in LandmarksM.LIST do
+		local c = new("Frame", { BackgroundColor3 = Color3.fromRGB(24, 32, 50), LayoutOrder = i, ZIndex = 23 }, hGrid)
+		corner(c, 12)
+		local st = new("UIStroke", { Color = C.line, Transparency = 0.86, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, c)
+		local ic = new("TextLabel", { Size = UDim2.fromOffset(36, 62), Position = UDim2.fromOffset(6, 0), BackgroundTransparency = 1, Font = FONT, TextSize = 20, Text = "🔒", ZIndex = 24 }, c)
+		new("TextLabel", { Size = UDim2.new(1, -48, 0, 34), Position = UDim2.fromOffset(44, 6), BackgroundTransparency = 1, Font = FONT, TextSize = 13, TextColor3 = C.fg, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = l.name, ZIndex = 24 }, c)
+		new("TextLabel", { Size = UDim2.new(1, -48, 0, 14), Position = UDim2.fromOffset(44, 42), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 11, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = l.city .. " · +" .. LandmarksM.REWARD, ZIndex = 24 }, c)
+		hCells[l.id] = { box = c, ic = ic, st = st }
+	end
+	local hRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, hS)
+	local hClose = button(hRow, "Понятно", { ZIndex = 23 })
+	primary(hClose)
+	hClose.Activated:Connect(function()
+		hO.Visible = false
+	end)
+	local function renderHunt()
+		local have: { [string]: boolean } = {}
+		local n = 0
+		for id in string.gmatch(tostring(player:GetAttribute("Photos") or ""), "[^,]+") do
+			have[id] = true
+			n += 1
+		end
+		for id, c in hCells do
+			local on = have[id] == true
+			c.ic.Text = if on then "📸" else "🔒"
+			c.st.Color = if on then C.gold else C.line
+			c.st.Transparency = if on then 0.2 else 0.86
+		end
+		hSub.Text = string.format("Снято %d из %d. Подлети к достопримечательности, включи фото-режим (H) и поверни камеру так, чтобы она была в центре кадра (ближе ~800 м).", n, #LandmarksM.LIST)
+		bHunt.Text = string.format("📸 %d", n)
+	end
+	renderHunt()
+	player:GetAttributeChangedSignal("Photos"):Connect(renderHunt)
+	bHunt.Activated:Connect(function()
+		renderHunt()
+		hO.Visible = true
 	end)
 
 	-- карта мира (K): фон по рельефу (строится при первом открытии), аэропорты, города, самолёт

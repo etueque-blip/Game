@@ -1,6 +1,6 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
-<Item class="Workspace" referent="RBX00000019"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
-<Item class="ReplicatedStorage" referent="RBX0000001A"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX0000000D"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Achievements</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="Workspace" referent="RBX0000001A"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX0000001B"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX0000000E"><Properties><string name="Name">SkyPilot</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Achievements</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Достижения: общий список для сервера (проверка, сохранение, награда) и клиента (экран, уведомления).
 -- Тот же список — в веб-версии (tools/web_premium.py, ACH_JS).
 local Achievements = {}
@@ -20,6 +20,7 @@ Achievements.LIST: { Ach } = {
 	{ id = "race", icon = "🏁", title = "Гонщик", desc = "Пройди все кольца гонки", reward = 500 },
 	{ id = "ace", icon = "⚡", title = "Ас", desc = "Выдержи 8 G на F-16", reward = 400, client = true },
 	{ id = "heavy", icon = "🐘", title = "Тяжеловес", desc = "Посади Airbus A380 или Boeing 747", reward = 300 },
+	{ id = "photographer", icon = "📸", title = "Фотограф", desc = "Сними 10 достопримечательностей в фото-режиме", reward = 1000 },
 	{ id = "one_engine", icon = "🔥", title = "Один мотор", desc = "Посади самолёт с отказавшим двигателем", reward = 600, client = true },
 }
 
@@ -13724,7 +13725,59 @@ end
 
 return Guide
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">Landmarks</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Фотоохота: достопримечательности городов (координаты — как в tools/gen_cities.py). Тот же список — tools/web_photohunt.py.
+-- Засчитывается, если в фото-режиме объект ближе 1600 stud и в пределах 28° от центра кадра; +200 за каждую новую.
+local Landmarks = {}
+
+Landmarks.LIST = {
+	{ id = "burj", name = "Бурдж-Халифа", city = "Дубай", x = 5500, y = 600, z = -7500 },
+	{ id = "future", name = "Музей будущего", city = "Дубай", x = 6120, y = 40, z = -8060 },
+	{ id = "aindubai", name = "Ain Dubai", city = "Дубай", x = 6400, y = 250, z = -8850 },
+	{ id = "bigben", name = "Биг-Бен", city = "Лондон", x = -4760, y = 90, z = 12275 },
+	{ id = "eye", name = "Лондонский глаз", city = "Лондон", x = -4560, y = 120, z = 12565 },
+	{ id = "shard", name = "Шард", city = "Лондон", x = -3680, y = 300, z = 12854 },
+	{ id = "tbridge", name = "Тауэрский мост", city = "Лондон", x = -3300, y = 40, z = 12619 },
+	{ id = "tvtash", name = "Ташкентская телебашня", city = "Ташкент", x = 11100, y = 360, z = 3520 },
+	{ id = "sofia", name = "Айя-София", city = "Стамбул", x = -21020, y = 60, z = 20800 },
+	{ id = "blue", name = "Голубая мечеть", city = "Стамбул", x = -21020, y = 60, z = 20240 },
+	{ id = "galata", name = "Галатская башня", city = "Стамбул", x = -19900, y = 60, z = 20080 },
+	{ id = "kingdom", name = "Kingdom Centre", city = "Эр-Рияд", x = 20850, y = 300, z = 20350 },
+	{ id = "masmak", name = "Крепость Масмак", city = "Эр-Рияд", x = 20480, y = 20, z = 20960 },
+	{ id = "tvriyadh", name = "Телебашня Эр-Рияда", city = "Эр-Рияд", x = 21560, y = 160, z = 20000 },
+	{ id = "registan", name = "Регистан", city = "Самарканд", x = -21000, y = 40, z = -20500 },
+	{ id = "gur", name = "Гур-Эмир", city = "Самарканд", x = -20480, y = 50, z = -20080 },
+	{ id = "bibi", name = "Биби-Ханым", city = "Самарканд", x = -21500, y = 50, z = -20030 },
+}
+Landmarks.RANGE = 1600
+Landmarks.CONE = math.cos(math.rad(28))
+Landmarks.REWARD = 200
+
+Landmarks.BY_ID = {} :: { [string]: any }
+for _, l in Landmarks.LIST do
+	Landmarks.BY_ID[l.id] = l
+end
+
+-- какая достопримечательность «в кадре» камеры (или nil)
+function Landmarks.inFrame(camCF: CFrame, have: { [string]: boolean }): any?
+	local best, bestDot = nil, Landmarks.CONE
+	for _, l in Landmarks.LIST do
+		if not have[l.id] then
+			local d = Vector3.new(l.x, l.y, l.z) - camCF.Position
+			if d.Magnitude < Landmarks.RANGE then
+				local dot = camCF.LookVector:Dot(d.Unit)
+				if dot > bestDot then
+					best, bestDot = l, dot
+				end
+			end
+		end
+	end
+	return best
+end
+
+return Landmarks
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит модель самолёта из обычных деталей Roblox по PlaneConfigs.
 -- Оси модели: нос -Z, верх +Y, правое крыло +X. Корень (Root) — центр фюзеляжа,
 -- он стоит на высоте gearHeight над землёй, когда шасси касается полосы.
@@ -14533,7 +14586,7 @@ end
 
 return PlaneBuilder
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">PlaneConfigs</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Те же PlaneConfigs, что и в HTML-полигоне Sky Pilot (1 stud/s = 1 kt, 1 stud = 1.69 ft).
 local WHITE = Color3.fromHex("f3f5f8")
 local GREY = Color3.fromHex("c4c8ce")
@@ -14641,7 +14694,7 @@ return {
 	} :: { [string]: string },
 }
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Данные мира. Один и тот же модуль используют сервер (строит визуал) и клиент (физика),
 -- поэтому рельеф, полосы и здания всегда совпадают с тем, что видно на экране.
 local PlaneConfigs = require(script.Parent.PlaneConfigs)
@@ -14980,7 +15033,7 @@ return World
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX0000001B"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000011"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ServerScriptService" referent="RBX0000001C"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000012"><Properties><string name="Name">SkyPilotServer</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — сервер: мир, выдача самолётов, посадка пилота, очки, крушения, ИИ-трафик.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15036,6 +15089,8 @@ local DailyRemote = remote("DailyTask")
 local TrickRemote = remote("Trick")
 local FlightLogRemote = remote("FlightLog")
 local ChallengeRemote = remote("Challenge")
+local PhotoRemote = remote("Photo")
+local Landmarks = require(Shared:WaitForChild("Landmarks"))
 local Challenge = require(Shared:WaitForChild("Challenge"))
 remotes.Parent = ReplicatedStorage
 
@@ -15336,6 +15391,26 @@ ChallengeRemote.OnServerEvent:Connect(function(p, apId, score)
 	end
 end)
 
+-- фотоохота: клиент сообщает, что объект в кадре; сервер проверяет, что самолёт рядом (с запасом на камеру-орбиту)
+PhotoRemote.OnServerEvent:Connect(function(p, id)
+	local a = active[p]
+	local l = type(id) == "string" and Landmarks.BY_ID[id]
+	if not a or a.crashed or not l or not a.root then
+		return
+	end
+	if (a.root.Position - Vector3.new(l.x, l.y, l.z)).Magnitude > Landmarks.RANGE + 600 then
+		return
+	end
+	local new, n = Scores.photo(p, id)
+	if new then
+		Scores.add(p, Landmarks.REWARD, false)
+		Notify:FireClient(p, string.format("📸 В кадре: %s (%s) · +%d · %d/%d", l.name, l.city, Landmarks.REWARD, n, #Landmarks.LIST), "green")
+		if n >= 10 then
+			award(p, "photographer")
+		end
+	end
+end)
+
 -- бортовой журнал: проверяем типы и обрезаем значения, не чаще раза в 3 с
 local logAt: { [Player]: number } = {}
 FlightLogRemote.OnServerEvent:Connect(function(p, e)
@@ -15615,7 +15690,7 @@ end
 if AI_TRAFFIC_COUNT > 0 then
 	AITraffic.start(AI_TRAFFIC_COUNT)
 end
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">AITraffic</string><ProtectedString name="Source"><![CDATA[--!strict
 -- ИИ-пилоты (боты-«агенты»): летают по маршрутам между аэропортами и городом
 -- на той же физике, что и игроки, управляются автопилотом.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15706,7 +15781,7 @@ end
 
 return AITraffic
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Scores</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Очки и статистика игрока (leaderstats + DataStore, если включён доступ к API).
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
@@ -15719,7 +15794,7 @@ pcall(function()
 	store = DataStoreService:GetDataStore("SkyPilot_v1")
 end)
 
-type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean }, log: { any }, tot: { [string]: number }, chal: { [string]: number } }
+type Data = { score: number, landings: number, best: number, flights: number, ach: { [string]: boolean }, visited: { [string]: boolean }, dailyKey: number, daily: { [string]: boolean }, log: { any }, tot: { [string]: number }, chal: { [string]: number }, photos: { [string]: boolean } }
 local function newTot(): { [string]: number }
 	return { flights = 0, time = 0, landings = 0, dist = 0, perfect = 0, crashes = 0 }
 end
@@ -15738,7 +15813,7 @@ local function stat(p: Player, name: string, value: number)
 end
 
 function Scores.get(p: Player): Data
-	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {} }
+	return cache[p] or { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {}, photos = {} }
 end
 
 local function refresh(p: Player)
@@ -15771,6 +15846,12 @@ local function refresh(p: Player)
 	end
 	table.sort(ch)
 	p:SetAttribute("Chal", table.concat(ch, ","))
+	local ph = {}
+	for k in d.photos do
+		table.insert(ph, k)
+	end
+	table.sort(ph)
+	p:SetAttribute("Photos", table.concat(ph, ","))
 end
 
 function Scores.load(p: Player)
@@ -15782,7 +15863,7 @@ function Scores.load(p: Player)
 		v.Parent = ls
 	end
 	ls.Parent = p
-	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {} }
+	local data: Data = { score = 0, landings = 0, best = 0, flights = 0, ach = {}, visited = {}, dailyKey = 0, daily = {}, log = {}, tot = newTot(), chal = {}, photos = {} }
 	if store then
 		local ok, res = pcall(function()
 			return (store :: DataStore):GetAsync(key(p))
@@ -15812,7 +15893,7 @@ function Scores.load(p: Player)
 					data.tot[k] = tonumber(res.tot[k]) or 0
 				end
 			end
-			for _, field in { "ach", "visited", "daily" } do
+			for _, field in { "ach", "visited", "daily", "photos" } do
 				if type(res[field]) == "table" then
 					for k, v in res[field] do
 						if type(k) == "string" and v == true then
@@ -15895,6 +15976,21 @@ function Scores.visit(p: Player, apId: string): number
 	return n
 end
 
+-- фотоохота: true, если достопримечательность снята впервые; второе значение — сколько всего
+function Scores.photo(p: Player, id: string): (boolean, number)
+	local d = cache[p]
+	if not d or d.photos[id] then
+		return false, 0
+	end
+	d.photos[id] = true
+	local n = 0
+	for _ in d.photos do
+		n += 1
+	end
+	refresh(p)
+	return true, n
+end
+
 -- рекорд посадочного вызова: true, если новый
 function Scores.challenge(p: Player, apId: string, score: number): boolean
 	local d = cache[p]
@@ -15958,7 +16054,7 @@ end)
 
 return Scores
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит визуальный мир по данным World (сервер, один раз при старте).
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16873,7 +16969,7 @@ return WorldBuilder
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX0000001D"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX0000001C"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000018"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="StarterPlayer" referent="RBX0000001E"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX0000001D"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000019"><Properties><string name="Name">SkyPilotClient</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Sky Pilot — клиент: локальная физика полёта (как FlightClient), ввод, камера, приборы.
 -- Самолёт принадлежит игроку по сети (SetNetworkOwner), поэтому управление без задержки,
 -- а другие игроки видят движение через обычную репликацию физики Roblox.
@@ -17995,6 +18091,36 @@ do
 	end)
 end
 
+-- ===== фотоохота: в фото-режиме объект в центре кадра — сообщаем серверу (он проверит и начислит)
+do
+	local Landmarks = require(Shared:WaitForChild("Landmarks"))
+	local PhotoR = R("Photo")
+	local sent: { [string]: boolean } = {}
+	local acc = 0
+	RunService.RenderStepped:Connect(function(dt)
+		if not photoMode or not flight then
+			return
+		end
+		acc += dt
+		if acc < 0.4 then
+			return
+		end
+		acc = 0
+		local have: { [string]: boolean } = {}
+		for id in string.gmatch(tostring(Players.LocalPlayer:GetAttribute("Photos") or ""), "[^,]+") do
+			have[id] = true
+		end
+		for id in sent do
+			have[id] = true
+		end
+		local l = Landmarks.inFrame(workspace.CurrentCamera.CFrame, have)
+		if l then
+			sent[l.id] = true
+			PhotoR:FireServer(l.id)
+		end
+	end)
+end
+
 -- ===== обзорные радары аэропортов: антенна вращается (~10 об/мин)
 do
 	local dishes: { { p: BasePart, pivot: CFrame, off: CFrame } } = {}
@@ -18515,7 +18641,7 @@ do
 		infoRows[3].Text = tostring(math.round(vsSmooth / 10) * 10)
 	end)
 end
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Локальная анимация всех самолётов (своих, чужих и ИИ): винт, огни, шасси, закрылки,
 -- инверсионный след, форсаж. Состояние приходит атрибутами модели от сервера,
 -- а для своего самолёта — прямо из локальной физики (без задержки сети).
@@ -18682,7 +18808,7 @@ end
 
 return Animator
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Камеры: сзади (плавная), кабина, орбита. Плюс облёт аэропорта в ангаре.
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18798,7 +18924,7 @@ end
 
 return CameraRig
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Ввод: клавиатура, геймпад, сенсорный штурвал и мышь-штурвал -> общий ввод физики.
 local UserInputService = game:GetService("UserInputService")
 
@@ -18907,7 +19033,7 @@ end
 
 return Controls
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">Race</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Гонка через кольца: маршрут Skyport → Дубай → Ташкент → Лондон → Skyport.
 -- Кольца строятся у каждого игрока локально, поэтому подсветка своя у каждого.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19035,7 +19161,7 @@ end
 
 return Race
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">Radar</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Радар: курс вверх, радиус 12 000 stud (~6 км). Аэропорты, города, самолёты, следующее кольцо.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -19231,7 +19357,7 @@ end
 
 return Radar
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Интерфейс Sky Pilot: верхняя панель, приборы, авиагоризонт, ангар, справка,
 -- экран крушения и сенсорное управление (штурвал, РУД, кнопки).
 local Players = game:GetService("Players")
@@ -19736,6 +19862,7 @@ function Ui.new(cb: Callbacks)
 	local bAch = button(navRow, "🏆 Достижения", { ZIndex = 23, LayoutOrder = -1 })
 	local bDaily = button(navRow, "📋 Задания", { ZIndex = 23, LayoutOrder = -2 })
 	local bLog = button(navRow, "📒", { ZIndex = 23, LayoutOrder = -5 }) -- бортовой журнал (коротко: ряд кнопок узкий)
+	local bHunt = button(navRow, "📸", { ZIndex = 23, LayoutOrder = -6 }) -- фотоохота
 	-- уровень сложности: «Обычный» — без перегрузки и поломок, «Сложный» — перегрузка G, повреждения, поломки
 	local hard = player:GetAttribute("HardMode") == true
 	local bHard = button(navRow, "", { ZIndex = 23, LayoutOrder = -3 })
@@ -20345,6 +20472,52 @@ function Ui.new(cb: Callbacks)
 	bLog.Activated:Connect(function()
 		renderLog()
 		lgO.Visible = true
+	end)
+
+	-- 📸 фотоохота: коллекция достопримечательностей (атрибут Photos от сервера)
+	local LandmarksM = require(Shared:WaitForChild("Landmarks"))
+	local hO, hS = overlay("PhotoHunt", 660)
+	h2(hS, "📸 Фотоохота", nil, 1)
+	local hSub = para(hS, "", 2)
+	local hGrid = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 360), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 3, ZIndex = 22 }, hS)
+	new("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 62), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, hGrid)
+	local hCells: { [string]: { box: Frame, ic: TextLabel, st: UIStroke } } = {}
+	for i, l in LandmarksM.LIST do
+		local c = new("Frame", { BackgroundColor3 = Color3.fromRGB(24, 32, 50), LayoutOrder = i, ZIndex = 23 }, hGrid)
+		corner(c, 12)
+		local st = new("UIStroke", { Color = C.line, Transparency = 0.86, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, c)
+		local ic = new("TextLabel", { Size = UDim2.fromOffset(36, 62), Position = UDim2.fromOffset(6, 0), BackgroundTransparency = 1, Font = FONT, TextSize = 20, Text = "🔒", ZIndex = 24 }, c)
+		new("TextLabel", { Size = UDim2.new(1, -48, 0, 34), Position = UDim2.fromOffset(44, 6), BackgroundTransparency = 1, Font = FONT, TextSize = 13, TextColor3 = C.fg, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Text = l.name, ZIndex = 24 }, c)
+		new("TextLabel", { Size = UDim2.new(1, -48, 0, 14), Position = UDim2.fromOffset(44, 42), BackgroundTransparency = 1, Font = FONT_BODY, TextSize = 11, TextColor3 = C.dim, TextXAlignment = Enum.TextXAlignment.Left, Text = l.city .. " · +" .. LandmarksM.REWARD, ZIndex = 24 }, c)
+		hCells[l.id] = { box = c, ic = ic, st = st }
+	end
+	local hRow = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 22 }, hS)
+	local hClose = button(hRow, "Понятно", { ZIndex = 23 })
+	primary(hClose)
+	hClose.Activated:Connect(function()
+		hO.Visible = false
+	end)
+	local function renderHunt()
+		local have: { [string]: boolean } = {}
+		local n = 0
+		for id in string.gmatch(tostring(player:GetAttribute("Photos") or ""), "[^,]+") do
+			have[id] = true
+			n += 1
+		end
+		for id, c in hCells do
+			local on = have[id] == true
+			c.ic.Text = if on then "📸" else "🔒"
+			c.st.Color = if on then C.gold else C.line
+			c.st.Transparency = if on then 0.2 else 0.86
+		end
+		hSub.Text = string.format("Снято %d из %d. Подлети к достопримечательности, включи фото-режим (H) и поверни камеру так, чтобы она была в центре кадра (ближе ~800 м).", n, #LandmarksM.LIST)
+		bHunt.Text = string.format("📸 %d", n)
+	end
+	renderHunt()
+	player:GetAttributeChangedSignal("Photos"):Connect(renderHunt)
+	bHunt.Activated:Connect(function()
+		renderHunt()
+		hO.Visible = true
 	end)
 
 	-- карта мира (K): фон по рельефу (строится при первом открытии), аэропорты, города, самолёт

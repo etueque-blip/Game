@@ -478,7 +478,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   <div id="nav" hidden></div>
   <div id="route" hidden></div>
   <div id="gm" hidden></div>
-  <div id="photoBar" hidden><b>📷 Фото-режим</b><span>Пауза · крути камеру мышью или пальцем, колесо — зум</span><button class="tb primary" id="photoSave">Сохранить фото</button><button class="tb" id="photoExit">Выйти (H)</button></div>
+  <div id="photoBar" hidden><b>📷 Фото-режим</b><span>Пауза · крути камеру мышью или пальцем, колесо — зум · 📸 наведи на достопримечательность</span><button class="tb primary" id="photoSave">Сохранить фото</button><button class="tb" id="photoExit">Выйти (H)</button></div>
   <div id="pax" hidden></div>
   <div id="lrep" hidden></div>
   <div id="gfx"></div>
@@ -524,13 +524,13 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
       </div>
       <div class="mh">Что нового</div>
       <div class="news">
-        <div class="ncard" data-ph="mode_race"><span class="tag">Новое</span><b>🏆 Достижения</b><i>13 целей: мягкая посадка, все аэропорты, Ас на F-16…</i></div>
+        <div class="ncard" data-ph="mode_race"><span class="tag">Новое</span><b>🏆 Достижения</b><i>14 целей: мягкая посадка, все аэропорты, Ас на F-16…</i></div>
         <div class="ncard" data-ph="mode_career"><b>Перегрузка G и fly-by-wire</b><i>Пределы конструкции, тряска, поломки закрылков и шасси</i></div>
         <div class="ncard" data-ph="plane_A380"><b>Boeing, Airbus, Gulfstream</b><i>14 настоящих моделей и 6 ливрей</i></div>
         <div class="ncard" data-ph="news_airports"><b>8 аэропортов</b><i>Стамбул, Эр-Рияд, Самарканд и другие</i></div>
         <div class="ncard" data-ph="mode_race"><b>Гонка колец</b><i>Под Тауэрским мостом</i></div>
       </div>
-      <div class="mbar"><button class="tb primary" id="mPlay">Полёт</button><button class="tb" id="mSet">⚙ Настройки</button><button class="tb" id="mHard"></button><button class="tb" id="mHelp2">Клавиши</button><button class="tb" id="mDaily">📋 Задания дня</button><button class="tb" id="mLog">📒 Журнал</button><button class="tb" id="mAch">🏆 Достижения</button><span class="who" id="mBest"></span></div>
+      <div class="mbar"><button class="tb primary" id="mPlay">Полёт</button><button class="tb" id="mSet">⚙ Настройки</button><button class="tb" id="mHard"></button><button class="tb" id="mHelp2">Клавиши</button><button class="tb" id="mDaily">📋 Задания дня</button><button class="tb" id="mLog">📒 Журнал</button><button class="tb" id="mHunt">📸 Фотоохота</button><button class="tb" id="mAch">🏆 Достижения</button><span class="who" id="mBest"></span></div>
     </div>
   </div>
   <div class="overlay" id="flow" hidden>
@@ -603,6 +603,14 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
     </div>
   </div>
   <style>.pbtns { display: grid; gap: 8px; margin-top: 6px; } .pbtns .tb { width: 100%; justify-content: center; font-size: 15px; padding: 11px 16px; } .pbtns small { opacity: .6; margin-left: 6px; font-size: 11px; }</style>
+  <div class="overlay" id="huntO" style="z-index:40" hidden>
+    <div class="sheet">
+      <h2>📸 Фотоохота</h2>
+      <p id="huntSub"></p>
+      <div class="achg" id="huntG"></div>
+      <div class="row"><button class="tb primary" id="huntClose">Понятно</button></div>
+    </div>
+  </div>
   <div class="overlay" id="setO" style="z-index:40" hidden>
     <div class="sheet">
       <h2>⚙ Настройки</h2>
@@ -2201,7 +2209,7 @@ const ACH = [
   ["route", "🧳", "Рейс выполнен", "Долети до аэропорта назначения в режиме рейсов", 500], ["ten", "🔟", "Десять посадок", "Соверши 10 посадок", 500],
   ["airports", "🌍", "Все аэропорты", "Сядь во всех 8 аэропортах", 2000], ["high", "🛰", "Стратосфера", "Поднимись выше 35 000 ft", 300],
   ["night", "🌙", "Ночной пилот", "Посади самолёт ночью", 400], ["race", "🏁", "Гонщик", "Пройди все кольца гонки", 500],
-  ["ace", "⚡", "Ас", "Выдержи 8 G на F-16", 400], ["heavy", "🐘", "Тяжеловес", "Посади Airbus A380 или Boeing 747", 300], ["one_engine", "🔥", "Один мотор", "Посади самолёт с отказавшим двигателем", 600],
+  ["ace", "⚡", "Ас", "Выдержи 8 G на F-16", 400], ["heavy", "🐘", "Тяжеловес", "Посади Airbus A380 или Boeing 747", 300], ["one_engine", "🔥", "Один мотор", "Посади самолёт с отказавшим двигателем", 600], ["photographer", "📸", "Фотограф", "Сними 10 достопримечательностей в фото-режиме", 1000],
 ];
 const ACHS = (() => { try { const d = JSON.parse(localStorage.getItem("skypilot.ach") || "{}"); return { ids: d.ids || [], visited: d.visited || [] }; } catch (e) { return { ids: [], visited: [] }; } })();
 function achSave() { try { localStorage.setItem("skypilot.ach", JSON.stringify(ACHS)); } catch (e) {} }
@@ -2569,6 +2577,44 @@ function rainbowStep(dt, day) {
 function radarStep(dt, day) {
   if (window.__radars) for (const r of window.__radars) r.rotation.y += dt * 1.05;
   if (window.__towerCabs) for (const m of window.__towerCabs) m.emissiveIntensity = 0.55 * (1 - day);
+}
+
+// ===== фотоохота
+const LANDMARKS = [
+  ["burj", "Бурдж-Халифа", "Дубай", 5500, 600, -7500],
+  ["future", "Музей будущего", "Дубай", 6120, 40, -8060],
+  ["aindubai", "Ain Dubai", "Дубай", 6400, 250, -8850],
+  ["bigben", "Биг-Бен", "Лондон", -4760, 90, 12275],
+  ["eye", "Лондонский глаз", "Лондон", -4560, 120, 12565],
+  ["shard", "Шард", "Лондон", -3680, 300, 12854],
+  ["tbridge", "Тауэрский мост", "Лондон", -3300, 40, 12619],
+  ["tvtash", "Ташкентская телебашня", "Ташкент", 11100, 360, 3520],
+  ["sofia", "Айя-София", "Стамбул", -21020, 60, 20800],
+  ["blue", "Голубая мечеть", "Стамбул", -21020, 60, 20240],
+  ["galata", "Галатская башня", "Стамбул", -19900, 60, 20080],
+  ["kingdom", "Kingdom Centre", "Эр-Рияд", 20850, 300, 20350],
+  ["masmak", "Крепость Масмак", "Эр-Рияд", 20480, 20, 20960],
+  ["tvriyadh", "Телебашня Эр-Рияда", "Эр-Рияд", 21560, 160, 20000],
+  ["registan", "Регистан", "Самарканд", -21000, 40, -20500],
+  ["gur", "Гур-Эмир", "Самарканд", -20480, 50, -20080],
+  ["bibi", "Биби-Ханым", "Самарканд", -21500, 50, -20030]
+];
+const HUNT = (() => { try { return JSON.parse(localStorage.getItem("skypilot.photos") || "[]"); } catch (e) { return []; } })();
+let huntT = 0;
+function huntStep(dt) {
+  if (!PHOTO || !flight) return; huntT -= dt; if (huntT > 0) return; huntT = 0.4;
+  const fwd = new V3(0, 0, -1).applyQuaternion(camera.quaternion); let best = null, bd = Math.cos(28 * Math.PI / 180);
+  for (const l of LANDMARKS) { if (HUNT.includes(l[0])) continue; const d = new V3(l[3], l[4], l[5]).sub(camera.position), len = d.length(); if (len > 1600) continue; const dot = fwd.dot(d.divideScalar(len)); if (dot > bd) { best = l; bd = dot; } }
+  if (!best) return;
+  HUNT.push(best[0]); try { localStorage.setItem("skypilot.photos", JSON.stringify(HUNT)); } catch (e) {}
+  toast("📸 В кадре: " + best[1] + " (" + best[2] + ") · +200 · " + HUNT.length + "/" + LANDMARKS.length, "var(--gold)"); addScore(200, "фотоохота");
+  if (HUNT.length >= 10) achUnlock("photographer"); huntRender();
+}
+function huntRender() {
+  const b = $("mHunt"); if (b) b.textContent = "📸 Фотоохота " + HUNT.length + "/" + LANDMARKS.length;
+  const g = $("huntG"); if (!g) return;
+  g.innerHTML = LANDMARKS.map(([id, n, city]) => { const on = HUNT.includes(id); return '<div class="achc' + (on ? " on" : "") + '"><span class="ai">' + (on ? "📸" : "🔒") + '</span><b>' + n + '</b><small>' + city + '</small><em>+200</em></div>'; }).join("");
+  $("huntSub").textContent = "Снято " + HUNT.length + " из " + LANDMARKS.length + ". Подлети к достопримечательности, включи фото-режим (H) и поверни камеру так, чтобы она была в центре кадра (ближе ~800 м).";
 }
 function dayNight(dt) {
   socksStep();
@@ -3186,7 +3232,7 @@ function frame(t) {
       updateHUD(f);
     }
   }
-  updateParticles(dt);
+  updateParticles(dt); huntStep(dt);
   stepBots(dt);
   dayNight(dt);
   for (const d of debris) {
@@ -3364,6 +3410,7 @@ $("pGuide").onclick = () => { if (flight) showGuide(flight.cfg); };
 $("pMenu").onclick = () => { togglePause(false); openMenu(); };
 addEventListener("keydown", (e) => { if (e.code === "Escape" && !e.repeat) { if (!$("setO").hidden) $("setO").hidden = true; else if (flight && !flight.crashed && $("menu").hidden && $("flow").hidden) togglePause(); } });
 $("bPhoto") && $("bPhoto").insertAdjacentHTML("beforebegin", '<button class="tb" id="bPause">❚❚ Пауза</button>'); $("bPause") && ($("bPause").onclick = () => togglePause());
+$("mHunt").onclick = () => { huntRender(); $("huntO").hidden = false; }; $("huntClose").onclick = () => ($("huntO").hidden = true); huntRender();
 $("loading").hidden = true;
 requestAnimationFrame(frame);
 try { navigator.wakeLock && navigator.wakeLock.request("screen").catch(() => {}); } catch (e) {}
