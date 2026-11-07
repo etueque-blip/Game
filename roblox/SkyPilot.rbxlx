@@ -14623,6 +14623,9 @@ local PLANES: { [string]: any } = {
 		colors = { body = WHITE, accent = Color3.fromHex("d22828"), tail = Color3.fromHex("b4141e"), engine = GREY } },
 	A320 = { name = "Airbus A320neo", cls = "Узкофюзеляжный лайнер", length = 139, diameter = 13.5, span = 132, chord = 20, wing = "low", wingPos = 0.47, sweep = 25, dihedral = 5, engines = "wing2", engineD = 7.5, engineLen = 13, tail = "conventional", hstabSpan = 46, finHeight = 26, finSweep = 36, gearLen = 5, windows = true, winglets = true, thrust = 6.0, maxKts = 470, stallKts = 122, vrKts = 142, flapMaxKts = 230, pitchRate = 0.42, rollRate = 0.95, yawRate = 0.25, turnBoost = 2, groundSteer = 0.5, brakeDecel = 8, stallSink = 55, maxRotate = 12, ceilingFt = 39000, maxTouchdownFpm = 1200,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("0b2a6f"), tail = Color3.fromHex("0b2a6f"), engine = Color3.fromHex("c4c8ce") } },
+	-- четырёхмоторный дальнемагистральный (как в веб-версии, tools/web_a340.py)
+	A340 = { name = "Airbus A340-600", cls = "Четырёхмоторный дальнемагистральный", length = 269, diameter = 20, span = 227, chord = 33, wing = "low", wingPos = 0.46, sweep = 30, dihedral = 6, engines = "wing4", engineD = 9, engineLen = 18, tail = "conventional", hstabSpan = 74, finHeight = 46, finSweep = 40, gearLen = 7.5, windows = true, winglets = true, thrust = 5.2, maxKts = 480, stallKts = 135, vrKts = 160, flapMaxKts = 230, pitchRate = 0.3, rollRate = 0.66, yawRate = 0.18, turnBoost = 2, groundSteer = 0.42, brakeDecel = 8, stallSink = 64, maxRotate = 11, ceilingFt = 41000, maxTouchdownFpm = 1250,
+		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("7a1f3d"), tail = Color3.fromHex("5a1530"), engine = Color3.fromHex("c4c8ce") } },
 	A330 = { name = "Airbus A330-300", cls = "Широкофюзеляжный лайнер", length = 236, diameter = 20.5, span = 223, chord = 32, wing = "low", wingPos = 0.47, sweep = 30, dihedral = 6, engines = "wing2", engineD = 11.5, engineLen = 21, tail = "conventional", hstabSpan = 72, finHeight = 44, finSweep = 40, gearLen = 7.2, windows = true, winglets = true, thrust = 5.6, maxKts = 480, stallKts = 130, vrKts = 152, flapMaxKts = 230, pitchRate = 0.34, rollRate = 0.72, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 41000, maxTouchdownFpm = 1200,
 		colors = { body = Color3.fromHex("f3f5f8"), accent = Color3.fromHex("1a7f4b"), tail = Color3.fromHex("0f5a34"), engine = Color3.fromHex("c4c8ce") } },
 	A350 = { name = "Airbus A350-900", cls = "Широкофюзеляжный лайнер", length = 247, diameter = 21.5, span = 240, chord = 33, wing = "low", wingPos = 0.47, sweep = 32, dihedral = 6, engines = "wing2", engineD = 12, engineLen = 21, tail = "conventional", hstabSpan = 76, finHeight = 46, finSweep = 40, gearLen = 7.5, windows = true, winglets = true, mask = true, thrust = 5.8, maxKts = 490, stallKts = 128, vrKts = 150, flapMaxKts = 230, pitchRate = 0.34, rollRate = 0.74, yawRate = 0.2, turnBoost = 2, groundSteer = 0.45, brakeDecel = 8, stallSink = 60, maxRotate = 12, ceilingFt = 43000, maxTouchdownFpm = 1200,
@@ -14643,7 +14646,7 @@ local PLANES: { [string]: any } = {
 		colors = { body = Color3.fromHex("8e98a3"), accent = Color3.fromHex("6b737d"), tail = Color3.fromHex("78808a"), engine = Color3.fromHex("3c3c41") } },
 }
 
-local ORDER = { "C172", "ATR72", "LEAR75", "CRJ900", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A350", "B777", "B747", "A380", "F16" }
+local ORDER = { "C172", "ATR72", "LEAR75", "CRJ900", "G650", "GL7500", "B737", "A220", "A320", "B787", "A330", "A340", "A350", "B777", "B747", "A380", "F16" }
 
 for id, c in PLANES do
 	c.id = id
@@ -14665,6 +14668,12 @@ return {
 		{ id = "indigo", name = "Индиго Эр-Рияда", colors = { body = Color3.fromHex("3b1f6e"), accent = Color3.fromHex("a98be0"), tail = Color3.fromHex("2c1656"), engine = Color3.fromHex("3b1f6e") } },
 		{ id = "silk", name = "Небо Шёлкового пути", colors = { body = Color3.fromHex("fbfbfb"), accent = Color3.fromHex("0099b5"), tail = Color3.fromHex("0099b5"), engine = Color3.fromHex("1eb53a") } },
 		{ id = "graphite", name = "Ночной графит", colors = { body = Color3.fromHex("2b2f36"), accent = Color3.fromHex("ff7a1a"), tail = Color3.fromHex("1c1f24"), engine = Color3.fromHex("3a3f47") } },
+		{ id = "royal", name = "Королевский синий", colors = { body = Color3.fromHex("f4f5f7"), accent = Color3.fromHex("1c2c6b"), tail = Color3.fromHex("1c2c6b"), engine = Color3.fromHex("c8ccd3") } },
+		{ id = "sakura", name = "Сакура", colors = { body = Color3.fromHex("fbf8f9"), accent = Color3.fromHex("e07a9b"), tail = Color3.fromHex("c74f78"), engine = Color3.fromHex("f1e4ea") } },
+		{ id = "aurora", name = "Северное сияние", colors = { body = Color3.fromHex("f4f7f8"), accent = Color3.fromHex("1fb5a3"), tail = Color3.fromHex("5a3fa8"), engine = Color3.fromHex("e6ecef") } },
+		{ id = "retro", name = "Ретро 70-х", colors = { body = Color3.fromHex("f5f1e8"), accent = Color3.fromHex("d96b1f"), tail = Color3.fromHex("7a3b1c"), engine = Color3.fromHex("e8e0d0") } },
+		{ id = "emerald", name = "Изумрудный", colors = { body = Color3.fromHex("f3f6f4"), accent = Color3.fromHex("0f7a4a"), tail = Color3.fromHex("0b5a36"), engine = Color3.fromHex("dfe8e2") } },
+		{ id = "arctic", name = "Арктика", colors = { body = Color3.fromHex("ffffff"), accent = Color3.fromHex("7fc4e8"), tail = Color3.fromHex("4a9cd0"), engine = Color3.fromHex("f0f5f8") } },
 	},
 	-- Фото для меню и ангара. Файлы лежат в roblox/assets/photos/*.jpg — загрузите их в Studio
 	-- (Asset Manager → Bulk Import или Create → Decals) и вставьте сюда "rbxassetid://ЧИСЛО".
@@ -14678,6 +14687,7 @@ return {
 		plane_C172 = "",
 		plane_ATR72 = "",
 		plane_CRJ900 = "",
+		plane_A340 = "",
 		plane_A220 = "",
 		plane_B777 = "",
 		plane_LEAR75 = "",
@@ -20062,7 +20072,7 @@ function Ui.new(cb: Callbacks)
 	local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
 	local cats = {
 		{ "BOEING", { "B737", "B787", "B777", "B747" } },
-		{ "AIRBUS", { "A220", "A320", "A330", "A350", "A380" } },
+		{ "AIRBUS", { "A220", "A320", "A330", "A340", "A350", "A380" } },
 		{ "GULFSTREAM · BOMBARDIER · LEARJET", { "G650", "GL7500", "CRJ900", "LEAR75" } },
 		{ "ATR · ТУРБОВИНТОВЫЕ", { "ATR72" } },
 		{ "CESSNA", { "C172" } },

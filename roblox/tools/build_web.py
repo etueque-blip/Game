@@ -1056,6 +1056,8 @@ def main():
     s = add_pause(s, patch)
     from web_photohunt import add_hunt
     s = add_hunt(s, patch)
+    from web_a340 import add_a340
+    s = add_a340(s, patch)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(s)

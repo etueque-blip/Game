@@ -703,7 +703,7 @@ function Ui.new(cb: Callbacks)
 	local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
 	local cats = {
 		{ "BOEING", { "B737", "B787", "B777", "B747" } },
-		{ "AIRBUS", { "A220", "A320", "A330", "A350", "A380" } },
+		{ "AIRBUS", { "A220", "A320", "A330", "A340", "A350", "A380" } },
 		{ "GULFSTREAM · BOMBARDIER · LEARJET", { "G650", "GL7500", "CRJ900", "LEAR75" } },
 		{ "ATR · ТУРБОВИНТОВЫЕ", { "ATR72" } },
 		{ "CESSNA", { "C172" } },
