@@ -1,121 +1,177 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>Powder Peak Tycoon</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&display=swap">
 <style>
-:root{--pn:rgba(14,22,38,.78);--ln:rgba(255,255,255,.14);--tx:#f1f5fb;--mut:#a9b6cc;--ac:#38bdf8;--ok:#22c55e;--bad:#f43f5e}
+:root{--pn:rgba(14,22,38,.82);--pn2:rgba(255,255,255,.08);--ln:rgba(255,255,255,.14);--tx:#f1f5fb;--mut:#a9b6cc;--ac:#38bdf8;--ok:#4ade80;--warn:#fbbf24;--bad:#fb7185;color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
-html,body{margin:0;height:100%;overflow:hidden;background:#bcd6ee;font-family:'Baloo 2',system-ui,sans-serif;color:var(--tx)}
-canvas{display:block;touch-action:none;width:100vw;height:100vh}
+html,body{margin:0;height:100%;overflow:hidden;background:#bcd6ee;font-family:Rubik,system-ui,sans-serif;color:var(--tx)}
+canvas#c{display:block;touch-action:none;width:100vw;height:100vh}
 button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .pn{background:var(--pn);border:1px solid var(--ln);border-radius:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 6px 20px #0003}
-#top{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 8px) 10px 0;display:flex;gap:8px;align-items:flex-start;pointer-events:none}
+#top{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 8px) max(10px,env(safe-area-inset-right,0px)) 0 max(10px,env(safe-area-inset-left,0px));display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap;pointer-events:none}
 #top>*{pointer-events:auto}
-.stat{padding:6px 12px;line-height:1.15}
-.stat small{display:block;color:var(--mut);font-size:11px;font-weight:500;letter-spacing:.3px;text-transform:uppercase}
-.stat b{font-size:19px;font-weight:800}
-#money b{color:#86efac}
-#stars{color:#fbbf24;font-size:16px;letter-spacing:1px}
+.stat{padding:5px 11px;line-height:1.15}
+.stat small{display:block;color:var(--mut);font-size:10px;font-weight:500;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap}
+.stat b{font-size:17px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+#cash{color:#86efac}
+#stars{color:#fbbf24;font-size:14px;white-space:nowrap}
 .sp{flex:1}
-#speed{display:flex;padding:3px}
-#speed button{padding:6px 9px;border-radius:10px;font-weight:800;font-size:14px;min-width:34px}
-#speed button.on{background:var(--ac);color:#04121f}
-#gear{padding:8px 11px;font-size:16px}
-#bottom{position:fixed;left:0;right:0;bottom:0;padding:0 10px calc(env(safe-area-inset-bottom,0px) + 10px);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.grp{display:flex;padding:3px;gap:2px}
+.grp button{padding:5px 8px;border-radius:10px;font-weight:800;font-size:13px;min-width:32px}
+.grp button.on{background:var(--ac);color:#04121f}
+#quest{position:fixed;left:max(10px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 62px);max-width:min(330px,calc(100vw - 180px));padding:7px 12px;font-size:13px;line-height:1.3;cursor:pointer}
+#quest small{display:block;color:var(--warn);font-weight:700;font-size:10px;letter-spacing:.4px;text-transform:uppercase}
+#quest .rw{color:#86efac;font-weight:700}
+#miniWrap{position:fixed;right:max(10px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 62px);padding:5px;display:flex;flex-direction:column;gap:4px}
+#mini{width:150px;height:150px;border-radius:9px;display:block;cursor:crosshair;touch-action:none}
+#miniWrap.hide #mini{display:none}
+#sLeg[hidden]{display:none}
+#miniBar{display:flex;gap:4px}
+#miniBar button{flex:1;font-size:11px;font-weight:700;padding:3px 6px;border-radius:8px;background:var(--pn2);white-space:nowrap}
+#miniBar button.on{background:var(--ac);color:#04121f}
+#bottom{position:fixed;left:0;right:0;bottom:0;padding:0 max(8px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 8px) max(8px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
 #bottom>*{pointer-events:auto}
-#tools{display:flex;gap:4px;padding:5px;max-width:100%;overflow-x:auto}
-.tool{display:flex;flex-direction:column;align-items:center;padding:6px 10px;border-radius:11px;min-width:62px;font-size:12px;font-weight:700;color:var(--mut)}
-.tool span{font-size:21px;line-height:1.1}
-.tool.on{background:#ffffff1f;color:#fff;box-shadow:inset 0 0 0 1px #ffffff40}
-#ctx{display:none;align-items:center;gap:8px;padding:7px 8px 7px 14px;max-width:100%;font-size:14px}
-#ctx.show{display:flex}
-#ctxText{flex:1;min-width:0}
-.btn{padding:7px 13px;border-radius:10px;font-weight:800;background:#ffffff1a}
+#tools{display:flex;gap:2px;padding:4px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.tool{display:flex;flex-direction:column;align-items:center;padding:5px 7px;border-radius:11px;min-width:56px;font-size:11px;font-weight:700;color:var(--mut);white-space:nowrap}
+.tool span{font-size:20px;line-height:1.15}
+.tool.on{background:#ffffff22;color:#fff;box-shadow:inset 0 0 0 1px #ffffff55}
+#picker{display:none;gap:6px;padding:6px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+#picker.show{display:flex}
+.pk{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:7px 10px;border-radius:11px;background:var(--pn2);min-width:118px;max-width:150px;text-align:left;border:1px solid transparent}
+.pk.on{border-color:var(--ac);background:#38bdf822}
+.pk .i{font-size:20px}.pk b{font-size:13px}.pk .c{font-size:12px;color:#86efac;font-weight:700}.pk .d{font-size:11px;color:var(--mut);line-height:1.25;white-space:normal}
+.pk.lock{opacity:.45}
+#card{display:none;width:min(470px,100%);padding:10px 12px}
+#card.show{display:block}
+.ch{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.ch b{font-size:15px;flex:1}
+.ch .x{font-size:16px;color:var(--mut);padding:2px 8px;border-radius:8px;background:var(--pn2)}
+#cSteps{display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.3}
+.st{display:flex;gap:7px;color:#7d8aa3}.st i{font-style:normal;width:18px;height:18px;border-radius:50%;background:#ffffff14;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none;margin-top:1px}
+.st.cur{color:#fff}.st.cur i{background:var(--ac);color:#04121f}
+.st.done{color:#86a99a}.st.done i{background:#22c55e55;color:#bbf7d0}
+#cStat{margin-top:6px;font-size:13px;line-height:1.4;min-height:0}
+#cStat:empty{display:none}
+.cb{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.cb:empty{display:none}
+.btn{padding:7px 12px;border-radius:10px;font-weight:700;background:#ffffff1c;font-size:13px}
 .btn.pri{background:var(--ac);color:#04121f}
-.btn.red{background:#f43f5e33;color:#fecdd3}
-.btn:disabled{opacity:.4}
-#info{position:fixed;left:10px;top:calc(env(safe-area-inset-top,0px) + 70px);width:min(270px,calc(100vw - 20px));padding:12px 14px;display:none;font-size:14px}
-#info h3{margin:0 0 4px;font-size:18px;display:flex;justify-content:space-between;align-items:center}
-#info .r{display:flex;justify-content:space-between;color:var(--mut)}#info .r b{color:var(--tx)}
-#info .x{font-size:18px;color:var(--mut);padding:0 4px}
-#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 74px);transform:translate(-50%,-10px);opacity:0;transition:.25s;padding:8px 16px;font-weight:700;font-size:14px;pointer-events:none;text-align:center;max-width:90vw}
+.btn.red{background:#fb718540;color:#fecdd3}
+.btn:disabled{opacity:.35;cursor:default}
+.okc{color:var(--ok)}.wrn{color:var(--warn)}.bad{color:var(--bad)}
+#info{position:fixed;left:max(10px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 118px);width:min(280px,calc(100vw - 20px));padding:12px 14px;display:none;font-size:13px}
+#info h3{margin:0 0 6px;font-size:16px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+#info .r{display:flex;justify-content:space-between;color:var(--mut);padding:1px 0}#info .r b{color:var(--tx);font-variant-numeric:tabular-nums}
+#info .x{font-size:16px;color:var(--mut);padding:0 4px}
+#info .cb{margin-top:10px}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 62px);transform:translate(-50%,-10px);opacity:0;transition:.25s;padding:8px 16px;font-weight:700;font-size:14px;pointer-events:none;text-align:center;max-width:90vw;z-index:5}
 #toast.show{opacity:1;transform:translate(-50%,0)}
-#toast.bad{border-color:#f43f5e88}
-#price{display:none;padding:12px 14px;width:min(340px,calc(100vw - 20px))}
+#toast.bad{border-color:#fb718599}
+#price{display:none;padding:12px 14px;width:min(360px,100%)}
 #price.show{display:block}
 #price input{width:100%;accent-color:var(--ac)}
-#price .r{display:flex;justify-content:space-between;color:var(--mut);font-size:13px}
-.modal{position:fixed;inset:0;background:#0a1020aa;display:none;align-items:center;justify-content:center;padding:16px;z-index:9}
+#price .r{display:flex;justify-content:space-between;color:var(--mut);font-size:13px;padding:1px 0}
+#price .r b{color:#fff}
+.modal{position:fixed;inset:0;background:#0a1020bb;display:none;align-items:center;justify-content:center;padding:16px;z-index:9}
 .modal.show{display:flex}
-.card{width:min(420px,100%);padding:20px 22px;max-height:90vh;overflow:auto}
-.card h2{margin:0 0 4px;font-size:26px;font-weight:800;line-height:1.1}
-.card p{color:var(--mut);margin:6px 0 12px;font-size:15px}
-.card ol{padding-left:20px;margin:8px 0 16px;font-size:15px}.card li{margin:4px 0}
-.card .r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--ln);font-size:15px}
-.card .r:last-of-type{border:0}
-.card .tot b{font-size:19px}
-.card .row{display:flex;gap:8px;margin-top:14px}.card .row .btn{flex:1;padding:11px}
-.g{color:#22c55e}.bl{color:#60a5fa}.bk{color:#e5e7eb}
+.mcard{width:min(460px,100%);padding:20px 22px;max-height:90vh;overflow:auto}
+.mcard h2{margin:0 0 4px;font-size:24px;font-weight:800;line-height:1.15;text-wrap:balance}
+.mcard p{color:var(--mut);margin:6px 0 12px;font-size:14px;line-height:1.45}
+.mcard .r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--ln);font-size:14px}
+.mcard .tot b{font-size:18px}
+.mcard .row{display:flex;gap:8px;margin-top:12px}.mcard .row .btn{flex:1;padding:11px}
+.how{display:grid;grid-template-columns:34px 1fr;gap:8px 10px;margin:10px 0;font-size:14px;line-height:1.35}
+.how span{font-size:24px;text-align:center}
+.how b{color:#fff}
 .pos{color:#86efac}.neg{color:#fda4af}
-.stat small,.stat b{white-space:nowrap}
-@media (max-width:640px){#top{flex-wrap:wrap;gap:5px;padding-left:8px;padding-right:8px}.stat{padding:4px 8px}.stat b{font-size:15px}.stat small{font-size:9px}#stars{font-size:12px;white-space:nowrap}.sp{display:none}#speed button{padding:4px 6px;min-width:28px;font-size:12px}#gear{padding:5px 9px;font-size:14px}.tool{min-width:54px;padding:5px 6px;font-size:11px}.tool span{font-size:19px}#info{top:calc(env(safe-area-inset-top,0px) + 100px)}#toast{top:calc(env(safe-area-inset-top,0px) + 100px)}}
-.legend{display:flex;gap:10px;font-size:13px;color:var(--mut);flex-wrap:wrap}
+.ql{list-style:none;padding:0;margin:8px 0;font-size:14px}.ql li{padding:5px 0;border-bottom:1px solid var(--ln);display:flex;gap:8px}.ql .rw{margin-left:auto;color:#86efac;white-space:nowrap}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin:6px 0}
+@media (max-width:640px){
+  .stat{padding:4px 8px}.stat b{font-size:14px}.stat small{font-size:9px}#stars{font-size:11px}.sp{display:none}
+  .grp button{padding:4px 6px;min-width:26px;font-size:11px}
+  .tool{min-width:48px;padding:4px 4px;font-size:10px}.tool span{font-size:18px}
+  #quest{top:calc(env(safe-area-inset-top,0px) + 92px);max-width:calc(100vw - 20px);font-size:12px}
+  #miniWrap{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 82px)}
+  #mini{width:118px;height:118px}
+  #info{top:calc(env(safe-area-inset-top,0px) + 150px)}
+  #toast{top:calc(env(safe-area-inset-top,0px) + 92px)}
+  .pk{min-width:92px;padding:6px 8px}.pk .d{display:none}.pk .i{font-size:17px}
+  .st:not(.cur){display:none}#card{padding:8px 10px}#cSteps{font-size:12.5px}
+}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style></head><body>
 <canvas id="c"></canvas>
 
 <div id="top">
-  <div class="pn stat" id="money"><small>Cash</small><b id="cash">$0</b></div>
-  <div class="pn stat"><small id="dayL">Day 1</small><b id="clock">8:00</b></div>
-  <div class="pn stat"><small>Skiers</small><b id="nSk">0</b></div>
-  <div class="pn stat"><small>Rating</small><div id="stars">★★★☆☆</div></div>
+  <div class="pn stat"><small>Деньги</small><b id="cash">$0</b></div>
+  <div class="pn stat"><small id="dayL">День 1</small><b id="clock">8:00</b></div>
+  <div class="pn stat"><small>Гостей</small><b id="nSk">0</b></div>
+  <div class="pn stat"><small>Рейтинг</small><div id="stars">★★★☆☆</div></div>
   <div class="sp"></div>
-  <div class="pn" id="speed"><button data-s="0">❚❚</button><button data-s="1" class="on">▶</button><button data-s="2">▶▶</button><button data-s="4">▶▶▶</button></div>
-  <button class="pn" id="gear" title="Menu">⚙</button>
+  <div class="pn grp" id="speed" title="Скорость времени"><button data-s="0" title="Пауза">❚❚</button><button data-s="1" class="on" title="Обычная скорость">▶</button><button data-s="2" title="Быстрее">▶▶</button><button data-s="4" title="Очень быстро">▶▶▶</button></div>
+  <div class="pn grp"><button id="bHelpTop" title="Как играть">?</button><button id="gear" title="Меню">⚙</button></div>
 </div>
+<div class="pn" id="quest" title="Задания — нажми, чтобы открыть список"></div>
+<div class="pn" id="miniWrap"><canvas id="mini" width="300" height="300" title="Карта — нажми, чтобы перелететь"></canvas>
+  <div id="miniBar"><button id="bMini" title="Скрыть / показать карту">🗺️</button><button id="bSteep" title="Раскрасить гору по крутизне">Крутизна</button></div><div id="sLeg" hidden style="font-size:10px;line-height:1.5;padding:0 3px"><span style="color:#4ade80">■</span> зелёная <span style="color:#60a5fa">■</span> синяя <span style="color:#94a3b8">■</span> чёрная <span style="color:#f87171">■</span> эксперт</div></div>
 
 <div class="pn" id="info"></div>
 <div class="pn" id="toast"></div>
 
 <div id="bottom">
   <div class="pn" id="price">
-    <div class="r"><span>Lift ticket price</span><b id="pv" style="color:#fff">$45</b></div>
-    <input type="range" id="pr" min="10" max="160" step="1" value="45">
-    <div class="r"><span>Fair value now</span><span id="fair">$40</span></div>
-    <div class="r"><span>Expected visitors / day</span><span id="exp">0</span></div>
+    <div class="r"><span>Цена ски-пасса на день</span><b id="pv">$45</b></div>
+    <input type="range" id="pr" min="10" max="160" step="1" value="45" aria-label="Цена ски-пасса">
+    <div class="r"><span>Справедливая цена сейчас</span><span id="fair">$40</span></div>
+    <div class="r"><span>Ожидаем гостей за день</span><span id="exp">0</span></div>
+    <div class="r"><span>Мест на парковке</span><span id="capv">0</span></div>
+    <div class="r" style="margin-top:4px;line-height:1.35"><span>Дороже справедливой цены — меньше гостей. Больше трасс и зданий — цену можно поднять.</span></div>
   </div>
-  <div class="pn" id="ctx"><div id="ctxText"></div><button class="btn" id="bUndo">Undo</button><button class="btn red" id="bCancel">✕</button><button class="btn pri" id="bOk">Build</button></div>
+  <div class="pn" id="picker"></div>
+  <div class="pn" id="card">
+    <div class="ch"><span id="cIcon" style="font-size:20px"></span><b id="cTitle"></b><button class="x" id="cX" title="Закрыть инструмент">✕</button></div>
+    <div id="cSteps"></div>
+    <div id="cStat"></div>
+    <div class="cb" id="cBtns"></div>
+  </div>
   <div class="pn" id="tools">
-    <button class="tool on" data-t="look"><span>🔍</span>Inspect</button>
-    <button class="tool" data-t="lift"><span>🚡</span>Lift</button>
-    <button class="tool" data-t="run"><span>⛷️</span>Run</button>
-    <button class="tool" data-t="del"><span>🧨</span>Remove</button>
-    <button class="tool" data-t="price"><span>🎟️</span>Tickets</button>
+    <button class="tool on" data-t="look" title="Нажми на объект, чтобы узнать о нём всё"><span>🔍</span>Осмотр</button>
+    <button class="tool" data-t="lift" title="Кресельный, гондола или бугель"><span>🚡</span>Подъёмник</button>
+    <button class="tool" data-t="run" title="Нарисовать горнолыжную трассу"><span>⛷️</span>Трасса</button>
+    <button class="tool" data-t="build" title="Шале, отель, ресторан и другое"><span>🏠</span>Здания</button>
+    <button class="tool" data-t="trees" title="Вырубить или посадить лес"><span>🌲</span>Деревья</button>
+    <button class="tool" data-t="del" title="Убрать постройку и вернуть часть денег"><span>🧨</span>Снос</button>
+    <button class="tool" data-t="price" title="Цена ски-пасса"><span>🎟️</span>Билеты</button>
   </div>
 </div>
 
-<div class="modal" id="mIntro"><div class="pn card">
+<div class="modal" id="mIntro"><div class="pn mcard">
   <h2>🏔️ Powder Peak Tycoon</h2>
-  <p>You just bought a wild mountain. Turn it into the best ski resort in the valley.</p>
-  <ol>
-    <li><b>🚡 Lift</b>: tap near the lodge, then tap higher up the mountain.</li>
-    <li><b>⛷️ Run</b>: tap at the top of a lift, then tap points down the hill. Press <b>Build</b> when you're done.</li>
-    <li>Steepness sets the difficulty: <span class="g">● Green</span> <span class="bl">■ Blue</span> <span class="bk">◆ Black</span> <span class="bk">◆◆ Expert</span></li>
-    <li>Skiers move between lifts and runs when the ends are close (the rings). Lead runs back to the lodge.</li>
-    <li>Set ticket prices, keep skiers happy and grow your resort.</li>
-  </ol>
-  <p style="font-size:13px">Drag to rotate · pinch / scroll to zoom · two fingers / right-drag to pan</p>
-  <div class="row"><button class="btn pri" id="bStart">Open the resort</button></div>
+  <p>Ты купил дикую гору. Построй на ней лучший горнолыжный курорт в долине.</p>
+  <div class="how">
+    <span>🚡</span><div><b>Подъёмник.</b> Нажми у базы (жёлтый круг), потом выше по горе. Гости поедут наверх.</div>
+    <span>⛷️</span><div><b>Трасса.</b> Нажми у верхней станции, ставь точки вниз и закончи у базы. Цвет = крутизна.</div>
+    <span>🏠</span><div><b>Здания.</b> Рестораны кормят гостей, отели и шале приводят новых, прокат помогает новичкам.</div>
+    <span>🌲</span><div><b>Деревья.</b> Вырубай лес под стройку или сажай для красоты.</div>
+    <span>🎯</span><div><b>Задания</b> слева сверху подскажут, что делать дальше, и дадут награду.</div>
+  </div>
+  <div class="legend"><span style="color:#4ade80">● Зелёная — новички</span><span style="color:#60a5fa">■ Синяя — средние</span><span>◆ Чёрная — опытные</span><span>◆◆ Эксперт</span></div>
+  <p style="font-size:12px">Крути камеру пальцем или мышью · зум — щипком или колёсиком · двигать карту — двумя пальцами или правой кнопкой</p>
+  <div class="row"><button class="btn pri" id="bStart">Открыть курорт</button></div>
 </div></div>
 
-<div class="modal" id="mDay"><div class="pn card" id="dayCard"></div></div>
+<div class="modal" id="mDay"><div class="pn mcard" id="dayCard"></div></div>
+<div class="modal" id="mQuests"><div class="pn mcard" id="qCard"></div></div>
 
-<div class="modal" id="mMenu"><div class="pn card">
-  <h2>Menu</h2>
-  <p>Your progress saves automatically after each build and at the end of every day.</p>
-  <div class="row"><button class="btn" id="bHelp">How to play</button></div>
-  <div class="row"><button class="btn red" id="bNew">New mountain (reset)</button></div>
-  <div class="row"><button class="btn pri" id="bClose">Back to the slopes</button></div>
+<div class="modal" id="mMenu"><div class="pn mcard">
+  <h2>Меню</h2>
+  <p>Игра сохраняется сама после каждой постройки и в конце каждого дня.</p>
+  <div class="row"><button class="btn" id="bHelp">Как играть</button><button class="btn" id="bQuests">Задания</button></div>
+  <div class="row"><button class="btn red" id="bNew">Новая гора (сбросить всё)</button></div>
+  <div class="row"><button class="btn pri" id="bClose">Вернуться на склон</button></div>
 </div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -123,11 +179,12 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-const SAVE_KEY='powderpeak-v1';
-let save=null;try{save=JSON.parse(localStorage.getItem(SAVE_KEY)||'null')}catch(e){}
+const SAVE_KEY='powderpeak-v2';
+let save=null;
+try{save=JSON.parse(localStorage.getItem(SAVE_KEY)||'null')||JSON.parse(localStorage.getItem('powderpeak-v1')||'null')}catch(e){}
 let seed=save&&save.seed||((Math.random()*1e6)|0);
 
-/* ---------- terrain noise ---------- */
+/* ================= terrain ================= */
 function hash(i,j){let n=(Math.imul(i,374761393)+Math.imul(j,668265263)+Math.imul(seed,1442695))|0;n=Math.imul(n^(n>>>13),1274126177);n^=n>>>16;return (n>>>0)/4294967296}
 function vnoise(x,z){const i=Math.floor(x),j=Math.floor(z),fx=x-i,fz=z-j,u=fx*fx*(3-2*fx),v=fz*fz*(3-2*fz);const a=hash(i,j),b=hash(i+1,j),c=hash(i,j+1),d=hash(i+1,j+1);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
 function fbm(x,z,o){o=o||4;let s=0,a=.5,f=1,n=0;for(let k=0;k<o;k++){s+=a*vnoise(x*f+k*17.3,z*f-k*9.1);n+=a;a*=.5;f*=2.03}return s/n}
@@ -135,149 +192,223 @@ function rfbm(x,z){let s=0,a=.5,f=1,n=0,w=1;for(let k=0;k<5;k++){let r=1-Math.ab
 const S=260,H=S/2;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const sstep=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
-function heightAt(x,z){
+const LAKE={x:-78,z:96,r:17};
+function rawHeight(x,z){
   const t=clamp((H-z)/S,0,1);
   const m=Math.pow(t,1.9)*sstep(.02,.3,t);
   const lat=1-.35*Math.min(1,x*x/(H*H));
   const r=rfbm(x*.0075+3.1,z*.0075+5.7);
   return 150*m*lat*(.5+.7*r)+12*(fbm(x*.022,z*.022)-.5)*(.25+t)+2*(fbm(x*.07,z*.07,3)-.5)*t+2*fbm(x*.05,z*.05,2);
 }
+let LAKE_Y=0;
+function heightAt(x,z){
+  let h=rawHeight(x,z);
+  // flatter village valley around the lodge
+  const vd=Math.hypot((x)/1.6,z-110);if(vd<60){const f=sstep(60,25,vd);h=h+(rawHeight(0,112)+.5-h)*f*.85}
+  const d=Math.hypot(x-LAKE.x,z-LAKE.z);if(d<LAKE.r+11){h=h+(LAKE_Y-1.6-h)*sstep(LAKE.r+11,LAKE.r-2,d)}
+  return h;
+}
+LAKE_Y=rawHeight(LAKE.x,LAKE.z)-.4;
 function normalAt(x,z){const e=1;const nx=heightAt(x-e,z)-heightAt(x+e,z),nz=heightAt(x,z-e)-heightAt(x,z+e);const l=Math.hypot(nx,2*e,nz);return [nx/l,2*e/l,nz/l]}
 const inBounds=p=>Math.abs(p.x)<H-4&&Math.abs(p.z)<H-4;
+const onLake=p=>Math.hypot(p.x-LAKE.x,p.z-LAKE.z)<LAKE.r+2;
 
-/* ---------- three setup ---------- */
+/* ================= three setup ================= */
 const renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true});
 renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));
 const scene=new THREE.Scene();
-const SKY=new THREE.Color(0xa9cdee);
-scene.background=SKY.clone();scene.fog=new THREE.Fog(SKY.clone(),320,900);
-const camera=new THREE.PerspectiveCamera(50,1,.5,2500);
+scene.background=new THREE.Color(0xa9cdee);scene.fog=new THREE.Fog(0xa9cdee,360,1100);
+const camera=new THREE.PerspectiveCamera(50,1,.5,3000);
 camera.position.set(-40,150,255);
 const controls=new THREE.OrbitControls(camera,renderer.domElement);
 controls.target.set(0,45,20);controls.enableDamping=true;controls.dampingFactor=.12;
-controls.maxPolarAngle=1.40;controls.minDistance=22;controls.maxDistance=520;controls.screenSpacePanning=false;
+controls.maxPolarAngle=1.40;controls.minDistance=18;controls.maxDistance=560;controls.screenSpacePanning=false;
 controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};
 const hemi=new THREE.HemisphereLight(0xe6f0ff,0x7d8aa0,.78);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xfff4e0,.85);sun.position.set(-150,220,120);scene.add(sun);
 
-// terrain mesh (playable area + scenic surroundings)
-const RS=560,SEG=250;
+const RS=600,SEG=260;
 const tg=new THREE.PlaneGeometry(RS,RS,SEG,SEG);tg.rotateX(-Math.PI/2);
+let colNormal,colSteep;
 {
-  const p=tg.attributes.position,col=new Float32Array(p.count*3);
+  const p=tg.attributes.position;colNormal=new Float32Array(p.count*3);colSteep=new Float32Array(p.count*3);
   for(let i=0;i<p.count;i++){
     const x=p.getX(i),z=p.getZ(i),y=heightAt(x,z);p.setY(i,y);
     const n=normalAt(x,z),steep=1-n[1],v=fbm(x*.07,z*.07,2);
     let r=.93+v*.06,g=.95+v*.05,b=1;
     const rock=sstep(.28,.42,steep+(v-.5)*.08);
-    r+=(.46-r)*rock;g+=(.46-g)*rock;b+=(.5-b)*rock;
+    r+=(.44-r)*rock;g+=(.44-g)*rock;b+=(.49-b)*rock;
+    // blue-ish snow in hollows, warm on high sunny faces
+    const hi=sstep(60,140,y);r-=.03*(1-hi);b+=.0;g+=.01*hi;
     const out=Math.max(Math.abs(x),Math.abs(z))>H?.9:1;
-    col[i*3]=r*out;col[i*3+1]=g*out;col[i*3+2]=b*(out<1?.96:1);
+    colNormal[i*3]=r*out;colNormal[i*3+1]=g*out;colNormal[i*3+2]=b*(out<1?.96:1);
+    // steepness overlay: grade = tan(angle)
+    const gr=Math.sqrt(1-n[1]*n[1])/n[1];
+    const c=gr<.27?[.3,.85,.45]:gr<.45?[.35,.6,1]:gr<.7?[.25,.27,.32]:[.75,.2,.25];
+    const o=out<1?.75:1;colSteep[i*3]=c[0]*o;colSteep[i*3+1]=c[1]*o;colSteep[i*3+2]=c[2]*o;
   }
-  tg.setAttribute('color',new THREE.BufferAttribute(col,3));tg.computeVertexNormals();
+  tg.setAttribute('color',new THREE.BufferAttribute(colNormal.slice(),3));tg.computeVertexNormals();
 }
 const terrain=new THREE.Mesh(tg,new THREE.MeshLambertMaterial({vertexColors:true}));scene.add(terrain);
+let steepView=false;
+function setSteep(on){steepView=on;tg.attributes.color.array.set(on?colSteep:colNormal);tg.attributes.color.needsUpdate=true;$('bSteep').classList.toggle('on',on);$('sLeg').hidden=!on}
 
-// trees
+// frozen lake
+{const ice=new THREE.Mesh(new THREE.CircleGeometry(LAKE.r+1.5,48),new THREE.MeshLambertMaterial({color:0xbfe3f5,transparent:true,opacity:.95}));ice.rotation.x=-Math.PI/2;ice.position.set(LAKE.x,LAKE_Y,LAKE.z);scene.add(ice);
+ const rim=new THREE.Mesh(new THREE.RingGeometry(LAKE.r-1,LAKE.r+1.6,48),new THREE.MeshLambertMaterial({color:0xe8f4fb}));rim.rotation.x=-Math.PI/2;rim.position.set(LAKE.x,LAKE_Y+.05,LAKE.z);scene.add(rim)}
+// distant mountain ring
+{const g=new THREE.Group(),m1=new THREE.MeshLambertMaterial({color:0xdfe8f3,flatShading:true}),m2=new THREE.MeshLambertMaterial({color:0x9fb0c6,flatShading:true});
+ for(let k=0;k<26;k++){const a=k/26*Math.PI*2+hash(k,1)*.2,R=520+hash(k,2)*160;const h=120+hash(k,3)*220;
+   const c=new THREE.Mesh(new THREE.ConeGeometry(110+hash(k,4)*90,h,5+(k%3),1),k%3?m1:m2);c.position.set(Math.cos(a)*R,h/2-25,Math.sin(a)*R);c.rotation.y=hash(k,5)*3;g.add(c)}
+ scene.add(g)}
+
+/* ---- trees (instanced, can be cut and planted) ---- */
 const trees=[];
-{
-  for(let x=-RS/2+4;x<RS/2-4;x+=2.4)for(let z=-RS/2+4;z<RS/2-4;z+=2.4){
-    const jx=x+(hash(x*7|0,z*3|0)-.5)*2.2,jz=z+(hash(z*5|0,x*11|0)-.5)*2.2;
-    const y=heightAt(jx,jz);if(y>68+fbm(jx*.02,jz*.02)*28)continue;
-    const n=normalAt(jx,jz);if(n[1]<.8)continue;
-    if(fbm(jx*.035+9,jz*.035+2,3)<.47)continue;
-    if(Math.hypot(jx,jz-108)<26)continue;
-    const far=Math.max(Math.abs(jx),Math.abs(jz))>H;if(far&&hash(jx|0,jz|0)<.45)continue;
-    trees.push({x:jx,z:jz,y,s:.75+hash(jz*3|0,jx*2|0)*.6,on:true});
-  }
+for(let x=-RS/2+4;x<RS/2-4;x+=2.4)for(let z=-RS/2+4;z<RS/2-4;z+=2.4){
+  const jx=x+(hash(x*7|0,z*3|0)-.5)*2.2,jz=z+(hash(z*5|0,x*11|0)-.5)*2.2;
+  const y=heightAt(jx,jz);if(y>68+fbm(jx*.02,jz*.02)*28)continue;
+  const n=normalAt(jx,jz);if(n[1]<.8)continue;
+  if(fbm(jx*.035+9,jz*.035+2,3)<.47)continue;
+  if(Math.hypot(jx/1.5,jz-110)<30)continue;
+  if(Math.hypot(jx-LAKE.x,jz-LAKE.z)<LAKE.r+3)continue;
+  if(Math.abs(jx-6)<5&&jz>118)continue;// road
+  const far=Math.max(Math.abs(jx),Math.abs(jz))>H;if(far&&hash(jx|0,jz|0)<.45)continue;
+  trees.push({x:jx,z:jz,y,s:.75+hash(jz*3|0,jx*2|0)*.6,on:true});
 }
+const BASE_TREES=trees.length,TREE_CAP=trees.length+6000;
 const treeGeo=new THREE.ConeGeometry(1.5,5,7);treeGeo.translate(0,2.9,0);
 const trunkGeo=new THREE.CylinderGeometry(.25,.3,1.2,5);trunkGeo.translate(0,.4,0);
-const treeMesh=new THREE.InstancedMesh(treeGeo,new THREE.MeshLambertMaterial({color:0xffffff}),trees.length);
-const trunkMesh=new THREE.InstancedMesh(trunkGeo,new THREE.MeshLambertMaterial({color:0x5b3a24}),trees.length);
+const treeMesh=new THREE.InstancedMesh(treeGeo,new THREE.MeshLambertMaterial({color:0xffffff}),TREE_CAP);
+const trunkMesh=new THREE.InstancedMesh(trunkGeo,new THREE.MeshLambertMaterial({color:0x5b3a24}),TREE_CAP);
 const _m=new THREE.Matrix4(),_c=new THREE.Color();
 function setTree(i){const t=trees[i],s=t.on?t.s:0;_m.makeScale(s,s*(1+.25*(t.s-1)),s).setPosition(t.x,t.y-.2,t.z);treeMesh.setMatrixAt(i,_m);trunkMesh.setMatrixAt(i,_m)}
-trees.forEach((t,i)=>{setTree(i);_c.setHSL(.36+hash(i,7)*.06,.35+hash(i,9)*.2,.17+hash(i,3)*.08);treeMesh.setColorAt(i,_c)});
+function colorTree(i){_c.setHSL(.36+hash(i,7)*.06,.35+hash(i,9)*.2,.17+hash(i,3)*.08);treeMesh.setColorAt(i,_c)}
+trees.forEach((t,i)=>{setTree(i);colorTree(i)});
+treeMesh.count=trunkMesh.count=trees.length;
 scene.add(treeMesh,trunkMesh);
+let treesDirty=true;
+function treesChanged(){treeMesh.instanceMatrix.needsUpdate=true;trunkMesh.instanceMatrix.needsUpdate=true;if(treeMesh.instanceColor)treeMesh.instanceColor.needsUpdate=true;treeMesh.count=trunkMesh.count=trees.length;treesDirty=true}
 function clearTrees(pts,w){
   let minx=1e9,maxx=-1e9,minz=1e9,maxz=-1e9;pts.forEach(p=>{minx=Math.min(minx,p.x);maxx=Math.max(maxx,p.x);minz=Math.min(minz,p.z);maxz=Math.max(maxz,p.z)});
-  const w2=w*w;let ch=false;
+  const w2=w*w;let n=0;
   trees.forEach((t,i)=>{if(!t.on||t.x<minx-w||t.x>maxx+w||t.z<minz-w||t.z>maxz+w)return;
-    for(const p of pts){const dx=t.x-p.x,dz=t.z-p.z;if(dx*dx+dz*dz<w2){t.on=false;setTree(i);ch=true;break}}});
-  if(ch){treeMesh.instanceMatrix.needsUpdate=true;trunkMesh.instanceMatrix.needsUpdate=true}
+    for(const p of pts){const dx=t.x-p.x,dz=t.z-p.z;if(dx*dx+dz*dz<w2){t.on=false;setTree(i);n++;break}}});
+  if(n)treesChanged();return n;
 }
+function clearTreesRect(cx,cz,hw,hd,rot){let n=0;const c=Math.cos(rot),s=Math.sin(rot);
+  trees.forEach((t,i)=>{if(!t.on)return;const dx=t.x-cx,dz=t.z-cz,lx=dx*c-dz*s,lz=dx*s+dz*c;if(Math.abs(lx)<hw+1.5&&Math.abs(lz)<hd+1.5){t.on=false;setTree(i);n++}});if(n)treesChanged()}
 
-// base lodge
+// rocks on steep ground
+{const pts=[];for(let k=0;k<1400;k++){const x=(hash(k,11)-.5)*RS*.9,z=(hash(k,12)-.5)*RS*.9;const n=normalAt(x,z);if(n[1]<.86&&n[1]>.55)pts.push([x,z])}
+ const rm=new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.4,0),new THREE.MeshLambertMaterial({color:0x8a8f99,flatShading:true}),pts.length);
+ pts.forEach((p,i)=>{const s=.6+hash(i,13)*1.6;_m.makeRotationY(hash(i,14)*6);_m.scale(new THREE.Vector3(s,s*.7,s));_m.setPosition(p[0],heightAt(p[0],p[1])-.2,p[1]);rm.setMatrixAt(i,_m)});scene.add(rm)}
+
+// base lodge, parking, road
 const BASE=new THREE.Vector3(0,heightAt(0,108),108);
+function roofGeo(w,d,h){const sh=new THREE.Shape();sh.moveTo(-w/2,0);sh.lineTo(w/2,0);sh.lineTo(0,h);sh.lineTo(-w/2,0);const g=new THREE.ExtrudeGeometry(sh,{depth:d,bevelEnabled:false});g.translate(0,0,-d/2);return g}
+const M_={};const mat=c=>M_[c]||(M_[c]=new THREE.MeshLambertMaterial({color:c}));
+const winMat=new THREE.MeshBasicMaterial({color:0xffd27a});
+function box(w,h,d,c,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),typeof c==='number'?mat(c):c);m.position.set(x||0,y||0,z||0);return m}
+function windows(g,n,y,z,spacing,rotY){for(let k=0;k<n;k++){const w=new THREE.Mesh(new THREE.PlaneGeometry(1.3,1.5),winMat);w.position.set((k-(n-1)/2)*spacing,y,z);w.rotation.y=rotY||0;g.add(w)}}
+const CARC=[0xef4444,0x3b82f6,0x22c55e,0xeab308,0x111827,0xf8fafc,0xf97316];
+function car(g,x,z,r){const c=new THREE.Group();c.add(box(1.8,.9,3.4,CARC[(Math.random()*7)|0],0,.6,0),box(1.6,.7,1.8,0x1f2937,0,1.3,-.2));c.position.set(x,0,z);c.rotation.y=r||0;g.add(c)}
 {
   const g=new THREE.Group();
-  const wall=new THREE.Mesh(new THREE.BoxGeometry(16,6,9),new THREE.MeshLambertMaterial({color:0x8a5a3b}));wall.position.y=3;
-  const roof=new THREE.Mesh(new THREE.CylinderGeometry(0,11,5,4,1),new THREE.MeshLambertMaterial({color:0xf8fafc}));roof.rotation.y=Math.PI/4;roof.scale.set(1.15,1,.7);roof.position.y=8.4;
-  const chim=new THREE.Mesh(new THREE.BoxGeometry(1.4,4,1.4),new THREE.MeshLambertMaterial({color:0x6b7280}));chim.position.set(4,9,1);
-  const win=new THREE.MeshBasicMaterial({color:0xffd27a});
-  for(let k=-2;k<=2;k++){const w=new THREE.Mesh(new THREE.PlaneGeometry(1.6,1.8),win);w.position.set(k*3,3.4,-4.55);w.rotation.y=Math.PI;g.add(w)}
-  const lot=new THREE.Mesh(new THREE.PlaneGeometry(30,12),new THREE.MeshLambertMaterial({color:0x9aa3b2}));lot.rotation.x=-Math.PI/2;lot.position.set(0,.15,13);
-  g.add(wall,roof,chim,lot);
-  const carC=[0xef4444,0x3b82f6,0x22c55e,0xeab308,0x111827,0xf8fafc];
-  for(let k=0;k<9;k++){const c=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.2,3.4),new THREE.MeshLambertMaterial({color:carC[k%6]}));c.position.set(-12+k*3,.8,13+(k%2?2.5:-2.5));g.add(c)}
+  g.add(box(16,6,9,0x8a5a3b,0,3,0));
+  const rf=new THREE.Mesh(roofGeo(18,11,5),mat(0xf8fafc));rf.rotation.y=Math.PI/2;rf.position.y=6;rf.scale.set(1,1,1);g.add(rf);
+  g.add(box(1.4,4,1.4,0x6b7280,4,8,1));
+  windows(g,5,3.4,-4.55,3,Math.PI);
+  const lot=new THREE.Mesh(new THREE.PlaneGeometry(32,12),mat(0x9aa3b2));lot.rotation.x=-Math.PI/2;lot.position.set(0,.18,13);g.add(lot);
+  for(let k=0;k<9;k++)car(g,-12+k*3,13+(k%2?2.5:-2.5));
+  const sg=label('🏔️ База',null,.17);sg.position.set(0,13,0);g.add(sg);
   g.position.copy(BASE);g.position.y-=.3;scene.add(g);
+  // road from the valley
+  const pts=[];for(let z=BASE.z+19;z<RS/2;z+=2)pts.push({x:6+Math.sin(z*.03)*4*(z>150?1:0),z,y:0});
+  const r=ribbon(pts,2.6,0x6b7280,.95);scene.add(r);
 }
 
-/* ---------- helpers ---------- */
-const DIFF=[{n:'Green',s:'●',c:0x22c55e,css:'#22c55e'},{n:'Blue',s:'■',c:0x2f7cf6,css:'#60a5fa'},{n:'Black',s:'◆',c:0x111827,css:'#e5e7eb'},{n:'Expert',s:'◆◆',c:0x0b0b0f,css:'#e5e7eb'}];
+/* ================= helpers ================= */
+const DIFF=[{n:'Зелёная',s:'●',c:0x22c55e,css:'#4ade80'},{n:'Синяя',s:'■',c:0x2f7cf6,css:'#60a5fa'},{n:'Чёрная',s:'◆',c:0x111827,css:'#e5e7eb'},{n:'Эксперт',s:'◆◆',c:0x0b0b0f,css:'#e5e7eb'}];
+const SKILL=['новичок','средний','опытный','эксперт'];
 const M=v=>Math.round(v*8);// 1 unit = 8 m
 const fmt=v=>(v<0?'-$':'$')+Math.abs(Math.round(v)).toLocaleString('en-US');
 const d2=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
-function label(text,color){
+function label(text,color,sc){
   const cv=document.createElement('canvas');cv.width=512;cv.height=96;const g=cv.getContext('2d');
-  g.font='800 44px "Baloo 2",system-ui,sans-serif';const w=Math.min(500,g.measureText(text).width+44);
-  g.fillStyle='rgba(14,22,38,.82)';const x=(512-w)/2;g.beginPath();g.moveTo(x+24,12);g.arcTo(x+w,12,x+w,84,24);g.arcTo(x+w,84,x,84,24);g.arcTo(x,84,x,12,24);g.arcTo(x,12,x+w,12,24);g.fill();
+  g.font='700 42px Rubik,system-ui,sans-serif';const w=Math.min(500,g.measureText(text).width+44);
+  g.fillStyle='rgba(14,22,38,.84)';const x=(512-w)/2;g.beginPath();g.moveTo(x+24,12);g.arcTo(x+w,12,x+w,84,24);g.arcTo(x+w,84,x,84,24);g.arcTo(x,84,x,12,24);g.arcTo(x,12,x+w,12,24);g.fill();
   g.fillStyle=color||'#fff';g.textAlign='center';g.textBaseline='middle';g.fillText(text,256,50);
   const tx=new THREE.CanvasTexture(cv);tx.anisotropy=4;
-  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tx,sizeAttenuation:false,depthWrite:false}));sp.scale.set(.2,.0375,1);sp.renderOrder=5;return sp;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tx,sizeAttenuation:false,depthWrite:false}));sc=sc||.19;sp.scale.set(sc,sc*.1875,1);sp.renderOrder=5;return sp;
 }
-const NAMES_A=['Eagle','Summit','Glacier','Pine','Raven','Aurora','Timber','Frost','Granite','Wolf','Cedar','Polar','Lynx','Comet','Alpine','Storm','Blizzard','Sunrise'];
-const NAMES_LIFT=['Express','Chair','Quad','Six','Gondola','Lift'];
-const NAMES_RUN=['Run','Ridge','Glade','Bowl','Chute','Trail','Way','Drop','Cruiser','Couloir'];
+const WORDS=['Орёл','Ворон','Ледник','Сосна','Рысь','Комета','Буран','Метель','Кедр','Вершина','Аврора','Гранит','Иней','Полярка','Лавина','Рассвет','Медведь','Лиса','Волк','Сокол','Снежинка','Север','Пихта','Эдельвейс'];
 const pick=a=>a[(Math.random()*a.length)|0];
-const lifts=[],runs=[];let uid=1;
+function freshWord(used){const f=WORDS.filter(w=>!used.some(n=>n.includes(w)));return pick(f.length?f:WORDS)}
+const allNames=()=>lifts.map(l=>l.name).concat(runs.map(r=>r.name));
+const lifts=[],runs=[],buildings=[];let uid=1;
 
-/* ---------- lifts ---------- */
-const CABLE=7;
-const matTower=new THREE.MeshLambertMaterial({color:0x64748b}),matStation=new THREE.MeshLambertMaterial({color:0xdc2626}),matRoof=new THREE.MeshLambertMaterial({color:0x1f2937}),matChair=new THREE.MeshLambertMaterial({color:0x334155});
+/* ================= lifts ================= */
+const LT={
+  chair:{n:'Кресельный',icon:'🪑',desc:'Обычная канатка. Средняя цена и скорость.',speed:7.5,interval:1.6,maxLen:240,minVert:8,cable:7,upkeep:70,cost:(l,v)=>3500+l*38+v*25,st:0xdc2626},
+  gondola:{n:'Гондола',icon:'🚠',desc:'Быстрые кабинки, длинные пролёты, много людей. Дорого.',speed:11,interval:.85,maxLen:400,minVert:8,cable:10,upkeep:150,cost:(l,v)=>9000+l*70+v*30,st:0x2563eb},
+  tbar:{n:'Бугель',icon:'🎿',desc:'Короткий и дешёвый, тянет по снегу. Для учебных склонов.',speed:5,interval:1.3,maxLen:110,minVert:3,cable:4,upkeep:30,cost:(l,v)=>1500+l*18,st:0xf59e0b},
+};
+const matTower=mat(0x64748b),matChair=mat(0x334155);
 const cableMat=new THREE.LineBasicMaterial({color:0x1f2937});
-function liftCheck(a,b){
-  if(!inBounds(a)||!inBounds(b))return{ok:false,msg:'Outside your land'};
+function blockedByBuilding(p,r){return buildings.some(b=>Math.hypot(p.x-b.x,p.z-b.z)<b.rad+r)}
+function liftCheck(a,b,type){
+  const T=LT[type];
+  if(!inBounds(a)||!inBounds(b))return{ok:false,msg:'Это за границей твоей земли'};
+  if(onLake(a)||onLake(b))return{ok:false,msg:'На замёрзшем озере строить нельзя'};
   const len=d2(a,b),vert=b.y-a.y;
-  if(len<20)return{ok:false,msg:'Too short'};
-  if(len>240)return{ok:false,msg:'Too long (max '+M(240)+' m)'};
-  if(vert<8)return{ok:false,msg:'The top must be higher than the bottom'};
-  for(let t=.06;t<.95;t+=.02){const x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,cy=a.y+CABLE+(vert)*t;if(cy-heightAt(x,z)<2.6)return{ok:false,msg:'The ground blocks the cable'}}
-  const cost=Math.round((3500+len*38+vert*25)/50)*50;
-  return{ok:true,len,vert,cost};
+  if(len<20)return{ok:false,msg:'Слишком коротко: отодвинь верхнюю станцию'};
+  if(len>T.maxLen)return{ok:false,msg:`Слишком длинно для типа «${T.n}» (макс. ${M(T.maxLen)} м)`};
+  if(vert<T.minVert)return{ok:false,msg:'Верхняя станция должна быть ВЫШЕ нижней'};
+  if(blockedByBuilding(a,3)||blockedByBuilding(b,3))return{ok:false,msg:'Станция упирается в здание'};
+  if(type==='tbar'){for(let t=.05;t<1;t+=.05){const x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,x2=a.x+(b.x-a.x)*(t+.05),z2=a.z+(b.z-a.z)*(t+.05);if((heightAt(x2,z2)-heightAt(x,z))/(len*.05)>.6)return{ok:false,msg:'Для бугеля слишком круто: выбери гондолу или кресельный'}}}
+  else for(let t=.06;t<.95;t+=.02){const x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,cy=a.y+T.cable+vert*t-Math.sin(Math.PI*t)*1.2;if(cy-heightAt(x,z)<(type==='gondola'?4:2.6))return{ok:false,msg:'Гора мешает тросу: поставь станцию в другом месте'}}
+  const cost=Math.round(T.cost(len,vert)/50)*50;
+  return{ok:true,len,vert,cost,cap:Math.round(3600/T.interval*(type==='gondola'?1:1))};
 }
-function makeLift(a,b,name){
-  const L={id:uid++,type:'lift',name:name||pick(NAMES_A)+' '+pick(NAMES_LIFT),a:a.clone(),b:b.clone(),queue:[],load:0,riders:0,phase:0,speed:7.5,interval:1.6,g:new THREE.Group(),chairs:[]};
+function cablePos(L,t,side,out){out.copy(L.ca).lerp(L.cb,t);out.addScaledVector(L.perp,(L.type==='gondola'?1.8:1.3)*side);out.y-=Math.sin(Math.PI*t)*1.2;return out}
+function makeLift(a,b,type,name){
+  type=type||'chair';const T=LT[type];
+  const L={id:uid++,kind:'lift',type,name:name||`${T.n} «${freshWord(allNames())}»`,a:a.clone(),b:b.clone(),queue:[],load:0,riders:0,phase:0,speed:T.speed,interval:T.interval,g:new THREE.Group(),chairs:[],ridden:0};
+  L.cost=liftCheck(a,b,type).cost||0;
   L.len=Math.hypot(b.x-a.x,b.y-a.y,b.z-a.z);
   const dir=new THREE.Vector3(b.x-a.x,0,b.z-a.z).normalize(),perp=new THREE.Vector3(-dir.z,0,dir.x);L.dir=dir;L.perp=perp;
-  L.ca=a.clone().add(new THREE.Vector3(0,CABLE,0));L.cb=b.clone().add(new THREE.Vector3(0,CABLE,0));
+  L.ca=a.clone().add(new THREE.Vector3(0,T.cable,0));L.cb=b.clone().add(new THREE.Vector3(0,T.cable,0));
   const ang=Math.atan2(dir.x,dir.z);
-  [a,b].forEach((p,k)=>{const st=new THREE.Mesh(new THREE.BoxGeometry(5,CABLE-1,4),matStation);st.position.set(p.x,p.y+(CABLE-1)/2-.3,p.z);st.rotation.y=ang;
-    const rf=new THREE.Mesh(new THREE.BoxGeometry(6,.6,5.2),matRoof);rf.position.set(p.x,p.y+CABLE-.9,p.z);rf.rotation.y=ang;L.g.add(st,rf)});
-  const n=Math.max(1,Math.ceil(d2(a,b)/22));
-  for(let k=1;k<n;k++){const t=k/n,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,gy=heightAt(x,z),cy=L.ca.y+(L.cb.y-L.ca.y)*t,h=cy-gy+.6;
-    const tw=new THREE.Mesh(new THREE.CylinderGeometry(.32,.45,h,6),matTower);tw.position.set(x,gy+h/2-.3,z);
-    const cr=new THREE.Mesh(new THREE.BoxGeometry(3,.3,.3),matTower);cr.position.set(x,cy+.3,z);cr.rotation.y=ang+Math.PI/2;L.g.add(tw,cr)}
-  [1,-1].forEach(s=>{const o=perp.clone().multiplyScalar(1.3*s);const geo=new THREE.BufferGeometry().setFromPoints([L.ca.clone().add(o),L.cb.clone().add(o)]);L.g.add(new THREE.Line(geo,cableMat))});
-  const nc=Math.floor(L.len/6);const seatG=new THREE.BoxGeometry(1.6,.25,.8),hangG=new THREE.BoxGeometry(.08,1.6,.08);hangG.translate(0,.8,0);
-  for(let k=0;k<nc*2;k++){const c=new THREE.Group();const s=new THREE.Mesh(seatG,matChair),h=new THREE.Mesh(hangG,matChair);c.add(s,h);c.rotation.y=ang;L.chairs.push(c);L.g.add(c)}
-  L.lbl=label('🚡 '+L.name);L.lbl.position.set(b.x,b.y+CABLE+5,b.z);L.g.add(L.lbl);
-  scene.add(L.g);clearTrees(sampleLine(a,b),3.2);lifts.push(L);return L;
+  [a,b].forEach(p=>{
+    const sh=type==='tbar'?3:T.cable-1;
+    const st=box(type==='gondola'?7:5,sh,type==='gondola'?6:4,T.st,p.x,p.y+sh/2-.3,p.z);st.rotation.y=ang;
+    const rf=box(type==='gondola'?8:6,.6,type==='gondola'?7:5.2,0x1f2937,p.x,p.y+sh+.2,p.z);rf.rotation.y=ang;L.g.add(st,rf)});
+  const span=type==='gondola'?34:type==='tbar'?16:22;
+  const n=Math.max(1,Math.ceil(d2(a,b)/span));
+  for(let k=1;k<n;k++){const t=k/n,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,gy=heightAt(x,z),cy=L.ca.y+(L.cb.y-L.ca.y)*t-Math.sin(Math.PI*t)*1.2,h=type==='tbar'?T.cable:cy-gy+.6;
+    const ty=type==='tbar'?gy+T.cable:cy;
+    const tw=new THREE.Mesh(new THREE.CylinderGeometry(type==='gondola'?.5:.32,type==='gondola'?.7:.45,h,6),matTower);tw.position.set(x,gy+h/2-.3,z);
+    const cr=box(type==='gondola'?4.4:3,.3,.3,matTower,x,ty+.3,z);cr.rotation.y=ang+Math.PI/2;L.g.add(tw,cr)}
+  // cables (sagging)
+  [1,-1].forEach(s=>{const pts=[];for(let k=0;k<=24;k++){const t=k/24;const v=new THREE.Vector3();if(type==='tbar'){v.set(a.x+(b.x-a.x)*t,0,a.z+(b.z-a.z)*t);v.y=a.y+T.cable+(b.y-a.y)*t;v.addScaledVector(perp,1.3*s)}else cablePos(L,t,s,v);pts.push(v)}
+    L.g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),cableMat))});
+  if(type==='gondola'){
+    const nc=Math.floor(L.len/14);const cabG=new THREE.BoxGeometry(2.2,2.4,2.6),hangG=new THREE.BoxGeometry(.12,1.2,.12);hangG.translate(0,1.8,0);
+    const cc=[0xef4444,0x2563eb,0xf8fafc,0xfacc15];
+    for(let k=0;k<nc*2;k++){const c=new THREE.Group();const cab=new THREE.Mesh(cabG,mat(cc[k%4]));const win=box(2.25,.9,2.65,0x1e293b,0,.4,0);c.add(cab,win,new THREE.Mesh(hangG,matChair));c.rotation.y=ang;L.chairs.push(c);L.g.add(c)}
+  }else if(type==='tbar'){
+    const nc=Math.floor(L.len/5);const bar=new THREE.BoxGeometry(1.4,.12,.12),pole=new THREE.BoxGeometry(.08,2.6,.08);pole.translate(0,1.3,0);
+    for(let k=0;k<nc*2;k++){const c=new THREE.Group();const b1=new THREE.Mesh(bar,matChair);c.add(b1,new THREE.Mesh(pole,matChair));c.rotation.y=ang+Math.PI/2;L.chairs.push(c);L.g.add(c)}
+  }else{
+    const nc=Math.floor(L.len/6);const seatG=new THREE.BoxGeometry(1.6,.25,.8),hangG=new THREE.BoxGeometry(.08,1.6,.08);hangG.translate(0,.8,0);
+    for(let k=0;k<nc*2;k++){const c=new THREE.Group();c.add(new THREE.Mesh(seatG,matChair),new THREE.Mesh(hangG,matChair));c.rotation.y=ang;L.chairs.push(c);L.g.add(c)}
+  }
+  L.lbl=label(T.icon+' '+L.name);L.lbl.position.set(b.x,b.y+T.cable+5,b.z);L.g.add(L.lbl);
+  scene.add(L.g);clearTrees(sampleLine(a,b),type==='gondola'?4:3.2);lifts.push(L);return L;
 }
 function sampleLine(a,b){const n=Math.ceil(d2(a,b)),o=[];for(let k=0;k<=n;k++){const t=k/n;o.push({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t})}return o}
-function cablePos(L,t,side,out){out.copy(L.ca).lerp(L.cb,t);out.addScaledVector(L.perp,1.3*side);out.y-=Math.sin(Math.PI*t)*1.2;return out}
 
-/* ---------- runs ---------- */
+/* ================= runs ================= */
 function curveSamples(pts){
   if(pts.length<2)return[];
   const v=pts.map(p=>new THREE.Vector3(p.x,0,p.z));
@@ -285,35 +416,41 @@ function curveSamples(pts){
   const n=Math.max(2,Math.ceil(curve.getLength()/1.2));
   return curve.getSpacedPoints(n).map(p=>({x:p.x,z:p.z,y:heightAt(p.x,p.z)}));
 }
+function localGrades(sm){const step=d2(sm[0],sm[1])||1,w=Math.max(1,Math.round(14/step)),g=[];for(let i=0;i<sm.length;i++){const a=Math.max(0,i-(w>>1)),b=Math.min(sm.length-1,a+w);g.push((sm[a].y-sm[b].y)/(step*Math.max(1,b-a)))}return g}
 function runCheck(sm){
-  if(sm.length<2)return{ok:false,msg:'Add at least two points'};
+  if(sm.length<2)return{ok:false,msg:'Нужно минимум две точки',diff:0,len:0,vert:0,cost:0,maxG:0};
   let len=0;for(let i=1;i<sm.length;i++)len+=Math.hypot(sm[i].x-sm[i-1].x,sm[i].y-sm[i-1].y,sm[i].z-sm[i-1].z);
   const step=d2(sm[0],sm[1])||1,w=Math.max(1,Math.round(14/step));
   let maxG=0,minG=1,gs=[];
   for(let i=0;i+w<sm.length;i++){const g=(sm[i].y-sm[i+w].y)/(step*w);gs.push(g);maxG=Math.max(maxG,g);minG=Math.min(minG,g)}
-  gs.sort((a,b)=>a-b);const g90=gs.length?gs[Math.floor(gs.length*.75)]:(sm[0].y-sm[sm.length-1].y)/(step*(sm.length-1));
+  gs.sort((a,b)=>a-b);const g75=gs.length?gs[Math.floor(gs.length*.75)]:(sm[0].y-sm[sm.length-1].y)/(step*(sm.length-1));
   const vert=sm[0].y-sm[sm.length-1].y;
-  const diff=g90<.27?0:g90<.45?1:g90<.7?2:3;
+  const diff=g75<.27?0:g75<.45?1:g75<.7?2:3;
   const cost=Math.round((800+len*22)/50)*50;
   const r={len,vert,maxG,diff,cost,ok:true};
-  if(!sm.every(inBounds))return{...r,ok:false,msg:'Outside your land'};
-  if(len<25)return{...r,ok:false,msg:'Too short'};
-  if(minG<-.04||vert<5)return{...r,ok:false,msg:'Runs must go downhill'};
+  if(!sm.every(inBounds))return{...r,ok:false,msg:'Трасса выходит за границу земли'};
+  if(sm.some(onLake))return{...r,ok:false,msg:'Трасса не может идти по озеру'};
+  if(sm.some(p=>buildings.some(b=>Math.hypot(p.x-b.x,p.z-b.z)<b.rad)))return{...r,ok:false,msg:'Трасса проходит через здание'};
+  if(len<25)return{...r,ok:false,msg:'Слишком короткая трасса'};
+  if(minG<-.04||vert<5)return{...r,ok:false,msg:'Трасса идёт В ГОРУ на красном участке: веди точки только вниз'};
   return r;
 }
-function ribbon(sm,w,color,op){
-  const pos=[],idx=[];
+function gradeColor(g){return g<-.04?0xf43f5e:g<.27?0x22c55e:g<.45?0x2f7cf6:g<.7?0x111827:0x581c87}
+function ribbon(sm,w,color,op,perVertex){
+  const pos=[],idx=[],col=[];const gr=perVertex?localGrades(sm):null;
   for(let i=0;i<sm.length;i++){const a=sm[Math.max(0,i-1)],b=sm[Math.min(sm.length-1,i+1)];let tx=b.x-a.x,tz=b.z-a.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;
     const px=-tz*w,pz=tx*w,p=sm[i];
     pos.push(p.x+px,heightAt(p.x+px,p.z+pz)+.45,p.z+pz,p.x-px,heightAt(p.x-px,p.z-pz)+.45,p.z-pz);
+    if(gr){_c.setHex(gradeColor(gr[i]));col.push(_c.r,_c.g,_c.b,_c.r,_c.g,_c.b)}
     if(i<sm.length-1){const k=i*2;idx.push(k,k+2,k+1,k+1,k+2,k+3)}}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);
-  const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color,transparent:true,opacity:op,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}));
+  if(gr)g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:gr?0xffffff:color,vertexColors:!!gr,transparent:true,opacity:op,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}));
   m.renderOrder=2;return m;
 }
 function makeRun(pts,name){
   const sm=curveSamples(pts),info=runCheck(sm);
-  const R={id:uid++,type:'run',name:name||pick(NAMES_A)+' '+pick(NAMES_RUN),pts:pts.map(p=>({x:p.x,z:p.z})),sm,...info,g:new THREE.Group(),skiers:0};
+  const R={id:uid++,kind:'run',name:name||`Трасса «${freshWord(allNames())}»`,pts:pts.map(p=>({x:p.x,z:p.z})),sm,...info,g:new THREE.Group(),skiers:0,ridden:0,falls:0};
   R.step=R.len/(sm.length-1);
   const d=DIFF[R.diff];
   R.g.add(ribbon(sm,3.6,d.c,R.diff>=2?.66:.45));
@@ -321,85 +458,163 @@ function makeRun(pts,name){
   scene.add(R.g);clearTrees(sm,5.2);runs.push(R);return R;
 }
 
-/* ---------- connection rings ---------- */
-const rings=new THREE.Group();scene.add(rings);rings.visible=false;
-const ringMat=new THREE.MeshBasicMaterial({color:0x38bdf8,transparent:true,opacity:.35,depthWrite:false,side:THREE.DoubleSide});
-const LINK=16,BASE_LINK=30;
-function addRing(p,r,color){const m=new THREE.Mesh(new THREE.RingGeometry(r-1,r,48),color?new THREE.MeshBasicMaterial({color,transparent:true,opacity:.4,depthWrite:false,side:THREE.DoubleSide}):ringMat);m.rotation.x=-Math.PI/2;m.position.set(p.x,p.y+1.2,p.z);m.renderOrder=3;rings.add(m)}
-function refreshRings(){
-  while(rings.children.length)rings.remove(rings.children[0]);
-  addRing(BASE,BASE_LINK,0xfbbf24);
-  lifts.forEach(L=>{addRing(L.a,LINK);addRing(L.b,LINK)});
-  runs.forEach(R=>{addRing(R.sm[0],LINK,0x86efac);addRing(R.sm[R.sm.length-1],LINK,0xfda4af)});
+/* ================= buildings ================= */
+const BT={
+  chalet:{n:'Шале',icon:'🏠',cost:6000,w:7,d:7,upkeep:40,desc:'Домик для гостей: +4 гостя в день и $300 за ночь.',guests:4,night:300},
+  hotel:{n:'Отель',icon:'🏨',cost:30000,w:18,d:11,upkeep:300,desc:'Большой отель: +20 гостей в день и $1 800 за ночь.',guests:20,night:1800,need:2},
+  restaurant:{n:'Ресторан',icon:'🍽️',cost:12000,w:12,d:9,upkeep:150,desc:'Голодные гости заходят поесть: +$14 и хорошее настроение. Работает в радиусе 320 м.',food:14,radius:40},
+  cafe:{n:'Горное кафе',icon:'☕',cost:5000,w:6,d:6,upkeep:60,desc:'Маленькое кафе, можно ставить высоко на горе: +$8 и настроение. Радиус 220 м.',food:8,radius:28},
+  rental:{n:'Прокат',icon:'🎿',cost:8000,w:9,d:7,upkeep:80,desc:'Новички берут лыжи: +$10 с каждого новичка, им веселее.',rent:10},
+  parking:{n:'Парковка',icon:'🅿️',cost:4000,w:16,d:10,upkeep:20,desc:'+40 машин: больше гостей может приехать за день.',cap:40},
+  patrol:{n:'Спасатели',icon:'⛑️',cost:7000,w:7,d:6,upkeep:90,desc:'Помогают упавшим: падения почти не портят настроение.',need:1},
+};
+function bModel(type){
+  const g=new THREE.Group();
+  if(type==='chalet'){g.add(box(6,4,6,0x8b5a2b,0,2,0));const r=new THREE.Mesh(roofGeo(7.4,6.8,3.2),mat(0xf1f5f9));r.position.y=4;g.add(r);g.add(box(.9,2.4,.9,0x6b7280,1.6,5.4,1.2),box(1.2,2,.1,0x3f2a1a,0,1,-3.05));windows(g,2,2.4,-3.06,3,Math.PI)}
+  else if(type==='hotel'){g.add(box(18,10,10,0xe9dcc4,0,5,0),box(18.4,.5,10.4,0x7c5a3a,0,10.2,0));const r=new THREE.Mesh(roofGeo(19,10.6,3.6),mat(0x334155));r.rotation.y=0;r.position.y=10.4;
+    const rr=new THREE.Mesh(roofGeo(11,19,3.6),mat(0x334155));rr.rotation.y=Math.PI/2;rr.position.y=10.4;g.add(rr);
+    for(let f=0;f<3;f++){windows(g,6,2+f*3,-5.02,2.8,Math.PI);windows(g,6,2+f*3,5.02,2.8,0)}g.add(box(3,2.8,.3,0x3f2a1a,0,1.4,-5.1))}
+  else if(type==='restaurant'){g.add(box(12,4.6,9,0x6b4226,0,2.3,0));const r=new THREE.Mesh(roofGeo(10,13,3.4),mat(0x9f1239));r.rotation.y=Math.PI/2;r.position.y=4.6;g.add(r);
+    const gl=new THREE.Mesh(new THREE.PlaneGeometry(9,2.6),winMat);gl.position.set(0,2.2,-4.53);gl.rotation.y=Math.PI;g.add(gl);
+    for(let k=0;k<3;k++){g.add(box(1.6,.8,1,0x7c4a26,-4+k*4,.4,-7),box(.1,2.2,.1,0x334155,-4+k*4,1.5,-7))}
+    const um=new THREE.Mesh(new THREE.ConeGeometry(1.4,.8,8),mat(0xef4444));um.position.set(0,2.8,-7);g.add(um)}
+  else if(type==='cafe'){g.add(box(5,3.4,5,0x7c4a26,0,1.7,0));const r=new THREE.Mesh(roofGeo(6,6,2.6),mat(0xf8fafc));r.position.y=3.4;g.add(r);windows(g,1,1.9,-2.53,0,Math.PI);g.add(box(1.4,.6,.8,0x5b3a24,-1.4,.3,-3.4),box(1.4,.6,.8,0x5b3a24,1.4,.3,-3.4))}
+  else if(type==='rental'){g.add(box(9,4,7,0x0ea5e9,0,2,0),box(9.6,.5,7.6,0x0f172a,0,4.2,0));windows(g,3,2.2,-3.52,2.6,Math.PI);
+    for(let k=0;k<7;k++)g.add(box(.18,2.4,.1,CARC[k],-3+k,1.2,-4.2))}
+  else if(type==='parking'){const p=new THREE.Mesh(new THREE.PlaneGeometry(16,10),mat(0x8b95a5));p.rotation.x=-Math.PI/2;p.position.y=.2;g.add(p);
+    for(let k=-3;k<=3;k++){const l=new THREE.Mesh(new THREE.PlaneGeometry(.15,3.2),new THREE.MeshBasicMaterial({color:0xf8fafc}));l.rotation.x=-Math.PI/2;l.position.set(k*2.2,.25,-3);g.add(l);const l2=l.clone();l2.position.z=3;g.add(l2)}
+    for(let k=0;k<6;k++)car(g,-5.5+k*2.2,k%2?3:-3)}
+  else if(type==='patrol'){g.add(box(7,3.6,6,0xdc2626,0,1.8,0),box(7.4,.4,6.4,0xf8fafc,0,3.8,0),box(2.4,.6,.1,0xf8fafc,0,2.5,-3.05),box(.6,2.4,.1,0xf8fafc,0,2.5,-3.06))}
+  return g;
+}
+function bFoot(type,rot){const T=BT[type];return rot%2?{w:T.d,d:T.w}:{w:T.w,d:T.d}}
+function bCheck(type,x,z,rot){
+  const T=BT[type],f=bFoot(type,rot),hw=f.w/2,hd=f.d/2;
+  const r={ok:true,cost:T.cost};
+  if(!inBounds({x:x-hw,z:z-hd})||!inBounds({x:x+hw,z:z+hd}))return{...r,ok:false,msg:'Это за границей твоей земли'};
+  if(Math.hypot(x-LAKE.x,z-LAKE.z)<LAKE.r+Math.max(hw,hd))return{...r,ok:false,msg:'На озере строить нельзя'};
+  let mn=1e9,mx=-1e9;for(const [u,v] of [[-1,-1],[1,-1],[-1,1],[1,1],[0,0],[0,-1],[0,1],[-1,0],[1,0]]){const h=heightAt(x+u*hw,z+v*hd);mn=Math.min(mn,h);mx=Math.max(mx,h)}
+  r.y=mx;r.found=mx-mn;
+  if(mx-mn>Math.max(4,Math.min(hw,hd)*.9))return{...r,ok:false,msg:'Слишком круто: найди место ровнее (на карте крутизны — зелёное)'};
+  if(Math.hypot(x-BASE.x,z-BASE.z)<14&&!(type==='parking'))return{...r,ok:false,msg:'Слишком близко к базе'};
+  const rad=Math.hypot(hw,hd);
+  for(const b of buildings){if(Math.abs(b.x-x)<(b.fw+f.w)/2+1&&Math.abs(b.z-z)<(b.fd+f.d)/2+1)return{...r,ok:false,msg:'Мешает другое здание'}}
+  for(const R of runs)for(let i=0;i<R.sm.length;i+=2){if(Math.abs(R.sm[i].x-x)<hw+3.5&&Math.abs(R.sm[i].z-z)<hd+3.5)return{...r,ok:false,msg:'Мешает: '+R.name}}
+  for(const L of lifts){const ax=L.a.x,az=L.a.z,bx=L.b.x-ax,bz=L.b.z-az,t=clamp(((x-ax)*bx+(z-az)*bz)/(bx*bx+bz*bz),0,1);if(Math.hypot(x-ax-bx*t,z-az-bz*t)<rad+2.5)return{...r,ok:false,msg:'Мешает: '+L.name}}
+  if(T.need&&rating()<T.need&&!buildings.some(b=>b.type===type))return{...r,ok:false,msg:`Откроется при рейтинге ${T.need}★`};
+  const cut=trees.filter(t=>t.on&&Math.abs(t.x-x)<hw+1.5&&Math.abs(t.z-z)<hd+1.5).length;
+  r.cut=cut;r.cost=T.cost+cut*10;
+  return r;
+}
+function makeBuilding(type,x,z,rot,free){
+  const c=bCheck(type,x,z,rot);const T=BT[type],f=bFoot(type,rot);
+  const B={id:uid++,kind:'bld',type,name:T.n,x,z,rot,fw:f.w,fd:f.d,rad:Math.hypot(f.w,f.d)/2,cost:T.cost,g:new THREE.Group(),visits:0,earned:0};
+  const y=c.y!==undefined?c.y:heightAt(x,z);B.y=y;
+  const m=bModel(type);m.rotation.y=rot*Math.PI/2;B.g.add(m);
+  if(c.found>.4){const fd=box(f.w+.6,c.found+1.2,f.d+.6,0x8a8f99,0,-(c.found+1.2)/2+.1,0);B.g.add(fd)}
+  const lb=label(T.icon+' '+T.n,null,.13);lb.position.y=type==='hotel'?17:type==='parking'?4:9;B.g.add(lb);
+  B.g.position.set(x,y,z);scene.add(B.g);clearTreesRect(x,z,f.w/2,f.d/2,0);buildings.push(B);return B;
 }
 
-/* ---------- skiers ---------- */
+/* ================= connection rings ================= */
+const rings=new THREE.Group();scene.add(rings);rings.visible=false;
+const LINK=16,BASE_LINK=30;
+function addRing(p,r,color,op){const m=new THREE.Mesh(new THREE.RingGeometry(r-1.2,r,48),new THREE.MeshBasicMaterial({color,transparent:true,opacity:op||.5,depthWrite:false,side:THREE.DoubleSide}));m.rotation.x=-Math.PI/2;m.position.set(p.x,heightAt(p.x,p.z)+1.2,p.z);m.renderOrder=3;rings.add(m);return m}
+function refreshRings(){
+  while(rings.children.length)rings.remove(rings.children[0]);
+  addRing(BASE,BASE_LINK,0xfbbf24,.7);
+  lifts.forEach(L=>{addRing(L.a,LINK,0xfbbf24);addRing(L.b,LINK,0x38bdf8,.7)});
+  runs.forEach(R=>{addRing(R.sm[0],LINK,0x38bdf8,.35);addRing(R.sm[R.sm.length-1],LINK,0xfbbf24,.35)});
+}
+
+/* ================= skiers ================= */
 const skiers=[];
 const bodyG=new THREE.BoxGeometry(.7,1.05,.45);bodyG.translate(0,1.25,0);
 const legG=new THREE.BoxGeometry(.6,.75,.4);legG.translate(0,.4,0);
 const headG=new THREE.SphereGeometry(.3,8,6);headG.translate(0,2.05,0);
 const skiG=new THREE.BoxGeometry(.5,.06,1.9);
 const JACKETS=[0xef4444,0xf97316,0xeab308,0x22c55e,0x06b6d4,0x3b82f6,0x8b5cf6,0xec4899,0xf8fafc,0x111827];
-const matCache={};const mat=c=>matCache[c]||(matCache[c]=new THREE.MeshLambertMaterial({color:c}));
 function makeSkierMesh(){
   const g=new THREE.Group();
   g.add(new THREE.Mesh(bodyG,mat(pick(JACKETS))),new THREE.Mesh(legG,mat(pick([0x1f2937,0x374151,0x1e3a8a,0x111827]))),new THREE.Mesh(headG,mat(pick([0xef4444,0x2563eb,0xfacc15,0xf8fafc,0x16a34a]))));
   const sk=new THREE.Mesh(skiG,mat(0x0f172a));sk.position.y=.05;g.add(sk);g.scale.setScalar(1.25);scene.add(g);return g;
 }
+// thought bubbles
+const THOUGHTS={queue:['⏳','Очередь слишком длинная'],steep:['😱','Трасса слишком сложная для меня'],stuck:['🤷','Застрял: отсюда никуда не уехать'],price:['💸','Ски-пасс дорогой'],hungry:['🍔','Хочу есть, а негде'],happy:['😍','Отличная трасса!'],nolift:['🚫','У базы нет подъёмника'],fall:['🤕','Упал на склоне']};
+const bubbleTex={};
+function bubble(key){if(!bubbleTex[key]){const cv=document.createElement('canvas');cv.width=cv.height=96;const g=cv.getContext('2d');g.fillStyle='#fff';g.beginPath();g.arc(48,44,38,0,7);g.fill();g.beginPath();g.moveTo(38,76);g.lineTo(48,94);g.lineTo(58,76);g.fill();g.font='44px serif';g.textAlign='center';g.textBaseline='middle';g.fillText(THOUGHTS[key][0],48,46);bubbleTex[key]=new THREE.CanvasTexture(cv)}
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:bubbleTex[key],depthWrite:false}));s.scale.set(2.4,2.4,1);s.position.y=4;s.renderOrder=6;return s}
+function think(s,key){s.dayThoughts=s.dayThoughts||{};day.thoughts[key]=(day.thoughts[key]||0)+1;
+  if(s.bub){s.mesh.remove(s.bub)}if(skiers.filter(x=>x.bub).length>14)return;s.bub=bubble(key);s.mesh.add(s.bub);s.bubT=4}
 function spawnSkier(){
   const r=Math.random(),skill=r<.4?0:r<.8?1:r<.95?2:3;
-  const s={mesh:makeSkierMesh(),skill,state:'walk',pos:new THREE.Vector3(BASE.x+(Math.random()-.5)*22,0,BASE.z+10+Math.random()*6),happy:70,runsDone:0,goal:2+((Math.random()*5)|0),wait:0,phase:Math.random()*6,seen:new Set(),fade:1};
+  const s={mesh:makeSkierMesh(),skill,state:'walk',pos:new THREE.Vector3(BASE.x+(Math.random()-.5)*22,0,BASE.z+10+Math.random()*6),happy:70,runsDone:0,goal:2+((Math.random()*5)|0),wait:0,phase:Math.random()*6,seen:new Set(),fade:1,ate:false};
   s.pos.y=heightAt(s.pos.x,s.pos.z);s.dest={x:BASE.x+(Math.random()-.5)*10,z:BASE.z-6};s.after=null;
-  skiers.push(s);day.visitors++;day.tickets+=price;money+=price;return s;
+  skiers.push(s);day.visitors++;day.tickets+=price;money+=price;
+  if(price>fairValue()*1.2){s.happy-=10;if(Math.random()<.4)think(s,'price')}
+  const rent=buildings.find(b=>b.type==='rental');if(rent&&skill<=1){money+=BT.rental.rent;day.food+=BT.rental.rent;rent.earned+=BT.rental.rent;s.happy+=5}
+  return s;
 }
+function foodNear(P){let best=null,bd=1e9;buildings.forEach(b=>{const T=BT[b.type];if(!T.food)return;const d=Math.hypot(P.x-b.x,P.z-b.z);if(d<T.radius&&d<bd){bd=d;best=b}});return best}
 function optionsAt(P,s){
   const atBase=d2(P,BASE)<BASE_LINK,o=[];
-  lifts.forEach(L=>{if(d2(P,L.a)<LINK||(atBase&&d2(BASE,L.a)<BASE_LINK)){let w=1.4/(1+L.queue.length*.12);if(s.runsDone>=s.goal)w*=.25;o.push({w,lift:L})}});
+  lifts.forEach(L=>{if(d2(P,L.a)<LINK||(atBase&&d2(BASE,L.a)<BASE_LINK)){let w=1.4/(1+L.queue.length*.12);if(L.type==='tbar'&&s.skill===0)w*=1.8;if(s.runsDone>=s.goal)w*=.25;o.push({w,lift:L})}});
   runs.forEach(R=>{if(d2(P,R.sm[0])<LINK||(atBase&&d2(BASE,R.sm[0])<BASE_LINK)){const dd=R.diff-s.skill;let w=dd===0?3:dd<0?1.2/(1-dd):dd===1?.5:.04;if(!s.seen.has(R.id))w*=1.6;if(s.runsDone>=s.goal&&d2(R.sm[R.sm.length-1],BASE)<BASE_LINK)w*=4;o.push({w,run:R})}});
   return{atBase,o};
 }
 function decide(s){
+  if(!s.ate&&s.runsDone>=1&&Math.random()<.55){const f=foodNear(s.pos);if(f){s.state='walk';s.dest={x:f.x,z:f.z};s.after={eat:f};return}else if(s.runsDone>=3&&Math.random()<.3){think(s,'hungry');s.happy-=4;s.ate=true}}
   const {atBase,o}=optionsAt(s.pos,s);
   if(atBase&&s.runsDone>=s.goal)return leave(s);
   if(s.runsDone>=s.goal+3)return leave(s);
   if(!o.length){
-    if(atBase){s.happy-=35;day.noLift++;return leave(s)}
-    s.happy-=25;day.stranded++;return leave(s);
+    if(atBase){s.happy-=35;day.noLift++;think(s,'nolift');return leave(s,2)}
+    s.happy-=25;day.stranded++;think(s,'stuck');return leave(s,2);
   }
   let tot=o.reduce((a,b)=>a+b.w,0),r=Math.random()*tot,c=o[0];for(const x of o){r-=x.w;if(r<=0){c=x;break}}
-  if(c.lift){s.state='walk';s.dest={x:c.lift.a.x-c.lift.dir.x*2.5,z:c.lift.a.z-c.lift.dir.z*2.5};s.after=c}
-  else{s.state='walk';s.dest={x:c.run.sm[0].x,z:c.run.sm[0].z};s.after=c}
+  s.state='walk';s.after=c;
+  if(c.lift)s.dest={x:c.lift.a.x-c.lift.dir.x*2.5,z:c.lift.a.z-c.lift.dir.z*2.5};
+  else s.dest={x:c.run.sm[0].x,z:c.run.sm[0].z};
 }
-function leave(s){s.state='leave';day.food+=Math.max(0,Math.round(6*s.happy/70));money+=Math.max(0,Math.round(6*s.happy/70));pushRating(s.happy)}
+function leave(s,delay){s.state='leave';s.fade=1+(delay||0);const f=Math.max(0,Math.round(6*s.happy/70));day.food+=f;money+=f;pushRating(s.happy)}
 const ratingHist=save&&save.ratingHist||[];
-function pushRating(h){ratingHist.push(clamp(h,0,100));if(ratingHist.length>60)ratingHist.shift()}
-const rating=()=>ratingHist.length?ratingHist.reduce((a,b)=>a+b,0)/ratingHist.length/20:3;
+function pushRating(h){ratingHist.push(clamp(h,0,100));if(ratingHist.length>80)ratingHist.shift()}
+function rating(){const base=ratingHist.length?ratingHist.reduce((a,b)=>a+b,0)/ratingHist.length/20:3;const mix=new Set(runs.map(r=>Math.min(2,r.diff))).size;return clamp(base+(mix>=3?.25:0)+Math.min(.25,buildings.filter(b=>BT[b.type].food).length*.1),0,5)}
 const _v=new THREE.Vector3();
 function updateSkier(s,dt){
   const m=s.mesh;
+  if(s.bub){s.bubT-=dt;if(s.bubT<=0){m.remove(s.bub);s.bub=null}}
   if(s.state==='walk'){
     const dx=s.dest.x-s.pos.x,dz=s.dest.z-s.pos.z,l=Math.hypot(dx,dz),sp=4.2*dt;
     if(l<=sp){s.pos.x=s.dest.x;s.pos.z=s.dest.z;const a=s.after;s.after=null;
       if(!a)decide(s);
+      else if(a.eat){if(!buildings.includes(a.eat))return decide(s);s.state='eat';s.t=5;s.eatAt=a.eat;m.visible=false}
       else if(a.lift){if(!lifts.includes(a.lift))return decide(s);s.state='queue';s.lift=a.lift;s.wait=0;a.lift.queue.push(s)}
       else{if(!runs.includes(a.run))return decide(s);s.state='ski';s.run=a.run;s.d=0;a.run.skiers++}
     }else{s.pos.x+=dx/l*sp;s.pos.z+=dz/l*sp;m.rotation.y=Math.atan2(dx,dz)}
-    s.pos.y=heightAt(s.pos.x,s.pos.z)+.25;m.position.copy(s.pos);m.position.y+=Math.abs(Math.sin(performance.now()/120+s.phase))*.15;m.rotation.z=0;
+    s.pos.y=heightAt(s.pos.x,s.pos.z)+.25;m.position.copy(s.pos);m.position.y+=Math.abs(Math.sin(performance.now()/120+s.phase))*.15;m.rotation.z=0;m.rotation.x=0;
+  }else if(s.state==='eat'){
+    s.t-=dt;if(s.t<=0){const b=s.eatAt,T=BT[b.type];m.visible=true;s.ate=true;s.happy=clamp(s.happy+9,0,100);money+=T.food;day.food+=T.food;b.visits++;b.earned+=T.food;decide(s)}
   }else if(s.state==='queue'){
     const L=s.lift,k=L.queue.indexOf(s);
     const tx=L.a.x-L.dir.x*(2.5+k*1.3)+L.perp.x*((k%2)-.5)*1.2,tz=L.a.z-L.dir.z*(2.5+k*1.3)+L.perp.z*((k%2)-.5)*1.2;
     s.pos.x+=(tx-s.pos.x)*Math.min(1,dt*3);s.pos.z+=(tz-s.pos.z)*Math.min(1,dt*3);s.pos.y=heightAt(s.pos.x,s.pos.z)+.25;
-    s.wait+=dt;m.position.copy(s.pos);m.rotation.set(0,Math.atan2(L.dir.x,L.dir.z),0);
+    s.wait+=dt;if(s.wait>25&&!s.qThought){s.qThought=1;think(s,'queue')}
+    m.position.copy(s.pos);m.rotation.set(0,Math.atan2(L.dir.x,L.dir.z),0);
   }else if(s.state==='lift'){
     const L=s.lift;s.t+=L.speed*dt/L.len;
-    if(s.t>=1){L.riders--;s.state='walk';s.pos.set(L.b.x+L.dir.x*4,0,L.b.z+L.dir.z*4);s.pos.y=heightAt(s.pos.x,s.pos.z);s.dest={x:s.pos.x+(Math.random()-.5)*4,z:s.pos.z+(Math.random()-.5)*4};s.after=null;return}
-    cablePos(L,s.t,1,_v);m.position.set(_v.x,_v.y-2.3,_v.z);m.rotation.set(0,Math.atan2(L.dir.x,L.dir.z),0);
+    if(s.t>=1){L.riders--;L.ridden++;m.visible=true;s.state='walk';s.pos.set(L.b.x+L.dir.x*4,0,L.b.z+L.dir.z*4);s.pos.y=heightAt(s.pos.x,s.pos.z);s.dest={x:s.pos.x+(Math.random()-.5)*4,z:s.pos.z+(Math.random()-.5)*4};s.after=null;return}
+    if(L.type==='tbar'){const x=L.a.x+(L.b.x-L.a.x)*s.t+L.perp.x*1.3,z=L.a.z+(L.b.z-L.a.z)*s.t+L.perp.z*1.3;m.position.set(x,heightAt(x,z)+.25,z)}
+    else{cablePos(L,s.t,1,_v);m.position.set(_v.x,_v.y-2.3,_v.z)}
+    m.rotation.set(0,Math.atan2(L.dir.x,L.dir.z),0);
   }else if(s.state==='ski'){
     const R=s.run,sm=R.sm;
+    if(s.fallT>0){s.fallT-=dt;m.rotation.z=1.4;if(s.fallT<=0)m.rotation.z=0;return}
     const i=Math.min(sm.length-2,Math.floor(s.d/R.step)),f=s.d/R.step-i,a=sm[i],b=sm[i+1];
     const grade=Math.max(0,(a.y-b.y)/(R.step||1));
     const sp=clamp(3.5+grade*15,3,14)*(.78+.12*s.skill);s.d+=sp*dt;
-    if(s.d>=R.len-.5){R.skiers--;s.runsDone++;const dd=R.diff-s.skill;s.happy+=dd===0?9:dd<0?3:dd===1?1:-18;if(!s.seen.has(R.id)){s.happy+=3;s.seen.add(R.id)}s.happy=clamp(s.happy,0,100);
+    if(R.diff-s.skill>=1&&Math.random()<dt*.012*(R.diff-s.skill)){s.fallT=2;R.falls++;day.falls++;s.happy-=buildings.some(b=>b.type==='patrol')?2:9;think(s,'fall');return}
+    if(s.d>=R.len-.5){R.skiers--;R.ridden++;s.runsDone++;const dd=R.diff-s.skill;s.happy+=dd===0?9:dd<0?3:dd===1?1:-18;if(dd>=2)think(s,'steep');else if(dd===0&&Math.random()<.15)think(s,'happy');if(!s.seen.has(R.id)){s.happy+=3;s.seen.add(R.id)}s.happy=clamp(s.happy,0,100);
       s.pos.set(sm[sm.length-1].x,sm[sm.length-1].y,sm[sm.length-1].z);decide(s);return}
     let tx=b.x-a.x,tz=b.z-a.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;
     const wig=Math.sin(s.d*.32+s.phase)*(2.2-s.skill*.4);
@@ -407,72 +622,107 @@ function updateSkier(s,dt){
     s.pos.set(x,heightAt(x,z)+.3,z);m.position.copy(s.pos);
     m.rotation.set(0,Math.atan2(tx,tz)+Math.cos(s.d*.32+s.phase)*.5,-Math.cos(s.d*.32+s.phase)*.35);
   }else if(s.state==='leave'){
-    s.fade-=dt*1.2;m.scale.setScalar(1.25*Math.max(0,s.fade));if(s.fade<=0){scene.remove(m);s.dead=true}
+    s.fade-=dt*1.2;m.scale.setScalar(1.25*clamp(s.fade,0,1));if(s.fade<=0){scene.remove(m);s.dead=true}
   }
 }
 function updateLift(L,dt){
   L.phase=(L.phase+L.speed*dt/(L.len*2))%1;
   const n=L.chairs.length;
-  for(let k=0;k<n;k++){let u=(k/n+L.phase)%1*2;const up=u<1,t=up?u:2-u;cablePos(L,t,up?1:-1,_v);L.chairs[k].position.set(_v.x,_v.y-1.7,_v.z)}
+  for(let k=0;k<n;k++){let u=(k/n+L.phase)%1*2;const up=u<1,t=up?u:2-u;
+    if(L.type==='tbar'){const x=L.a.x+(L.b.x-L.a.x)*t+L.perp.x*1.3*(up?1:-1),z=L.a.z+(L.b.z-L.a.z)*t+L.perp.z*1.3*(up?1:-1);L.chairs[k].position.set(x,L.ca.y+(L.cb.y-L.ca.y)*t-2.6,z)}
+    else{cablePos(L,t,up?1:-1,_v);L.chairs[k].position.set(_v.x,_v.y-(L.type==='gondola'?3:1.7),_v.z)}}
   L.load-=dt;
-  if(L.queue.length&&L.load<=0){const s=L.queue.shift();s.state='lift';s.t=0;L.riders++;L.load=L.interval;if(s.wait>25)s.happy-=Math.min(20,(s.wait-25)*.4)}
+  if(L.queue.length&&L.load<=0){const s=L.queue.shift();s.state='lift';s.t=0;L.riders++;L.load=L.interval;if(L.type==='gondola')s.mesh.visible=false;if(s.wait>25)s.happy-=Math.min(20,(s.wait-25)*.4)}
 }
 
-/* ---------- economy & time ---------- */
-let money=save?save.money:60000,price=save?save.price:45,dayN=save?save.day:1;
+/* ================= economy, time, quests ================= */
+let money=save?save.money:60000,price=save?save.price:45,dayN=save?save.day:1,questI=save&&save.quest||0;
 let minutes=8*60,speed=1,paused=false;
-let day;function newDay(){day={visitors:0,tickets:0,food:0,costs:0,build:0,refund:0,noLift:0,stranded:0,startMoney:money}}newDay();
-function fairValue(){const v=new Set(runs.map(r=>r.diff)).size;return Math.round(22+Math.min(runs.length,12)*5+v*4+lifts.length*3+rating()*4)}
+let day;function newDay(){day={visitors:0,tickets:0,food:0,costs:0,build:0,refund:0,noLift:0,stranded:0,falls:0,thoughts:{},startMoney:money}}newDay();
+function fairValue(){const v=new Set(runs.map(r=>r.diff)).size;return Math.round(22+Math.min(runs.length,12)*5+v*4+lifts.length*3+buildings.length*2+rating()*4)}
+const lodging=()=>buildings.reduce((a,b)=>a+(BT[b.type].guests||0),0);
+const parkingCap=()=>60+buildings.filter(b=>b.type==='parking').length*40;
 function expected(){
   if(!lifts.length)return 4;
   const v=new Set(runs.map(r=>r.diff)).size,pf=clamp(1.6-1.1*price/fairValue(),0,1.6);
   const cap=lifts.reduce((a,L)=>a+3600/L.interval/60*9,0)/4;
-  return Math.round(Math.min(cap,(25+22*Math.pow(runs.length,.85)+12*v+6*lifts.length)*pf*(.35+rating()/5*.9)));
+  const want=(25+22*Math.pow(runs.length,.85)+12*v+6*lifts.length)*pf*(.35+rating()/5*.9);
+  return Math.round(Math.min(cap,Math.min(parkingCap(),want)+lodging()*clamp(pf,0,1)));
 }
 const ARR_START=8.5*60,ARR_END=14*60,CLOSE=17*60;let arrAcc=0;
 function tickEconomy(dt,mins){
-  if(minutes>=ARR_START&&minutes<ARR_END){arrAcc+=expected()/(ARR_END-ARR_START)*mins;while(arrAcc>=1&&skiers.length<260){arrAcc--;spawnSkier()}}
-  const c=(lifts.length*70+runs.length*14)/60*mins;money-=c;day.costs+=c;
+  if(minutes>=ARR_START&&minutes<ARR_END){arrAcc+=expected()/(ARR_END-ARR_START)*mins;while(arrAcc>=1&&skiers.length<280){arrAcc--;spawnSkier()}}
+  const c=(lifts.reduce((a,L)=>a+LT[L.type].upkeep,0)+runs.length*14)/60*mins;money-=c;day.costs+=c;
 }
+const QUESTS=[
+  {t:'Построй подъёмник, нижняя станция — в жёлтом круге у базы',r:3000,tool:'lift',ok:()=>lifts.some(L=>d2(L.a,BASE)<BASE_LINK)},
+  {t:'Проложи трассу от верхней станции вниз, до базы',r:3000,tool:'run',ok:()=>runs.some(R=>d2(R.sm[R.sm.length-1],BASE)<BASE_LINK&&lifts.some(L=>d2(L.b,R.sm[0])<LINK))},
+  {t:'Построй ресторан или горное кафе — голодные гости платят',r:3000,tool:'build',ok:()=>buildings.some(b=>BT[b.type].food)},
+  {t:'Прими 40 гостей за один день',r:4000,ok:()=>day.visitors>=40},
+  {t:'Сделай зелёную, синюю и чёрную трассы',r:8000,tool:'run',ok:()=>[0,1,2].every(d=>runs.some(r=>Math.min(2,r.diff)===d))},
+  {t:'Построй прокат или шале',r:4000,tool:'build',ok:()=>buildings.some(b=>b.type==='rental'||b.type==='chalet')},
+  {t:'Построй гондолу на вершину',r:8000,tool:'lift',ok:()=>lifts.some(L=>L.type==='gondola')},
+  {t:'Подними рейтинг до 4★',r:10000,ok:()=>rating()>=4},
+  {t:'Построй отель',r:12000,tool:'build',ok:()=>buildings.some(b=>b.type==='hotel')},
+  {t:'Прими 150 гостей за день',r:15000,ok:()=>day.visitors>=150},
+  {t:'Накопи $250 000',r:0,ok:()=>money>=250000},
+];
+function renderQuest(){const q=QUESTS[questI];$('quest').innerHTML=q?`<small>🎯 Задание ${questI+1}/${QUESTS.length}</small>${q.t}${q.r?` <span class="rw">+${fmt(q.r)}</span>`:''}`:'<small>🏆 Все задания выполнены</small>Ты — легенда гор! Строй дальше в своё удовольствие.'}
+function checkQuest(){const q=QUESTS[questI];if(q&&q.ok()){money+=q.r;toast(`✅ Задание выполнено! +${fmt(q.r)}`);questI++;renderQuest();persist()}}
 function endDay(){
   paused=true;
-  skiers.forEach(s=>{if(s.state!=='leave'){if(s.lift&&s.state==='queue')s.lift.queue.length=0;leave(s)}scene.remove(s.mesh)});skiers.length=0;
+  skiers.forEach(s=>{if(s.state!=='leave')leave(s);scene.remove(s.mesh)});skiers.length=0;
   lifts.forEach(L=>{L.queue.length=0;L.riders=0});runs.forEach(R=>R.skiers=0);
+  const occ=clamp(.35+rating()/5*.65,0,1);let night=0,bUp=0;buildings.forEach(b=>{const T=BT[b.type];if(T.night){const v=Math.round(T.night*occ);night+=v;b.earned+=v}bUp+=T.upkeep});
+  money+=night-bUp;
   const profit=money-day.startMoney;
   const tips=[];
-  if(!lifts.length)tips.push('🚡 Build a lift that starts near the lodge (yellow ring).');
-  else if(day.noLift>0)tips.push('🚡 '+day.noLift+' skiers found no lift near the lodge.');
-  if(lifts.length&&!runs.length)tips.push('⛷️ Draw a run from the top of your lift back down.');
-  if(day.stranded>0)tips.push('🧭 '+day.stranded+' skiers got stuck: connect run ends to a lift or the lodge.');
-  const diffs=new Set(runs.map(r=>r.diff));if(runs.length&&diffs.size<3)tips.push('🎿 Mix difficulties: beginners need greens, experts want blacks.');
-  if(price>fairValue()*1.25)tips.push('🎟️ Tickets feel expensive. Lower the price or add runs.');
-  $('dayCard').innerHTML=`<h2>Day ${dayN} report</h2><p>The lifts are closed and the snowcats are out.</p>
-    <div class="r"><span>Visitors</span><b>${day.visitors}</b></div>
-    <div class="r"><span>Ticket sales</span><b class="pos">${fmt(day.tickets)}</b></div>
-    <div class="r"><span>Lodge food &amp; drinks</span><b class="pos">${fmt(day.food)}</b></div>
-    <div class="r"><span>Lift &amp; grooming costs</span><b class="neg">${fmt(-day.costs)}</b></div>
-    ${day.build?`<div class="r"><span>Construction</span><b class="neg">${fmt(-(day.build-day.refund))}</b></div>`:''}
-    <div class="r tot"><span>Net change</span><b class="${profit>=0?'pos':'neg'}">${fmt(profit)}</b></div>
-    <div class="r"><span>Rating</span><b style="color:#fbbf24">${starStr()}</b></div>
-    ${tips.length?'<p>'+tips.join('<br>')+'</p>':'<p>🎉 Great day on the mountain!</p>'}
-    <div class="row"><button class="btn pri" id="bNext">Start day ${dayN+1}</button></div>`;
+  if(!lifts.length)tips.push('🚡 Построй подъёмник: нижняя станция — в жёлтом круге у базы.');
+  else if(day.noLift>0)tips.push('🚫 '+day.noLift+' гостей не нашли подъёмник у базы.');
+  if(lifts.length&&!runs.length)tips.push('⛷️ Нарисуй трассу от верхней станции вниз.');
+  if(day.stranded>0)tips.push('🤷 '+day.stranded+' гостей застряли: конец трассы должен быть в круге подъёмника или базы.');
+  const diffs=new Set(runs.map(r=>Math.min(2,r.diff)));if(runs.length&&diffs.size<3)tips.push('🎿 Нужны разные трассы: новичкам — зелёные, опытным — чёрные.');
+  if(price>fairValue()*1.25)tips.push('💸 Ски-пасс слишком дорогой. Снизь цену или построй больше.');
+  if((day.thoughts.queue||0)>5)tips.push('⏳ Длинные очереди: поставь ещё подъёмник или гондолу.');
+  if((day.thoughts.hungry||0)>3)tips.push('🍔 Гостям негде поесть: построй ресторан или кафе.');
+  if(day.falls>5&&!buildings.some(b=>b.type==='patrol'))tips.push('⛑️ Много падений: построй пункт спасателей.');
+  const th=Object.entries(day.thoughts).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`${THOUGHTS[k][0]} ${THOUGHTS[k][1]} — ${v}`).join('<br>');
+  $('dayCard').innerHTML=`<h2>Итоги дня ${dayN}</h2><p>Подъёмники закрыты, ратраки вышли на склон.</p>
+    <div class="r"><span>Гостей</span><b>${day.visitors}</b></div>
+    <div class="r"><span>Ски-пассы</span><b class="pos">${fmt(day.tickets)}</b></div>
+    <div class="r"><span>Еда и прокат</span><b class="pos">${fmt(day.food)}</b></div>
+    ${night?`<div class="r"><span>Ночёвки в отелях и шале</span><b class="pos">${fmt(night)}</b></div>`:''}
+    <div class="r"><span>Работа подъёмников и трасс</span><b class="neg">${fmt(-day.costs)}</b></div>
+    ${bUp?`<div class="r"><span>Содержание зданий</span><b class="neg">${fmt(-bUp)}</b></div>`:''}
+    ${day.build?`<div class="r"><span>Стройка</span><b class="neg">${fmt(-(day.build-day.refund))}</b></div>`:''}
+    <div class="r tot"><span>Итого за день</span><b class="${profit>=0?'pos':'neg'}">${fmt(profit)}</b></div>
+    <div class="r"><span>Рейтинг</span><b style="color:#fbbf24">${starStr()}</b></div>
+    ${th?`<p><b style="color:#fff">О чём думали гости:</b><br>${th}</p>`:''}
+    ${tips.length?'<p><b style="color:#fff">Советы:</b><br>'+tips.join('<br>')+'</p>':'<p>🎉 Отличный день на горе!</p>'}
+    <div class="row"><button class="btn pri" id="bNext">Начать день ${dayN+1}</button></div>`;
   $('mDay').classList.add('show');
   $('bNext').onclick=()=>{$('mDay').classList.remove('show');dayN++;minutes=8*60;newDay();paused=false;persist()};
   persist(dayN+1);
 }
 const starStr=()=>{const r=Math.round(rating()*2)/2;let s='';for(let i=1;i<=5;i++)s+=r>=i?'★':r>=i-.5?'⯪':'☆';return s+' '+rating().toFixed(1)};
 
-/* ---------- persistence ---------- */
+/* ================= persistence ================= */
 function persist(dayOverride){
-  try{localStorage.setItem(SAVE_KEY,JSON.stringify({seed,money:Math.round(money),price,day:dayOverride||dayN,ratingHist,
-    lifts:lifts.map(L=>({n:L.name,a:[L.a.x,L.a.z],b:[L.b.x,L.b.z]})),runs:runs.map(R=>({n:R.name,p:R.pts.map(p=>[p.x,p.z])}))}))}catch(e){}
+  try{const cut=[];for(let i=0;i<BASE_TREES;i++)if(!trees[i].on)cut.push(i);
+    localStorage.setItem(SAVE_KEY,JSON.stringify({v:2,seed,money:Math.round(money),price,day:dayOverride||dayN,ratingHist,quest:questI,
+    lifts:lifts.map(L=>({n:L.name,t:L.type,a:[L.a.x,L.a.z],b:[L.b.x,L.b.z]})),runs:runs.map(R=>({n:R.name,p:R.pts.map(p=>[p.x,p.z])})),
+    blds:buildings.map(b=>({t:b.type,x:b.x,z:b.z,r:b.rot})),cut,planted:trees.slice(BASE_TREES).filter(t=>t.on).map(t=>[+t.x.toFixed(1),+t.z.toFixed(1)])}))}catch(e){}
 }
+function addTree(x,z){if(trees.length>=TREE_CAP)return false;const i=trees.length;trees.push({x,z,y:heightAt(x,z),s:.7+Math.random()*.6,on:true});setTree(i);colorTree(i);return true}
 if(save){
-  (save.lifts||[]).forEach(l=>makeLift(new THREE.Vector3(l.a[0],heightAt(l.a[0],l.a[1]),l.a[1]),new THREE.Vector3(l.b[0],heightAt(l.b[0],l.b[1]),l.b[1]),l.n));
+  (save.cut||[]).forEach(i=>{if(trees[i]){trees[i].on=false;setTree(i)}});
+  (save.planted||[]).forEach(p=>addTree(p[0],p[1]));treesChanged();
+  (save.blds||[]).forEach(b=>makeBuilding(b.t,b.x,b.z,b.r,true));
+  (save.lifts||[]).forEach(l=>makeLift(new THREE.Vector3(l.a[0],heightAt(l.a[0],l.a[1]),l.a[1]),new THREE.Vector3(l.b[0],heightAt(l.b[0],l.b[1]),l.b[1]),l.t||'chair',l.n));
   (save.runs||[]).forEach(r=>makeRun(r.p.map(p=>({x:p[0],z:p[1]})),r.n));
 }
 
-/* ---------- picking & tools ---------- */
+/* ================= picking ================= */
 const ray=new THREE.Raycaster();
 function pickGround(cx,cy){
   const r=renderer.domElement.getBoundingClientRect();
@@ -483,119 +733,261 @@ function pickGround(cx,cy){
       const X=o.x+d.x*hi,Z=o.z+d.z*hi;return new THREE.Vector3(X,heightAt(X,Z),Z)}prev=t}
   return null;
 }
-function snap(p){
-  const nodes=[{x:BASE.x,z:BASE.z,r:0}];lifts.forEach(L=>nodes.push(L.a,L.b));runs.forEach(R=>nodes.push(R.sm[0],R.sm[R.sm.length-1]));
-  let best=null,bd=9;nodes.forEach(n=>{const d=d2(p,n);if(d<bd&&n.r===undefined){bd=d;best=n}});
-  return best?new THREE.Vector3(best.x,heightAt(best.x,best.z),best.z):p;
-}
-let tool='look',liftA=null,runPts=[],hover=null;
-const prev=new THREE.Group();scene.add(prev);
-const markerG=new THREE.CylinderGeometry(.9,.9,3,10);markerG.translate(0,1.5,0);
-function clearPrev(){while(prev.children.length){const c=prev.children[0];prev.remove(c);c.geometry&&c.geometry!==markerG&&c.geometry.dispose()}}
-function marker(p,c){const m=new THREE.Mesh(markerG,new THREE.MeshBasicMaterial({color:c}));m.position.copy(p);prev.add(m)}
-function ctx(text,{undo=false,ok=false,okText='Build',okOn=true}={}){
-  $('ctx').classList.toggle('show',!!text);$('ctxText').innerHTML=text||'';
-  $('bUndo').style.display=undo?'':'none';$('bOk').style.display=ok?'':'none';$('bOk').textContent=okText;$('bOk').disabled=!okOn;
-}
-function setTool(t){
-  if(t==='price'){$('price').classList.toggle('show');updatePrice();return}
-  tool=t;liftA=null;runPts=[];clearPrev();hideInfo();
-  document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
-  rings.visible=t==='lift'||t==='run';if(rings.visible)refreshRings();
-  refreshCtx();
-}
-function refreshCtx(){
-  if(tool==='lift'){
-    if(!liftA)ctx('🚡 Tap where the lift <b>starts</b> (bottom)');
-    else{const b=hover||null;let t='Now tap the <b>top</b> station';if(b){const c=liftCheck(liftA,b);t=c.ok?`📏 ${M(c.len)} m · ⬆ ${M(c.vert)} m · <b class="${money>=c.cost?'pos':'neg'}">${fmt(c.cost)}</b>`:`<span class="neg">${c.msg}</span>`}ctx(t,{undo:true})}
-  }else if(tool==='run'){
-    if(!runPts.length)ctx('⛷️ Tap the <b>start</b> of the run (top of a lift)');
-    else{const pts=hover?runPts.concat([hover]):runPts;const sm=curveSamples(pts),c=runCheck(curveSamples(runPts));const ch=runCheck(sm);
-      let t='Tap points down the slope';
-      if(runPts.length>=2){const d=DIFF[c.diff];t=c.ok?`<b style="color:${d.css}">${d.s} ${d.n}</b> · ${M(c.len)} m · ↓${M(c.vert)} m · <b class="${money>=c.cost?'pos':'neg'}">${fmt(c.cost)}</b>`:`<span class="neg">${c.msg}</span>`}
-      else if(hover&&sm.length>1){const d=DIFF[ch.diff];t=`Next point → <b style="color:${d.css}">${d.s} ${d.n}</b>`}
-      ctx(t,{undo:true,ok:true,okOn:runPts.length>=2&&c.ok&&money>=c.cost})}
-  }else if(tool==='del')ctx('🧨 Tap a lift or run to remove it (40% refund)');
-  else ctx('');
-}
-function drawPreview(){
-  clearPrev();
-  if(tool==='lift'&&liftA){marker(liftA,0x38bdf8);if(hover){const c=liftCheck(liftA,hover);const g=new THREE.BufferGeometry().setFromPoints([liftA.clone().setY(liftA.y+CABLE),hover.clone().setY(hover.y+CABLE)]);prev.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:c.ok?0x22c55e:0xf43f5e})));marker(hover,c.ok?0x22c55e:0xf43f5e)}}
-  if(tool==='run'&&runPts.length){runPts.forEach(p=>marker(p,0x38bdf8));const pts=hover?runPts.concat([hover]):runPts;const sm=curveSamples(pts);
-    if(sm.length>1){const c=runCheck(sm);prev.add(ribbon(sm,3.6,c.ok||sm.length<3?DIFF[c.diff].c:0xf43f5e,.6))}}
-}
+function snapNodes(){const n=[];lifts.forEach(L=>n.push({p:L.a,k:'bottom',L},{p:L.b,k:'top',L}));runs.forEach(R=>n.push({p:R.sm[0],k:'rstart',R},{p:R.sm[R.sm.length-1],k:'rend',R}));return n}
+function snap(p,r){let best=null,bd=r||8;snapNodes().forEach(n=>{const d=d2(p,n.p);if(d<bd){bd=d;best=n}});return best?new THREE.Vector3(best.p.x,heightAt(best.p.x,best.p.z),best.p.z):p}
 function nearest(p){
   let best=null,bd=7;
+  buildings.forEach(b=>{if(Math.abs(p.x-b.x)<b.fw/2+1.5&&Math.abs(p.z-b.z)<b.fd/2+1.5){best=b;bd=0}});
+  if(best)return best;
   lifts.forEach(L=>{const ax=L.a.x,az=L.a.z,bx=L.b.x-ax,bz=L.b.z-az,t=clamp(((p.x-ax)*bx+(p.z-az)*bz)/(bx*bx+bz*bz),0,1),d=Math.hypot(p.x-ax-bx*t,p.z-az-bz*t);if(d<bd){bd=d;best=L}});
   runs.forEach(R=>{for(let i=0;i<R.sm.length;i+=2){const d=d2(p,R.sm[i]);if(d<bd){bd=d;best=R}}});
   return best;
 }
+
+/* ================= tools & UI ================= */
+let tool='look',liftType='chair',bType=null,bRot=0,treeMode='cut',liftA=null,runPts=[],hover=null,ghostAt=null,selDel=null;
+const prev=new THREE.Group();scene.add(prev);
+const markerG=new THREE.CylinderGeometry(.9,.9,3,10);markerG.translate(0,1.5,0);
+function clearPrev(){while(prev.children.length){const c=prev.children[0];prev.remove(c);c.traverse&&c.traverse(o=>{if(o.geometry&&o.geometry!==markerG&&!o.isSprite)o.geometry.dispose()})}}
+function marker(p,c){const m=new THREE.Mesh(markerG,new THREE.MeshBasicMaterial({color:c}));m.position.copy(p);prev.add(m)}
+const TOOLS={
+  lift:{icon:'🚡',t:'Подъёмник',steps:['Выбери тип подъёмника в списке сверху','Нажми, где будет НИЖНЯЯ станция. Жёлтый круг у базы — туда приходят гости','Нажми выше по горе, где будет ВЕРХНЯЯ станция']},
+  run:{icon:'⛷️',t:'Трасса',steps:['Нажми у верхней станции подъёмника (синий круг)','Ставь точки вниз по склону. Цвет полосы = крутизна, красный = в гору','Закончи в жёлтом круге (база или низ подъёмника) и нажми «Построить»']},
+  build:{icon:'🏠',t:'Здания',steps:['Выбери здание в списке сверху','Нажми на ровное место (на карте «Крутизна» — зелёное)','Поверни, если нужно, и нажми «Построить»']},
+  trees:{icon:'🌲',t:'Деревья',steps:['Выбери: вырубить или посадить','Нажимай на склон: кисть радиусом ~60 м']},
+  del:{icon:'🧨',t:'Снос',steps:['Нажми на подъёмник, трассу или здание — оно подсветится красным','Нажми «Снести», вернём 40% стоимости']},
+};
+function stepOf(){if(tool==='lift')return liftA?2:1;if(tool==='run')return runPts.length?(runPts.length>=2?2:1):0;if(tool==='build')return bType?(ghostAt?2:1):0;if(tool==='trees')return 1;if(tool==='del')return selDel?1:0;return 0}
+function renderCard(stat,btns){
+  const T=TOOLS[tool];if(!T){$('card').classList.remove('show');return}
+  $('card').classList.add('show');$('cIcon').textContent=T.icon;
+  $('cTitle').textContent=T.t+(tool==='lift'?' · '+LT[liftType].n:tool==='build'&&bType?' · '+BT[bType].n:'');
+  const cur=stepOf();
+  $('cSteps').innerHTML=T.steps.map((s,i)=>`<div class="st ${i<cur?'done':i===cur?'cur':''}"><i>${i<cur?'✓':i+1}</i><span>${s}</span></div>`).join('');
+  $('cStat').innerHTML=stat||'';
+  const b=$('cBtns');b.innerHTML='';(btns||[]).forEach(x=>{const e=document.createElement('button');e.className='btn '+(x.c||'');e.innerHTML=x.l;e.disabled=!!x.dis;e.onclick=x.f;b.appendChild(e)});
+}
+function renderPicker(){
+  const p=$('picker');let items=[];
+  if(tool==='lift')items=Object.entries(LT).map(([k,T])=>({k,on:k===liftType,i:T.icon,n:T.n,c:'от '+fmt(Math.round(T.cost(40,15)/50)*50),d:T.desc,f:()=>{liftType=k;liftA=null;refresh()}}));
+  else if(tool==='build')items=Object.entries(BT).map(([k,T])=>{const lock=T.need&&rating()<T.need&&!buildings.some(b=>b.type===k);return{k,on:k===bType,lock,i:T.icon,n:T.n,c:lock?`🔒 рейтинг ${T.need}★`:fmt(T.cost),d:T.desc,f:()=>{bType=k;ghostAt=null;refresh()}}});
+  else if(tool==='trees')items=[{k:'cut',on:treeMode==='cut',i:'🪓',n:'Вырубить',c:'$12 за дерево',d:'Освободи место под стройку или трассу.',f:()=>{treeMode='cut';refresh()}},{k:'plant',on:treeMode==='plant',i:'🌱',n:'Посадить',c:'$20 за дерево',d:'Лес делает курорт красивее.',f:()=>{treeMode='plant';refresh()}}];
+  p.classList.toggle('show',items.length>0);p.innerHTML='';
+  items.forEach(x=>{const e=document.createElement('button');e.className='pk'+(x.on?' on':'')+(x.lock?' lock':'');e.innerHTML=`<span class="i">${x.i}</span><b>${x.n}</b><span class="c">${x.c}</span><span class="d">${x.d}</span>`;e.onclick=x.f;p.appendChild(e)});
+}
+function setTool(t){
+  if(t==='price'){$('price').classList.toggle('show');updatePrice();return}
+  tool=t;liftA=null;runPts=[];hover=null;ghostAt=null;selDel=null;bType=t==='build'?bType:null;hideInfo();
+  document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  rings.visible=t==='lift'||t==='run';if(rings.visible)refreshRings();
+  if(t!=='look')$('price').classList.remove('show');
+  refresh();
+}
+function cancelTool(){setTool('look')}
+function endHint(p){
+  if(d2(p,BASE)<BASE_LINK)return '<span class="okc">✓ конец у базы</span>';
+  if(lifts.some(L=>d2(p,L.a)<LINK))return '<span class="okc">✓ конец у подъёмника</span>';
+  if(runs.some(R=>d2(p,R.sm[0])<LINK))return '<span class="okc">✓ переходит в другую трассу</span>';
+  return '<span class="wrn">⚠ конец никуда не ведёт — гости застрянут</span>';
+}
+function refresh(){
+  renderPicker();drawPreview();
+  if(tool==='lift'){
+    let stat='';
+    const b=hover||null;
+    if(!liftA){stat=`<span style="color:var(--mut)">${LT[liftType].desc}</span>`}
+    else if(b){const c=liftCheck(liftA,b,liftType);stat=c.ok?`📏 ${M(c.len)} м · ⬆ ${M(c.vert)} м · 👥 ${c.cap}/час · <b class="${money>=c.cost?'okc':'bad'}">${fmt(c.cost)}</b>`:`<span class="bad">✕ ${c.msg}</span>`}
+    else stat=d2(liftA,BASE)<BASE_LINK?'<span class="okc">✓ Нижняя станция у базы — гости смогут прийти</span>':'<span class="wrn">ℹ Не у базы: сюда должна вести какая-то трасса</span>';
+    renderCard(stat,liftA?[{l:'↶ Заново',f:()=>{liftA=null;hover=null;refresh()}}]:[]);
+  }else if(tool==='run'){
+    let stat='';const btns=[];
+    if(runPts.length){
+      const sm=curveSamples(runPts),c=runCheck(sm);
+      const startOk=lifts.some(L=>d2(runPts[0],L.b)<LINK)||runs.some(R=>d2(runPts[0],R.sm[R.sm.length-1])<LINK)||d2(runPts[0],BASE)<BASE_LINK;
+      stat=startOk?'<span class="okc">✓ старт у подъёмника</span>':'<span class="wrn">⚠ старт не у подъёмника — сюда никто не приедет</span>';
+      if(runPts.length>=2){const d=DIFF[c.diff];stat+=' · '+endHint(runPts[runPts.length-1])+'<br>'+(c.ok?`<b style="color:${d.css}">${d.s} ${d.n}</b> · ${M(c.len)} м · ↓${M(c.vert)} м · <b class="${money>=c.cost?'okc':'bad'}">${fmt(c.cost)}</b>`:`<span class="bad">✕ ${c.msg}</span>`)}
+      btns.push({l:'↶ Убрать точку',f:()=>{runPts.pop();refresh()}},{l:runPts.length>=2&&c.ok?`Построить ${fmt(c.cost)}`:'Построить',c:'pri',dis:!(runPts.length>=2&&c.ok&&money>=c.cost),f:buildRun});
+    }
+    renderCard(stat,btns);
+  }else if(tool==='build'){
+    let stat='',btns=[];
+    if(bType&&ghostAt){const c=bCheck(bType,ghostAt.x,ghostAt.z,bRot);stat=c.ok?`<span class="okc">✓ Место подходит</span>${c.cut?` · вырубим ${c.cut} дер.`:''} · <b class="${money>=c.cost?'okc':'bad'}">${fmt(c.cost)}</b>`:`<span class="bad">✕ ${c.msg}</span>`;
+      btns=[{l:'⟳ Повернуть',f:()=>{bRot=(bRot+1)%4;refresh()}},{l:c.ok?`Построить ${fmt(c.cost)}`:'Построить',c:'pri',dis:!(c.ok&&money>=c.cost),f:placeBuilding}]}
+    else if(bType)stat=`<span style="color:var(--mut)">${BT[bType].desc}</span>`;
+    renderCard(stat,btns);
+  }else if(tool==='trees'){renderCard(treeMode==='cut'?'🪓 Режим: вырубка':'🌱 Режим: посадка',[])}
+  else if(tool==='del'){
+    if(selDel){const r=Math.round((selDel.cost||0)*.4);renderCard(`Снести <b>${selDel.name}</b>? Вернём <b class="okc">${fmt(r)}</b>`,[{l:'Отмена',f:()=>{selDel=null;refresh()}},{l:'🧨 Снести',c:'red',f:()=>{removeObj(selDel);selDel=null;refresh()}}])}
+    else renderCard('',[]);
+  }else renderCard();
+}
+function drawPreview(){
+  clearPrev();
+  if(tool==='lift'&&liftA){marker(liftA,0x38bdf8);if(hover){const c=liftCheck(liftA,hover,liftType),h=LT[liftType].cable;const g=new THREE.BufferGeometry().setFromPoints([liftA.clone().setY(liftA.y+h),hover.clone().setY(hover.y+h)]);prev.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:c.ok?0x22c55e:0xf43f5e})));marker(hover,c.ok?0x22c55e:0xf43f5e)}}
+  if(tool==='run'&&runPts.length){runPts.forEach((p,i)=>marker(p,i===0?0x38bdf8:0xffffff));const pts=hover?runPts.concat([hover]):runPts;const sm=curveSamples(pts);
+    if(sm.length>1)prev.add(ribbon(sm,3.6,0xffffff,.75,true))}
+  if(tool==='build'&&bType&&(ghostAt||hover)){const p=ghostAt||hover,c=bCheck(bType,p.x,p.z,bRot),f=bFoot(bType,bRot);
+    const g=bModel(bType);g.rotation.y=bRot*Math.PI/2;g.traverse(o=>{if(o.isMesh){o.material=new THREE.MeshBasicMaterial({color:c.ok?0x4ade80:0xf43f5e,transparent:true,opacity:.55,depthWrite:false})}});
+    g.position.set(p.x,c.y!==undefined?c.y:p.y,p.z);prev.add(g);
+    const fp=new THREE.Mesh(new THREE.PlaneGeometry(f.w,f.d),new THREE.MeshBasicMaterial({color:c.ok?0x4ade80:0xf43f5e,transparent:true,opacity:.3,depthWrite:false}));fp.rotation.x=-Math.PI/2;fp.position.set(p.x,(c.y||p.y)+.5,p.z);prev.add(fp);
+    if(BT[bType].radius){const rr=addRing(p,BT[bType].radius,0xfbbf24,.4);rings.remove(rr);prev.add(rr)}}
+  if(tool==='trees'&&hover){const rr=addRing(hover,8,treeMode==='cut'?0xf97316:0x22c55e,.8);rings.remove(rr);prev.add(rr)}
+  if(tool==='del'&&selDel)highlight(selDel,0xf43f5e);
+}
+function highlight(o,c){
+  if(o.kind==='run')prev.add(ribbon(o.sm,4.6,c,.7));
+  else if(o.kind==='lift'){const g=new THREE.BufferGeometry().setFromPoints([o.ca,o.cb]);const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:c}));prev.add(l);marker(o.a,c);marker(o.b,c)}
+  else{const m=new THREE.Mesh(new THREE.BoxGeometry(o.fw+1,12,o.fd+1),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.3,depthWrite:false}));m.position.set(o.x,o.y+6,o.z);prev.add(m)}
+}
 let infoObj=null;
-function showInfo(o){
-  infoObj=o;const el=$('info');el.style.display='block';
-  if(o.type==='lift'){
-    el.innerHTML=`<h3>🚡 ${o.name}<button class="x" onclick="hideInfo()">✕</button></h3>
-    <div class="r"><span>Length</span><b>${M(o.len)} m</b></div><div class="r"><span>Vertical</span><b>${M(o.b.y-o.a.y)} m</b></div>
-    <div class="r"><span>Capacity</span><b>${Math.round(3600/o.interval)} / hr</b></div><div class="r"><span>In line</span><b>${o.queue.length}</b></div><div class="r"><span>Riding</span><b>${o.riders}</b></div>
-    <div class="r"><span>Running cost</span><b>$70 / hr</b></div>`;
-  }else{const d=DIFF[o.diff];
-    el.innerHTML=`<h3><span style="color:${d.css}">${d.s} ${o.name}</span><button class="x" onclick="hideInfo()">✕</button></h3>
-    <div class="r"><span>Difficulty</span><b style="color:${d.css}">${d.n}</b></div><div class="r"><span>Length</span><b>${M(o.len)} m</b></div>
-    <div class="r"><span>Vertical drop</span><b>${M(o.vert)} m</b></div><div class="r"><span>Max steepness</span><b>${Math.round(Math.atan(o.maxG)*180/Math.PI)}°</b></div>
-    <div class="r"><span>Skiers on run</span><b>${o.skiers}</b></div>`;
+function showInfo(o,live){
+  const el=$('info');if(live&&infoObj!==o)return;infoObj=o;el.style.display='block';let h='';
+  if(o.kind==='lift'){const T=LT[o.type];
+    h=`<h3>${T.icon} ${o.name}<button class="x" id="iX">✕</button></h3>
+    <div class="r"><span>Тип</span><b>${T.n}</b></div><div class="r"><span>Длина</span><b>${M(o.len)} м</b></div><div class="r"><span>Перепад</span><b>${M(o.b.y-o.a.y)} м</b></div>
+    <div class="r"><span>Пропускная</span><b>${Math.round(3600/o.interval)} чел/час</b></div><div class="r"><span>В очереди</span><b>${o.queue.length}</b></div><div class="r"><span>Едут</span><b>${o.riders}</b></div>
+    <div class="r"><span>Подъёмов всего</span><b>${o.ridden}</b></div><div class="r"><span>Расход</span><b>$${T.upkeep}/час</b></div>`;
+    if(live){$('iStats').innerHTML=h.replace(/^<h3>.*?<\/h3>/s,'');return}
+    h=h.replace(/(<\/h3>)([\s\S]*)$/,'$1<div id="iStats">$2</div>');
+    const up=o.type==='chair'?'gondola':o.type==='tbar'?'chair':null;
+    if(up){const c=liftCheck(o.a,o.b,up);const diff=c.ok?Math.max(0,c.cost-o.cost*.6):0;h+=`<div class="cb"><button class="btn pri" id="iUp" ${c.ok&&money>=diff?'':'disabled'}>⬆ Улучшить до «${LT[up].n}» ${c.ok?fmt(diff):''}</button></div>${c.ok?'':`<div class="r"><span class="bad">${c.msg}</span></div>`}`;o._up={to:up,cost:diff}}
+  }else if(o.kind==='run'){const d=DIFF[o.diff];
+    h=`<h3><span style="color:${d.css}">${d.s} ${o.name}</span><button class="x" id="iX">✕</button></h3>
+    <div class="r"><span>Сложность</span><b style="color:${d.css}">${d.n}</b></div><div class="r"><span>Длина</span><b>${M(o.len)} м</b></div>
+    <div class="r"><span>Перепад</span><b>${M(o.vert)} м</b></div><div class="r"><span>Макс. крутизна</span><b>${Math.round(Math.atan(o.maxG)*180/Math.PI)}°</b></div>
+    <div class="r"><span>Сейчас на трассе</span><b>${o.skiers}</b></div><div class="r"><span>Спусков всего</span><b>${o.ridden}</b></div><div class="r"><span>Падений</span><b>${o.falls}</b></div>`;
+    if(live){$('iStats').innerHTML=h.replace(/^<h3>.*?<\/h3>/s,'');return}
+    h=h.replace(/(<\/h3>)([\s\S]*)$/,'$1<div id="iStats">$2</div>');
+  }else{const T=BT[o.type];
+    h=`<h3>${T.icon} ${T.n}<button class="x" id="iX">✕</button></h3><div class="r" style="display:block;line-height:1.35"><span>${T.desc}</span></div>
+    ${T.food?`<div class="r"><span>Посетителей</span><b>${o.visits}</b></div>`:''}<div class="r"><span>Заработано</span><b>${fmt(o.earned)}</b></div><div class="r"><span>Содержание</span><b>$${T.upkeep}/день</b></div>`;
+    if(live){$('iStats').innerHTML=h.replace(/^<h3>.*?<\/h3>/s,'');return}
+    h=h.replace(/(<\/h3>)([\s\S]*)$/,'$1<div id="iStats">$2</div>');
   }
+  h+=`<div class="cb"><button class="btn red" id="iDel">🧨 Снести</button></div>`;
+  el.innerHTML=h;$('iX').onclick=hideInfo;$('iDel').onclick=()=>{setTool('del');selDel=o;refresh()};
+  if($('iUp'))$('iUp').onclick=()=>upgradeLift(o);
 }
 function hideInfo(){infoObj=null;$('info').style.display='none'}
-window.hideInfo=hideInfo;
+function upgradeLift(L){const u=L._up;if(!u||money<u.cost)return;money-=u.cost;day.build+=u.cost;const a=L.a.clone(),b=L.b.clone(),nm=L.name.replace(/^\S+/,LT[u.to].n);
+  // keep riders safe: send queue and riders back to decision
+  L.queue.forEach(s=>{s.state='walk';s.dest={x:s.pos.x,z:s.pos.z};s.after=null});skiers.forEach(s=>{if(s.lift===L&&s.state==='lift'){s.mesh.visible=true;s.state='walk';s.pos.copy(b);s.dest={x:b.x,z:b.z};s.after=null}});
+  scene.remove(L.g);lifts.splice(lifts.indexOf(L),1);const N=makeLift(a,b,u.to,nm);burst(b,'⬆ '+LT[u.to].n);showInfo(N);refreshRings();persist()}
 function removeObj(o){
-  if(o.type==='lift'){o.queue.forEach(s=>leave(s));skiers.forEach(s=>{if(s.lift===o&&s.state==='lift')leave(s)});scene.remove(o.g);lifts.splice(lifts.indexOf(o),1)}
-  else{skiers.forEach(s=>{if(s.run===o&&s.state==='ski')leave(s)});scene.remove(o.g);runs.splice(runs.indexOf(o),1)}
-  const refund=Math.round((o.cost||liftCheck(o.a,o.b).cost||0)*.4);money+=refund;day.refund+=refund;toast(`Removed ${o.name} · +${fmt(refund)}`);refreshRings();persist();
+  if(o.kind==='lift'){o.queue.forEach(s=>leave(s));skiers.forEach(s=>{if(s.lift===o&&s.state==='lift'){s.mesh.visible=true;leave(s)}});scene.remove(o.g);lifts.splice(lifts.indexOf(o),1)}
+  else if(o.kind==='run'){skiers.forEach(s=>{if(s.run===o&&s.state==='ski')leave(s)});scene.remove(o.g);runs.splice(runs.indexOf(o),1)}
+  else{skiers.forEach(s=>{if(s.eatAt===o&&s.state==='eat'){s.mesh.visible=true;decide(s)}});scene.remove(o.g);buildings.splice(buildings.indexOf(o),1)}
+  const refund=Math.round((o.cost||0)*.4);money+=refund;day.refund+=refund;toast(`Снесено: ${o.name} · +${fmt(refund)}`);hideInfo();refreshRings();persist();
+}
+function buildRun(){
+  const c=runCheck(curveSamples(runPts));if(!c.ok)return toast(c.msg,1);if(money<c.cost)return toast('Не хватает денег',1);
+  money-=c.cost;day.build+=c.cost;const R=makeRun(runPts);burst(R.sm[0],`${DIFF[R.diff].s} -${fmt(c.cost)}`);toast(`${DIFF[R.diff].s} ${R.name} открыта!`);runPts=[];hover=null;refreshRings();refresh();persist();checkQuest();
+}
+function placeBuilding(){
+  if(!bType||!ghostAt)return;const c=bCheck(bType,ghostAt.x,ghostAt.z,bRot);if(!c.ok)return toast(c.msg,1);if(money<c.cost)return toast('Не хватает денег',1);
+  money-=c.cost;day.build+=c.cost;const B=makeBuilding(bType,ghostAt.x,ghostAt.z,bRot);burst(new THREE.Vector3(B.x,B.y+6,B.z),`-${fmt(c.cost)}`);toast(`${BT[bType].icon} ${BT[bType].n} построено!`);ghostAt=null;refresh();persist();checkQuest();
 }
 function onTap(cx,cy){
   const p=pickGround(cx,cy);if(!p)return;
   if(tool==='look'){const o=nearest(p);o?showInfo(o):hideInfo();return}
-  if(tool==='del'){const o=nearest(p);if(o)removeObj(o);return}
+  if(tool==='del'){const o=nearest(p);selDel=o||null;if(!o)toast('Здесь нечего сносить. Нажми прямо на постройку');refresh();return}
+  if(tool==='trees'){hover=p;applyTrees(p);refresh();return}
+  if(tool==='build'){if(!bType)return toast('Сначала выбери здание в списке',1);ghostAt=p;refresh();return}
   const q=snap(p);
   if(tool==='lift'){
-    if(!liftA){if(!inBounds(q))return toast('Outside your land',1);liftA=q;hover=null}
-    else{const c=liftCheck(liftA,q);if(!c.ok)return toast(c.msg,1);if(money<c.cost)return toast('Not enough cash ('+fmt(c.cost)+')',1);
-      money-=c.cost;day.build+=c.cost;const L=makeLift(liftA,q);toast(`🚡 ${L.name} built · ${fmt(-c.cost)}`);liftA=null;hover=null;refreshRings();persist();}
+    if(!liftA){if(!inBounds(q))return toast('Это за границей твоей земли',1);liftA=q;hover=null}
+    else{const c=liftCheck(liftA,q,liftType);if(!c.ok){hover=q;refresh();return toast(c.msg,1)}if(money<c.cost)return toast('Не хватает денег: нужно '+fmt(c.cost),1);
+      money-=c.cost;day.build+=c.cost;const L=makeLift(liftA,q,liftType);burst(q,'-'+fmt(c.cost));toast(`${LT[liftType].icon} ${L.name} построен!`);liftA=null;hover=null;refreshRings();persist();checkQuest()}
   }else if(tool==='run'){
-    if(!inBounds(q))return toast('Outside your land',1);
+    if(!inBounds(q))return toast('Это за границей твоей земли',1);
     if(runPts.length&&d2(q,runPts[runPts.length-1])<3)return;
     runPts.push(q);hover=null;
   }
-  drawPreview();refreshCtx();
+  refresh();
 }
-$('bUndo').onclick=()=>{if(tool==='lift')liftA=null;else runPts.pop();hover=null;drawPreview();refreshCtx()};
-$('bCancel').onclick=()=>{if(tool==='look')return;setTool('look')};
-$('bOk').onclick=()=>{
-  if(tool!=='run')return;const c=runCheck(curveSamples(runPts));if(!c.ok)return toast(c.msg,1);if(money<c.cost)return toast('Not enough cash',1);
-  money-=c.cost;day.build+=c.cost;const R=makeRun(runPts);toast(`${DIFF[R.diff].s} ${R.name} opened · ${fmt(-c.cost)}`);runPts=[];hover=null;drawPreview();refreshRings();refreshCtx();persist();
-};
+function applyTrees(p){
+  if(treeMode==='cut'){let n=0;trees.forEach((t,i)=>{if(t.on&&money>=12&&Math.hypot(t.x-p.x,t.z-p.z)<8){t.on=false;setTree(i);n++;money-=12;day.build+=12}});if(n){treesChanged();toast(`🪓 Вырублено ${n} дер. · -${fmt(n*12)}`);persist()}else toast('Здесь нет деревьев')}
+  else{let n=0;for(let k=0;k<10;k++){const a=Math.random()*6.3,r=Math.sqrt(Math.random())*8,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;
+      if(money<20||!inBounds({x,z})||onLake({x,z})||normalAt(x,z)[1]<.8)continue;
+      if(buildings.some(b=>Math.abs(b.x-x)<b.fw/2+1&&Math.abs(b.z-z)<b.fd/2+1))continue;
+      if(runs.some(R=>R.sm.some(s=>Math.hypot(s.x-x,s.z-z)<5)))continue;
+      if(d2({x,z},BASE)<20)continue;
+      if(addTree(x,z)){n++;money-=20;day.build+=20}}
+    if(n){treesChanged();toast(`🌱 Посажено ${n} дер. · -${fmt(n*20)}`);persist()}else toast('Тут сажать нельзя: трасса, здание или слишком круто',1)}
+}
+// floating "+$" text
+const bursts=[];
+function burst(p,text){const s=label(text,'#86efac',.12);s.position.set(p.x,p.y+8,p.z);scene.add(s);bursts.push({s,t:1.6})
+  for(let k=0;k<14;k++){const m=new THREE.Mesh(new THREE.SphereGeometry(.5,5,4),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true}));m.position.set(p.x,p.y+1,p.z);m.userData.v=new THREE.Vector3((Math.random()-.5)*12,6+Math.random()*6,(Math.random()-.5)*12);scene.add(m);bursts.push({m,t:1})}}
+function updBursts(dt){for(let i=bursts.length-1;i>=0;i--){const b=bursts[i];b.t-=dt;if(b.s){b.s.position.y+=dt*4;b.s.material.opacity=clamp(b.t,0,1)}else{b.m.userData.v.y-=20*dt;b.m.position.addScaledVector(b.m.userData.v,dt);b.m.material.opacity=clamp(b.t,0,1)}
+  if(b.t<=0){scene.remove(b.s||b.m);bursts.splice(i,1)}}}
+
+$('cX').onclick=cancelTool;
 document.querySelectorAll('.tool').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
+addEventListener('keydown',e=>{if(e.key==='Escape'){if(tool==='run'&&runPts.length){runPts=[];refresh()}else if(tool==='lift'&&liftA){liftA=null;refresh()}else cancelTool()}
+  if(e.key==='Backspace'&&tool==='run'&&runPts.length){runPts.pop();refresh()}if(e.key==='Enter'&&tool==='run')buildRun();if((e.key==='r'||e.key==='к')&&tool==='build'){bRot=(bRot+1)%4;refresh()}});
 let down=null;
 const cv=renderer.domElement;
-cv.addEventListener('pointerdown',e=>{if(e.isPrimary)down={x:e.clientX,y:e.clientY,t:performance.now()}});
-cv.addEventListener('pointerup',e=>{if(!down||!e.isPrimary)return;const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(moved<8&&performance.now()-down.t<600&&e.button===0)onTap(e.clientX,e.clientY);down=null});
+cv.addEventListener('contextmenu',e=>{if(tool!=='look'){e.preventDefault()}});
+cv.addEventListener('pointerdown',e=>{if(e.isPrimary)down={x:e.clientX,y:e.clientY,t:performance.now(),b:e.button}});
+cv.addEventListener('pointerup',e=>{if(!down||!e.isPrimary)return;const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(moved<8&&performance.now()-down.t<600&&down.b===0)onTap(e.clientX,e.clientY);down=null});
 let hoverReq=null;
 cv.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse'||e.buttons)return;hoverReq={x:e.clientX,y:e.clientY}});
 
-let toastT;function toast(m,bad){const t=$('toast');t.textContent=m;t.classList.toggle('bad',!!bad);t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200)}
+let toastT;function toast(m,bad){const t=$('toast');t.textContent=m;t.classList.toggle('bad',!!bad);t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600)}
 
-/* ---------- UI wiring ---------- */
+/* ================= minimap ================= */
+const mini=$('mini'),mg=mini.getContext('2d'),MW=300;
+const miniBase=document.createElement('canvas');miniBase.width=miniBase.height=MW;
+const toMini=(x,z)=>[(x+H)/S*MW,(z+H)/S*MW];
+function drawMiniBase(){const g=miniBase.getContext('2d'),img=g.createImageData(MW,MW);
+  for(let j=0;j<MW;j++)for(let i=0;i<MW;i++){const x=i/MW*S-H,z=j/MW*S-H,n=normalAt(x,z),y=heightAt(x,z);
+    const sh=clamp(.55+(-n[0]*.6+n[1]*.5+n[2]*.5)*.6,.35,1.1);let r=235,gg=240,b=250;const st=1-n[1];if(st>.3){r=g2(r,120,st);gg=g2(gg,122,st);b=g2(b,135,st)}
+    if(Math.hypot(x-LAKE.x,z-LAKE.z)<LAKE.r){r=170;gg=215;b=240}
+    const k=(j*MW+i)*4;img.data[k]=r*sh;img.data[k+1]=gg*sh;img.data[k+2]=b*sh;img.data[k+3]=255}
+  g.putImageData(img,0,0);function g2(a,b,t){const f=clamp((t-.3)/.15,0,1);return a+(b-a)*f}}
+drawMiniBase();
+const miniTrees=document.createElement('canvas');miniTrees.width=miniTrees.height=MW;
+function drawMiniTrees(){const g=miniTrees.getContext('2d');g.clearRect(0,0,MW,MW);g.fillStyle='rgba(22,101,52,.75)';trees.forEach(t=>{if(!t.on||Math.abs(t.x)>H||Math.abs(t.z)>H)return;const [x,y]=toMini(t.x,t.z);g.fillRect(x-1,y-1,2,2)});treesDirty=false}
+function drawMini(){
+  if(treesDirty)drawMiniTrees();
+  mg.drawImage(miniBase,0,0);mg.drawImage(miniTrees,0,0);
+  mg.lineCap='round';
+  runs.forEach(R=>{mg.strokeStyle=['#22c55e','#2f7cf6','#111827','#000'][R.diff];mg.lineWidth=4;mg.beginPath();R.sm.forEach((p,i)=>{const [x,y]=toMini(p.x,p.z);i?mg.lineTo(x,y):mg.moveTo(x,y)});mg.stroke()});
+  lifts.forEach(L=>{mg.strokeStyle='#dc2626';mg.lineWidth=2.5;mg.setLineDash([5,3]);mg.beginPath();mg.moveTo(...toMini(L.a.x,L.a.z));mg.lineTo(...toMini(L.b.x,L.b.z));mg.stroke();mg.setLineDash([])});
+  buildings.forEach(b=>{const [x,y]=toMini(b.x,b.z);mg.fillStyle='#7c2d12';mg.fillRect(x-b.fw/S*MW/2,y-b.fd/S*MW/2,b.fw/S*MW,b.fd/S*MW)});
+  {const [x,y]=toMini(BASE.x,BASE.z);mg.fillStyle='#f59e0b';mg.beginPath();mg.arc(x,y,6,0,7);mg.fill()}
+  mg.fillStyle='#ec4899';skiers.forEach(s=>{if(s.state==='leave')return;const [x,y]=toMini(s.pos.x,s.pos.z);mg.fillRect(x-1.5,y-1.5,3,3)});
+  // camera view
+  const [cx,cy]=toMini(controls.target.x,controls.target.z),[px,py]=toMini(camera.position.x,camera.position.z);
+  mg.strokeStyle='#fff';mg.lineWidth=2;mg.beginPath();mg.arc(cx,cy,7,0,7);mg.stroke();mg.beginPath();mg.moveTo(cx,cy);mg.lineTo(cx+(px-cx)*.25,cy+(py-cy)*.25);mg.stroke();
+}
+function miniJump(e){const r=mini.getBoundingClientRect();const x=(e.clientX-r.left)/r.width*S-H,z=(e.clientY-r.top)/r.height*S-H;const dx=x-controls.target.x,dz=z-controls.target.z;controls.target.x+=dx;controls.target.z+=dz;camera.position.x+=dx;camera.position.z+=dz;controls.target.y=heightAt(x,z)+8}
+mini.addEventListener('pointerdown',e=>{miniJump(e);mini.setPointerCapture(e.pointerId)});
+mini.addEventListener('pointermove',e=>{if(e.buttons)miniJump(e)});
+$('bMini').onclick=()=>{const w=$('miniWrap');w.classList.toggle('hide');$('bMini').classList.toggle('on',!w.classList.contains('hide'))};
+$('bSteep').onclick=()=>setSteep(!steepView);
+if(innerWidth<640){$('miniWrap').classList.add('hide')}else $('bMini').classList.add('on');
+
+/* ================= UI wiring ================= */
 document.querySelectorAll('#speed button').forEach(b=>b.onclick=()=>{speed=+b.dataset.s;document.querySelectorAll('#speed button').forEach(x=>x.classList.toggle('on',x===b))});
-function updatePrice(){$('pv').textContent='$'+price;$('fair').textContent='$'+fairValue();$('exp').textContent=expected()}
+function updatePrice(){$('pv').textContent='$'+price;$('fair').textContent='$'+fairValue();$('exp').textContent=expected();$('capv').textContent=parkingCap()+(lodging()?` + ${lodging()} в отелях`:'')}
 $('pr').value=price;$('pr').oninput=e=>{price=+e.target.value;updatePrice();persist()};
 $('gear').onclick=()=>{paused=true;$('mMenu').classList.add('show')};
 $('bClose').onclick=()=>{paused=false;$('mMenu').classList.remove('show')};
-$('bHelp').onclick=()=>{$('mMenu').classList.remove('show');$('mIntro').classList.add('show')};
-let newArm=0;$('bNew').onclick=()=>{if(Date.now()-newArm>4000){newArm=Date.now();$('bNew').textContent='Tap again to erase this resort';setTimeout(()=>$('bNew').textContent='New mountain (reset)',4000);return}try{localStorage.setItem(SAVE_KEY,JSON.stringify({seed:(Math.random()*1e6)|0,money:60000,price:45,day:1,lifts:[],runs:[]}))}catch(e){}location.reload()};
+const openHelp=()=>{paused=true;$('mMenu').classList.remove('show');$('mIntro').classList.add('show')};
+$('bHelp').onclick=openHelp;$('bHelpTop').onclick=openHelp;
+function openQuests(){paused=true;$('mMenu').classList.remove('show');
+  $('qCard').innerHTML=`<h2>🎯 Задания</h2><p>Выполняй по порядку — они научат всему и дадут денег.</p><ul class="ql">${QUESTS.map((q,i)=>`<li><span>${i<questI?'✅':i===questI?'▶️':'⬜'}</span><span style="${i>questI?'color:var(--mut)':''}">${q.t}</span>${q.r?`<span class="rw">+${fmt(q.r)}</span>`:''}</li>`).join('')}</ul><div class="row">${QUESTS[questI]&&QUESTS[questI].tool?`<button class="btn" id="qGo">Показать инструмент</button>`:''}<button class="btn pri" id="qClose">Понятно</button></div>`;
+  $('mQuests').classList.add('show');$('qClose').onclick=()=>{$('mQuests').classList.remove('show');paused=false};
+  if($('qGo'))$('qGo').onclick=()=>{$('mQuests').classList.remove('show');paused=false;setTool(QUESTS[questI].tool)}}
+$('quest').onclick=openQuests;$('bQuests').onclick=openQuests;
+let newArm=0;$('bNew').onclick=()=>{if(Date.now()-newArm>4000){newArm=Date.now();$('bNew').textContent='Нажми ещё раз — курорт удалится';setTimeout(()=>$('bNew').textContent='Новая гора (сбросить всё)',4000);return}
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({seed:(Math.random()*1e6)|0,money:60000,price:45,day:1,lifts:[],runs:[],blds:[]}));localStorage.removeItem('powderpeak-v1')}catch(e){}location.reload()};
 $('bStart').onclick=()=>{$('mIntro').classList.remove('show');paused=false};
-if(!save||(!save.lifts||!save.lifts.length)&&dayN===1){$('mIntro').classList.add('show');paused=true}
+if(!save||(!save.lifts||!save.lifts.length)&&(save.day||1)===1){$('mIntro').classList.add('show');paused=true}
 
-/* ---------- snow & sky ---------- */
+/* ================= snow & sky ================= */
 const SN=1400,snowPos=new Float32Array(SN*3);for(let i=0;i<SN;i++){snowPos[i*3]=(Math.random()-.5)*240;snowPos[i*3+1]=Math.random()*140;snowPos[i*3+2]=(Math.random()-.5)*240}
 const snowG=new THREE.BufferGeometry();snowG.setAttribute('position',new THREE.BufferAttribute(snowPos,3));
 const snow=new THREE.Points(snowG,new THREE.PointsMaterial({color:0xffffff,size:.7,transparent:true,opacity:.85,depthWrite:false}));scene.add(snow);
@@ -603,10 +995,10 @@ const skyNoon=new THREE.Color(0xa9cdee),skyEve=new THREE.Color(0xf2b28c),skyMorn
 function sky(){const h=minutes/60;const t=clamp((h-8)/9,0,1);const c=t<.5?skyMorn.clone().lerp(skyNoon,t*2):skyNoon.clone().lerp(skyEve,Math.pow((t-.5)*2,2));
   scene.background.copy(c);scene.fog.color.copy(c);const a=Math.PI*(.15+.7*t);sun.position.set(Math.cos(a)*-220,Math.sin(a)*240+30,120);sun.intensity=.55+.4*Math.sin(Math.PI*t);sun.color.setHSL(.1,.6+.3*Math.max(0,t-.6),.92-.1*Math.max(0,t-.7))}
 
-/* ---------- loop ---------- */
+/* ================= loop ================= */
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.fov=w<h?68:50;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
-let last=performance.now(),uiT=0;
+let last=performance.now(),uiT=0,miniT=0;
 function frame(now){
   requestAnimationFrame(frame);
   const rdt=Math.min(.05,(now-last)/1000);last=now;
@@ -620,25 +1012,27 @@ function frame(now){
       if(minutes>=CLOSE){endDay();break}
     }
   }
-  if(hoverReq&&(tool==='lift'&&liftA||tool==='run'&&runPts.length)){const p=pickGround(hoverReq.x,hoverReq.y);hover=p?snap(p):null;hoverReq=null;drawPreview();refreshCtx()}
-  // snow
+  updBursts(rdt);
+  if(hoverReq&&((tool==='lift'&&liftA)||(tool==='run'&&runPts.length)||(tool==='build'&&bType&&!ghostAt)||tool==='trees')){const p=pickGround(hoverReq.x,hoverReq.y);hover=p?(tool==='build'||tool==='trees'?p:snap(p)):null;hoverReq=null;
+    if(tool==='lift'||tool==='run')refresh();else drawPreview()}
   const sp=snowG.attributes.position.array,cx=controls.target.x,cz=controls.target.z,cy=controls.target.y;
   for(let i=0;i<SN;i++){let y=sp[i*3+1]-rdt*(6+(i%5));if(y<cy-40)y+=140;sp[i*3+1]=y;sp[i*3]+=Math.sin(now/1500+i)*rdt*.8;
     if(sp[i*3]-cx>120)sp[i*3]-=240;else if(sp[i*3]-cx<-120)sp[i*3]+=240;if(sp[i*3+2]-cz>120)sp[i*3+2]-=240;else if(sp[i*3+2]-cz<-120)sp[i*3+2]+=240}
   snowG.attributes.position.needsUpdate=true;
-  // keep camera over land
-  const tg=controls.target;tg.x=clamp(tg.x,-H,H);tg.z=clamp(tg.z,-H,H);const gy=heightAt(tg.x,tg.z);tg.y+=(gy+8-tg.y)*.05;
+  const tg2=controls.target;tg2.x=clamp(tg2.x,-H,H);tg2.z=clamp(tg2.z,-H,H);const gy=heightAt(tg2.x,tg2.z);tg2.y+=(gy+8-tg2.y)*.05;
   if(camera.position.y<heightAt(camera.position.x,camera.position.z)+6)camera.position.y=heightAt(camera.position.x,camera.position.z)+6;
   controls.update();sky();
   uiT-=rdt;if(uiT<=0){uiT=.25;
-    $('cash').textContent=fmt(money);$('cash').parentNode.querySelector('b').style.color=money<0?'#fda4af':'';
+    $('cash').textContent=fmt(money);$('cash').style.color=money<0?'#fda4af':'';
     const hh=Math.floor(minutes/60),mm=Math.floor(minutes%60);$('clock').textContent=hh+':'+String(mm).padStart(2,'0');
-    $('dayL').textContent='Day '+dayN+(minutes<ARR_END?' · Open':' · Last runs');$('nSk').textContent=skiers.filter(s=>s.state!=='leave').length;$('stars').textContent=starStr();
-    if(infoObj)showInfo(infoObj);if($('price').classList.contains('show'))updatePrice();
+    $('dayL').textContent='День '+dayN+(minutes<ARR_END?' · открыто':' · последние спуски');$('nSk').textContent=skiers.filter(s=>s.state!=='leave').length;$('stars').textContent=starStr();
+    if(infoObj&&tool==='look'&&$('iStats'))showInfo(infoObj,true);if($('price').classList.contains('show'))updatePrice();
+    checkQuest();
   }
+  miniT-=rdt;if(miniT<=0&&!$('miniWrap').classList.contains('hide')){miniT=.4;drawMini()}
   renderer.render(scene,camera);
 }
+renderQuest();setTool('look');
 requestAnimationFrame(frame);
-setTool('look');
 </script>
 </body></html>
