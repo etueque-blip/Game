@@ -1,7 +1,7 @@
 // Offline cache for Powder Peak Tycoon.
 // Network first, so players always get the newest version when online;
 // falls back to the cached copy when there is no connection.
-const CACHE = 'powder-peak-v3';
+const CACHE = 'powder-peak-v4';
 const FILES = [
   './',
   'index.html',
@@ -10,7 +10,10 @@ const FILES = [
   'lib/OrbitControls.js',
   'manifest.webmanifest',
   'icon-192.png',
-  'icon-512.png'
+  'icon-512.png',
+  'assets/shot-day.jpg',
+  'assets/shot-night.jpg',
+  'assets/shot-ride.jpg'
 ];
 
 self.addEventListener('install', e => {
