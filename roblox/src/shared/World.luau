@@ -76,6 +76,7 @@ for _, ap in World.AIRPORTS do
 	addLocalRect(ap, W / 2 + 280, W / 2 + 880, -1500, -1000, 0.49, "apron")
 	addLocalRect(ap, W / 2 + 880, W / 2 + 1320, -700, 700, 0.49, "landside") -- терминал, дорога, парковка
 	addLocalRect(ap, W / 2 + 700, W / 2 + 1130, 1000, 1520, 0.49, "apron") -- грузовой терминал
+	addLocalRect(ap, -(W / 2 + 350), -(W / 2 + 290), -930, -870, 0.49, "apron") -- обзорный радар
 end
 
 -- Города (Дубай, Лондон, Ташкент) — данные из tools/gen_cities.py, общие с веб-версией
@@ -160,6 +161,7 @@ for _, ap in World.AIRPORTS do
 	World.addLocalObstacle(ap, W / 2 + 790, -1130, 170, 210, 135) -- ангары
 	World.addLocalObstacle(ap, W / 2 + 790, -1370, 170, 210, 135)
 	World.addLocalObstacle(ap, W / 2 + 1010, 1260, 200, 260, 32) -- грузовой терминал
+	World.addLocalObstacle(ap, -(W / 2 + 320), -900, 16, 16, 52) -- обзорный радар
 	for _, p in ap.parked do
 		local c = PlaneConfigs.PLANES[p[1]]
 		local lx = W / 2 + 760 - c.length / 2

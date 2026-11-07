@@ -38,7 +38,7 @@ local function neon(parent: Instance, size: Vector3, cf: CFrame, color: Color3)
 end
 
 -- ссылки для смены цвета неба по времени суток (updateSky)
-local skyFx: { atm: Atmosphere?, cc: ColorCorrectionEffect?, clouds: Clouds? } = {}
+local skyFx: { atm: Atmosphere?, cc: ColorCorrectionEffect?, clouds: Clouds?, cabs: { PointLight } } = { cabs = {} }
 
 local function setupLighting()
 	Lighting.ClockTime = 14.5
@@ -122,6 +122,9 @@ function WorldBuilder.updateSky(clock: number, rain: number?, mist: number?)
 		clouds.Color = mix(mix(mix(Color3.fromRGB(60, 66, 88), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 186, 150), dusk * 0.6), Color3.fromRGB(110, 116, 126), r * 0.7)
 		clouds.Cover = 0.55 + r * 0.4
 		clouds.Density = 0.6 + r * 0.35
+	end
+	for _, l in skyFx.cabs do
+		l.Brightness = 2.2 * (1 - day)
 	end
 	if cc then
 		cc.TintColor = mix(mix(Color3.fromRGB(196, 206, 255), Color3.new(1, 1, 1), day), Color3.fromRGB(255, 222, 196), dusk * 0.7)
@@ -516,28 +519,62 @@ local function buildAirport(folder: Folder, ap: any)
 			band.Parent = cone
 		end
 	end
-	-- вышка
-	local tw = Instance.new("Part")
-	tw.Shape = Enum.PartType.Cylinder
-	tw.Anchored = true
-	tw.Size = Vector3.new(130, 24, 24)
-	tw.CFrame = cf(tx + 20, 65, 560) * CFrame.Angles(0, 0, math.pi / 2)
-	tw.Color = Color3.fromRGB(223, 226, 230)
-	tw.Material = Enum.Material.Concrete
-	tw.Parent = f
-	local cab = tw:Clone()
-	cab.Size = Vector3.new(16, 44, 44)
-	cab.CFrame = cf(tx + 20, 138, 560) * CFrame.Angles(0, 0, math.pi / 2)
-	cab.Color = GLASS
-	cab.Material = Enum.Material.Glass
-	cab.Parent = f
-	local roofT = tw:Clone()
-	roofT.Size = Vector3.new(3, 48, 48)
-	roofT.CFrame = cf(tx + 20, 147.5, 560) * CFrame.Angles(0, 0, math.pi / 2)
-	roofT.Color = Color3.fromRGB(61, 67, 76)
-	roofT.Material = Enum.Material.Metal
-	roofT.Parent = f
-	neon(f, Vector3.new(3, 3, 3), cf(tx + 20, 152, 560), Color3.fromRGB(255, 48, 48))
+	-- диспетчерская вышка (как в веб-версии, tools/web_tower.py): двухъярусный ствол, балкон, стеклянная кабина
+	-- со стойками (ночью светится — свет включает updateSky), крыша с антеннами и красным огнём
+	do
+		local X, Z = tx + 20, 560
+		local TW, DARK = Color3.fromRGB(223, 226, 230), Color3.fromRGB(61, 67, 76)
+		local function cyl(h: number, d: number, y: number, color: Color3, mat: Enum.Material): Part
+			local p = part(f, Vector3.new(h, d, d), cf(X, y, Z) * CFrame.Angles(0, 0, math.pi / 2), color, mat, true)
+			p.Shape = Enum.PartType.Cylinder
+			return p
+		end
+		cyl(50, 27, 25, TW, Enum.Material.Concrete)
+		cyl(50, 21, 75, TW, Enum.Material.Concrete)
+		cyl(30, 16, 115, Color3.fromRGB(201, 206, 213), Enum.Material.Concrete)
+		cyl(1.5, 34, 130.5, DARK, Enum.Material.Metal)
+		local cab = cyl(15, 38, 139, GLASS, Enum.Material.Glass)
+		local cl = Instance.new("PointLight")
+		cl.Name = "CabLight"
+		cl.Color = Color3.fromRGB(255, 217, 160)
+		cl.Range = 40
+		cl.Brightness = 0
+		cl.Parent = cab
+		table.insert(skyFx.cabs, cl)
+		for i = 0, 7 do
+			local a0 = (i + 0.5) / 8 * math.pi * 2
+			part(f, Vector3.new(0.8, 15.5, 0.8), cf(X + math.cos(a0) * 18.6, 139, Z + math.sin(a0) * 18.6), DARK, Enum.Material.Metal)
+		end
+		cyl(2.5, 46, 148, DARK, Enum.Material.Metal)
+		cyl(4, 24, 151.2, TW, Enum.Material.Concrete)
+		part(f, Vector3.new(0.6, 14, 0.6), cf(X - 4, 160, Z), Color3.fromRGB(208, 212, 218), Enum.Material.Metal)
+		part(f, Vector3.new(0.6, 10, 0.6), cf(X + 5, 158, Z), Color3.fromRGB(208, 212, 218), Enum.Material.Metal)
+		neon(f, Vector3.new(2, 2, 2), cf(X - 4, 167.5, Z), Color3.fromRGB(255, 48, 48))
+	end
+	-- обзорный радар на решётчатой мачте по другую сторону полосы (антенну вращает клиент: атрибуты RadarPivot/RadarOff)
+	do
+		local RX, RZ = -(W / 2 + 320), -900
+		local STEEL = Color3.fromRGB(185, 191, 199)
+		part(f, Vector3.new(44, 1, 44), cf(RX, 0.5, RZ), Color3.fromRGB(165, 165, 160), Enum.Material.Concrete)
+		for _, sx in { -6, 6 } do
+			for _, sz in { -6, 6 } do
+				part(f, Vector3.new(1.2, 40, 1.2), cf(RX + sx, 20, RZ + sz), STEEL, Enum.Material.Metal, true)
+			end
+		end
+		for k = 1, 4 do
+			for _, b2 in { { 12, 0.6, 0, -6 }, { 12, 0.6, 0, 6 }, { 0.6, 12, -6, 0 }, { 0.6, 12, 6, 0 } } do
+				part(f, Vector3.new(b2[1], 0.6, b2[2]), cf(RX + b2[3], k * 9, RZ + b2[4]), STEEL, Enum.Material.Metal)
+			end
+		end
+		part(f, Vector3.new(16, 1.5, 16), cf(RX, 41, RZ), Color3.fromRGB(90, 96, 104), Enum.Material.Metal, true)
+		local pivot = cf(RX, 46, RZ)
+		for _, d in { { Vector3.new(34, 9, 1.2), CFrame.new(0, 3, -1.5) * CFrame.Angles(-0.25, 0, 0), Color3.fromRGB(232, 235, 239) }, { Vector3.new(1, 1, 7), CFrame.new(0, 0.5, 2.5), STEEL } } do
+			local p = part(f, d[1], pivot * d[2], d[3], Enum.Material.Metal)
+			p.Name = "RadarDish"
+			p:SetAttribute("RadarPivot", pivot)
+			p:SetAttribute("RadarOff", d[2])
+		end
+	end
 	-- ангары техобслуживания (как в веб-версии, tools/web_hangar.py): открытые ворота, полая арочная крыша из панелей,
 	-- задняя стена-полукруг, сдвинутые створки, светлый пол с разметкой, лампы, внутри самолёт на обслуживании со стремянками
 	do

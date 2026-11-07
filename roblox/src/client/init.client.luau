@@ -1084,6 +1084,30 @@ do
 	end)
 end
 
+-- ===== обзорные радары аэропортов: антенна вращается (~10 об/мин)
+do
+	local dishes: { { p: BasePart, pivot: CFrame, off: CFrame } } = {}
+	task.spawn(function()
+		task.wait(5)
+		for _, d in workspace:GetDescendants() do
+			if d:IsA("BasePart") and d.Name == "RadarDish" then
+				local pv, off = d:GetAttribute("RadarPivot"), d:GetAttribute("RadarOff")
+				if typeof(pv) == "CFrame" and typeof(off) == "CFrame" then
+					table.insert(dishes, { p = d, pivot = pv, off = off })
+				end
+			end
+		end
+	end)
+	local ang = 0
+	RunService.RenderStepped:Connect(function(dt)
+		ang = (ang + dt * 1.05) % (math.pi * 2)
+		local rot = CFrame.Angles(0, ang, 0)
+		for _, e in dishes do
+			e.p.CFrame = e.pivot * rot * e.off
+		end
+	end)
+end
+
 -- ===== радуга после дождя (как в веб-версии, tools/web_rainbow.py): если днём шёл дождь (> 0.4) и стих (< 0.15),
 -- на ~2 минуты напротив солнца — дуга радиусом 42° из семи цветных полос (только у себя на экране)
 do
