@@ -26,6 +26,21 @@ button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 #quest{position:fixed;left:max(10px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 62px);max-width:min(330px,calc(100vw - 180px));padding:7px 12px;font-size:13px;line-height:1.3;cursor:pointer}
 #quest small{display:block;color:var(--warn);font-weight:700;font-size:10px;letter-spacing:.4px;text-transform:uppercase}
 #quest .rw{color:#86efac;font-weight:700}
+#side{position:fixed;left:max(10px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 62px);display:flex;flex-direction:column;gap:6px;align-items:flex-start;width:min(300px,calc(100vw - 180px));pointer-events:none;z-index:2}
+#side>*{pointer-events:auto}
+#side #quest,#side #info,#side #alert{position:static;max-width:100%}
+#side #info{width:100%}
+#alert[hidden]{display:none}
+#alert{padding:7px 10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-color:#fb7185aa;background:rgba(80,14,28,.85)}
+#quest .bar{height:5px;border-radius:5px;background:#ffffff1f;margin-top:5px;overflow:hidden}#quest .bar i{display:block;height:100%;background:var(--ok);transition:width .4s}
+#quest .dly{display:block;margin-top:4px;color:var(--mut);font-size:11px}
+.claim{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:6px 12px;border-radius:10px;background:linear-gradient(90deg,#f59e0b,#facc15);color:#1c1300;font-weight:800;font-size:13px;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.06);box-shadow:0 0 18px #facc15aa}}
+.ql .pb{height:4px;border-radius:4px;background:#ffffff1a;margin-top:4px;overflow:hidden}.ql .pb i{display:block;height:100%;background:var(--ok)}
+.ql li>div{flex:1;min-width:0}.ql small{color:var(--mut)}
+.ql .claim{margin:0;padding:5px 10px;font-size:12px}
+.qh{margin:14px 0 2px;font-size:15px;color:#fff}
+@media (prefers-reduced-motion:reduce){.claim{animation:none}}
 #miniWrap{position:fixed;right:max(10px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 62px);padding:5px;display:flex;flex-direction:column;gap:4px}
 #mini{width:150px;height:150px;border-radius:9px;display:block;cursor:crosshair;touch-action:none}
 #miniWrap.hide #mini{display:none}
@@ -99,7 +114,7 @@ body.building #quest,body.building #info{display:none!important}
   .stat{padding:4px 8px}.stat b{font-size:14px}.stat small{font-size:9px}#stars{font-size:11px}.sp{display:none}
   .grp button{padding:4px 6px;min-width:26px;font-size:11px}
   .tool{min-width:48px;padding:4px 4px;font-size:10px}.tool span{font-size:18px}
-  #quest{top:calc(env(safe-area-inset-top,0px) + 92px);max-width:calc(100vw - 20px);font-size:12px}
+  #quest{font-size:12px}#side{top:calc(env(safe-area-inset-top,0px) + 92px);width:calc(100vw - 20px)}
   #miniWrap{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 82px)}
   #mini{width:118px;height:118px}
   #info{top:calc(env(safe-area-inset-top,0px) + 150px)}
@@ -122,11 +137,10 @@ body.building #quest,body.building #info{display:none!important}
   <div class="pn grp" id="speed" title="Скорость времени"><button data-s="0" title="Пауза">❚❚</button><button data-s="1" class="on" title="Обычная скорость">▶</button><button data-s="2" title="Быстрее">▶▶</button><button data-s="4" title="Очень быстро">▶▶▶</button></div>
   <div class="pn grp"><button id="bHelpTop" title="Как играть">?</button><button id="gear" title="Меню">⚙</button></div>
 </div>
-<div class="pn" id="quest" title="Задания — нажми, чтобы открыть список"></div>
+<div id="side"><div class="pn" id="quest" title="Задания — нажми, чтобы открыть список"></div><div class="pn" id="alert" hidden></div><div class="pn" id="info"></div></div>
 <div class="pn" id="miniWrap"><canvas id="mini" width="300" height="300" title="Карта — нажми, чтобы перелететь"></canvas>
   <div id="miniBar"><button id="bMini" title="Скрыть / показать карту">🗺️</button><button id="bSteep" title="Раскрасить гору по крутизне">Крутизна</button></div><div id="sLeg" hidden style="font-size:10px;line-height:1.5;padding:0 3px"><span style="color:#4ade80">■</span> зелёная <span style="color:#60a5fa">■</span> синяя <span style="color:#94a3b8">■</span> чёрная <span style="color:#f87171">■</span> эксперт</div></div>
 
-<div class="pn" id="info"></div>
 <div class="pn" id="toast"></div>
 
 <div id="bottom">
@@ -496,6 +510,7 @@ const BT={
   rental:{n:'Прокат',icon:'🎿',cost:8000,w:9,d:7,upkeep:80,desc:'Новички берут лыжи: +$10 с каждого новичка, им веселее.',rent:10},
   parking:{n:'Парковка',icon:'🅿️',cost:4000,w:16,d:10,upkeep:20,desc:'+40 машин: больше гостей может приехать за день.',cap:40},
   cannon:{n:'Снежные пушки',icon:'❄️',cost:9000,w:5,d:5,upkeep:120,desc:'Делают снег в радиусе 400 м: в оттепель трассы рядом не раскисают.',radius:50},
+  workshop:{n:'Мастерская',icon:'🔧',cost:10000,w:9,d:7,upkeep:100,desc:'Механики сами чинят сломанный подъёмник за 30 мин, а поломок вдвое меньше.'},
   patrol:{n:'Спасатели',icon:'⛑️',cost:7000,w:7,d:6,upkeep:90,desc:'Помогают упавшим: падения почти не портят настроение.',need:1},
 };
 function bModel(type){
@@ -515,6 +530,7 @@ function bModel(type){
     for(let k=-3;k<=3;k++){const l=new THREE.Mesh(new THREE.PlaneGeometry(.15,3.2),new THREE.MeshBasicMaterial({color:0xf8fafc}));l.rotation.x=-Math.PI/2;l.position.set(k*2.2,.25,-3);g.add(l);const l2=l.clone();l2.position.z=3;g.add(l2)}
     for(let k=0;k<6;k++)car(g,-5.5+k*2.2,k%2?3:-3)}
   else if(type==='cannon'){g.add(box(3,.4,3,0x475569,0,.2,0));const tw=new THREE.Mesh(new THREE.CylinderGeometry(.25,.3,4,6),mat(0x64748b));tw.position.y=2;g.add(tw);const br=new THREE.Mesh(new THREE.CylinderGeometry(.9,.6,2.6,10),mat(0xfacc15));br.rotation.x=1.1;br.position.set(0,4.4,-.6);g.add(br)}
+  else if(type==='workshop'){g.add(box(9,4.4,7,0x6b7280,0,2.2,0));const r=new THREE.Mesh(roofGeo(10,7.6,2.4),mat(0x334155));r.rotation.y=Math.PI/2;r.scale.set(.75,1,1.32);r.position.y=4.4;g.add(r);g.add(box(4,3.2,.15,0x1f2937,0,1.6,-3.55));for(let k=0;k<4;k++)g.add(box(4,.12,.18,0x9ca3af,0,.6+k*.75,-3.62));g.add(box(1.6,1.2,2.6,0xf59e0b,3.4,.7,-5))}
   else if(type==='patrol'){g.add(box(7,3.6,6,0xdc2626,0,1.8,0),box(7.4,.4,6.4,0xf8fafc,0,3.8,0),box(2.4,.6,.1,0xf8fafc,0,2.5,-3.05),box(.6,2.4,.1,0xf8fafc,0,2.5,-3.06))}
   return g;
 }
@@ -574,7 +590,7 @@ function syncSkiers(){let n=0;for(const s of skiers){const o=s.mesh;if(!o.visibl
   for(const im of skParts){im.setMatrixAt(n,o.matrix);if(im.userData.ci>=0){_c.setHex(o.userData.c[im.userData.ci]);im.setColorAt(n,_c)}}n++}
   for(const im of skParts){im.count=n;im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true}}
 // thought bubbles
-const THOUGHTS={queue:['⏳','Очередь слишком длинная'],steep:['😱','Трасса слишком сложная для меня'],stuck:['🤷','Застрял: отсюда никуда не уехать'],price:['💸','Ски-пасс дорогой'],hungry:['🍔','Хочу есть, а негде'],happy:['😍','Отличная трасса!'],nolift:['🚫','У базы нет подъёмника'],fall:['🤕','Упал на склоне'],slush:['🫠','Снег раскис, каша'],powder:['🤩','Свежий снег, кайф!']};
+const THOUGHTS={queue:['⏳','Очередь слишком длинная'],steep:['😱','Трасса слишком сложная для меня'],stuck:['🤷','Застрял: отсюда никуда не уехать'],price:['💸','Ски-пасс дорогой'],hungry:['🍔','Хочу есть, а негде'],happy:['😍','Отличная трасса!'],nolift:['🚫','У базы нет подъёмника'],fall:['🤕','Упал на склоне'],broken:['🛠️','Подъёмник сломался!'],slush:['🫠','Снег раскис, каша'],powder:['🤩','Свежий снег, кайф!']};
 const bubbleTex={};
 function bubble(key){if(!bubbleTex[key]){const cv=document.createElement('canvas');cv.width=cv.height=96;const g=cv.getContext('2d');g.fillStyle='#fff';g.beginPath();g.arc(48,44,38,0,7);g.fill();g.beginPath();g.moveTo(38,76);g.lineTo(48,94);g.lineTo(58,76);g.fill();g.font='44px serif';g.textAlign='center';g.textBaseline='middle';g.fillText(THOUGHTS[key][0],48,46);bubbleTex[key]=new THREE.CanvasTexture(cv)}
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:bubbleTex[key],depthWrite:false}));s.scale.set(2.4,2.4,1);s.position.y=4;s.renderOrder=6;return s}
@@ -595,7 +611,7 @@ function matchW(R,s){const dd=R.diff-s.skill;return dd===0?3:dd<0?1.2/(1-dd):dd=
 function topScore(L,s){let best=0;runs.forEach(R=>{if(d2(L.b,R.sm[0])<LINK){let w=matchW(R,s);if(s.runsDone>=s.goal&&d2(R.sm[R.sm.length-1],BASE)<BASE_LINK)w*=2;best=Math.max(best,w)}});lifts.forEach(L2=>{if(L2!==L&&d2(L.b,L2.a)<LINK)best=Math.max(best,.7)});return best}
 function optionsAt(P,s){
   const atBase=d2(P,BASE)<BASE_LINK,o=[];
-  lifts.forEach(L=>{if(d2(P,L.a)<LINK||(atBase&&d2(BASE,L.a)<BASE_LINK)){let w=1.4/(1+L.queue.length*.12);if(L.type==='tbar'&&s.skill===0)w*=1.8;if(s.runsDone>=s.goal)w*=.25;w*=(.03+topScore(L,s))/3;o.push({w,lift:L})}});
+  lifts.forEach(L=>{if(d2(P,L.a)<LINK||(atBase&&d2(BASE,L.a)<BASE_LINK)){let w=1.4/(1+L.queue.length*.12);if(L.type==='tbar'&&s.skill===0)w*=1.8;if(s.runsDone>=s.goal)w*=.25;w*=(.03+topScore(L,s))/3;if(L.broken)w*=.05;o.push({w,lift:L})}});
   runs.forEach(R=>{if(d2(P,R.sm[0])<LINK||(atBase&&d2(BASE,R.sm[0])<BASE_LINK)){let w=matchW(R,s);if(!s.seen.has(R.id))w*=1.6;if(s.runsDone>=s.goal&&d2(R.sm[R.sm.length-1],BASE)<BASE_LINK)w*=4;o.push({w,run:R})}});
   return{atBase,o};
 }
@@ -640,7 +656,7 @@ function updateSkier(s,dt){
     m.position.copy(s.pos);m.rotation.set(0,Math.atan2(L.dir.x,L.dir.z),0);
   }else if(s.state==='lift'){
     const L=s.lift;s.t+=liftSpeed(L)*dt/L.len;
-    if(s.t>=1){L.riders--;L.ridden++;m.visible=true;s.state='walk';s.pos.set(L.b.x+L.dir.x*4,0,L.b.z+L.dir.z*4);s.pos.y=heightAt(s.pos.x,s.pos.z);s.dest={x:s.pos.x+(Math.random()-.5)*4,z:s.pos.z+(Math.random()-.5)*4};s.after=null;return}
+    if(s.t>=1){L.riders--;L.ridden++;day.rides++;m.visible=true;s.state='walk';s.pos.set(L.b.x+L.dir.x*4,0,L.b.z+L.dir.z*4);s.pos.y=heightAt(s.pos.x,s.pos.z);s.dest={x:s.pos.x+(Math.random()-.5)*4,z:s.pos.z+(Math.random()-.5)*4};s.after=null;return}
     if(L.type==='tbar'){const x=L.a.x+(L.b.x-L.a.x)*s.t+L.perp.x*1.3,z=L.a.z+(L.b.z-L.a.z)*s.t+L.perp.z*1.3;m.position.set(x,heightAt(x,z)+.25,z)}
     else{cablePos(L,s.t,1,_v);m.position.set(_v.x,_v.y-2.3,_v.z)}
     m.rotation.set(0,Math.atan2(L.dir.x,L.dir.z),0);
@@ -651,7 +667,7 @@ function updateSkier(s,dt){
     const grade=Math.max(0,(a.y-b.y)/(R.step||1));
     const sp=clamp(3.5+grade*15,3,14)*(.78+.12*s.skill);s.d+=sp*dt;
     if(R.diff-s.skill>=1&&Math.random()<dt*.012*(R.diff-s.skill)){s.fallT=2;R.falls++;day.falls++;s.happy-=buildings.some(b=>b.type==='patrol')?2:9;think(s,'fall');return}
-    if(s.d>=R.len-.5){R.skiers--;R.ridden++;s.runsDone++;const dd=R.diff-s.skill;s.happy+=dd===0?9:dd<0?3:dd===1?1:-18;if(dd>=2)think(s,'steep');else if(dd===0&&Math.random()<.15)think(s,'happy');if(!s.seen.has(R.id)){s.happy+=3;s.seen.add(R.id)}{const W=WEATHER[weather];if(weather==='thaw'){if(cannonCovers(R))s.happy+=2;else{s.happy-=10;if(Math.random()<.3)think(s,'slush')}}else{s.happy+=W.happy||0;if(weather==='powder'&&Math.random()<.12)think(s,'powder')}}s.happy=clamp(s.happy,0,100);
+    if(s.d>=R.len-.5){R.skiers--;R.ridden++;day.runs++;s.runsDone++;const dd=R.diff-s.skill;s.happy+=dd===0?9:dd<0?3:dd===1?1:-18;if(dd>=2)think(s,'steep');else if(dd===0&&Math.random()<.15)think(s,'happy');if(!s.seen.has(R.id)){s.happy+=3;s.seen.add(R.id)}{const W=WEATHER[weather];if(weather==='thaw'){if(cannonCovers(R))s.happy+=2;else{s.happy-=10;if(Math.random()<.3)think(s,'slush')}}else{s.happy+=W.happy||0;if(weather==='powder'&&Math.random()<.12)think(s,'powder')}}s.happy=clamp(s.happy,0,100);
       s.pos.set(sm[sm.length-1].x,sm[sm.length-1].y,sm[sm.length-1].z);decide(s);return}
     let tx=b.x-a.x,tz=b.z-a.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;
     const wig=Math.sin(s.d*.32+s.phase)*(2.2-s.skill*.4);
@@ -671,7 +687,7 @@ function updateLift(L,dt){
     _m.compose(_p,_q,_one);for(const im of L.cparts)im.setMatrixAt(k,_m)}
   for(const im of L.cparts)im.instanceMatrix.needsUpdate=true;
   L.load-=dt;
-  if(L.queue.length&&L.load<=0){const s=L.queue.shift();s.state='lift';s.t=0;L.riders++;L.load=L.interval;if(L.type==='gondola')s.mesh.visible=false;if(s.wait>25)s.happy-=Math.min(20,(s.wait-25)*.4)}
+  if(!L.broken&&L.queue.length&&L.load<=0){const s=L.queue.shift();s.state='lift';s.t=0;L.riders++;L.load=L.interval;if(L.type==='gondola')s.mesh.visible=false;if(s.wait>25)s.happy-=Math.min(20,(s.wait-25)*.4)}
 }
 
 /* ================= economy, time, quests ================= */
@@ -679,11 +695,11 @@ const WEATHER={sun:{n:'Солнечно',i:'☀️',mult:1,snow:.12,fog:1,sunI:1
 const WDESC={sun:'обычный день',powder:'гостей больше на треть, все довольны',cloud:'чуть меньше гостей',thaw:'снег раскисает: снежные пушки спасают трассы',storm:'гостей мало, кресельные и бугели едут медленно'};
 function rollWeather(){const r=Math.random();return r<.34?'sun':r<.55?'powder':r<.75?'cloud':r<.88?'thaw':'storm'}
 let weather=save&&save.weather||'sun',forecast=save&&save.forecast||rollWeather();
-const liftSpeed=L=>L.speed*(weather==='storm'&&L.type!=='gondola'?.6:1);
+const liftSpeed=L=>L.broken?0:L.speed*(weather==='storm'&&L.type!=='gondola'?.6:1);
 function cannonCovers(R){return buildings.some(b=>b.type==='cannon'&&R.sm.some((p,i)=>i%4===0&&Math.hypot(p.x-b.x,p.z-b.z)<50))}
 let money=save?save.money:60000,price=save?save.price:45,dayN=save?save.day:1,questI=save&&save.quest||0;
 let minutes=8*60,speed=1,paused=false;
-let day;function newDay(){day={visitors:0,tickets:0,food:0,costs:0,build:0,refund:0,noLift:0,stranded:0,falls:0,thoughts:{},startMoney:money}}newDay();
+let day;function newDay(){day={visitors:0,tickets:0,food:0,costs:0,build:0,refund:0,runs:0,rides:0,builtN:0,breaks:0,repairs:0,noLift:0,stranded:0,falls:0,thoughts:{},startMoney:money}}newDay();
 function fairValue(){const v=new Set(runs.map(r=>r.diff)).size;return Math.round(22+Math.min(runs.length,12)*5+v*4+lifts.length*3+buildings.length*2+rating()*4)}
 const lodging=()=>buildings.reduce((a,b)=>a+(BT[b.type].guests||0),0);
 const parkingCap=()=>60+buildings.filter(b=>b.type==='parking').length*40;
@@ -695,33 +711,84 @@ function expected(){
   return Math.round(Math.min(cap,(Math.min(parkingCap(),want)+lodging()*clamp(pf,0,1))*WEATHER[weather].mult));
 }
 const ARR_START=8.5*60,ARR_END=14*60,CLOSE=17*60;let arrAcc=0;
+const repairCost=L=>LT[L.type].upkeep*8+400;
+function breakLift(L){L.broken=true;L.repairT=30;day.breaks++;L.warn=label('⚠ СЛОМАН','#fda4af',.15);L.warn.position.set(L.b.x,L.b.y+LT[L.type].cable+9,L.b.z);L.g.add(L.warn);
+  L.queue.slice(0,4).forEach(s=>think(s,'broken'));toast(`⚠ ${L.name} сломался!`+(has('workshop')?' Механики уже едут':' Нажми «Починить»'),1);window.haptic&&window.haptic('heavy');renderAlert();if(infoObj===L)showInfo(L)}
+function repairLift(L,auto){if(!L.broken)return;if(!auto){const c=repairCost(L);if(money<c)return toast('Не хватает денег на ремонт',1);money-=c;day.repairs+=c;burst(L.b,'🔧 -'+fmt(c))}
+  L.broken=false;if(L.warn){L.g.remove(L.warn);L.warn=null}toast(`🔧 ${L.name} снова работает`+(auto?' (починила мастерская)':''));renderAlert();if(infoObj===L)showInfo(L)}
+function renderAlert(){const br=lifts.filter(L=>L.broken),el=$('alert');if(!br.length){el.hidden=true;return}const L=br[0];el.hidden=false;
+  el.innerHTML=`<span style="flex:1;min-width:0">⚠ <b>${L.name}</b> сломан${br.length>1?` <span style="color:var(--mut)">(и ещё ${br.length-1})</span>`:''}</span><button class="btn pri" id="aFix">🔧 Починить ${fmt(repairCost(L))}</button>`;
+  $('aFix').onclick=()=>repairLift(L);el.firstChild.onclick=()=>{controls.target.set(L.a.x,L.a.y,L.a.z);camera.position.set(L.a.x-40,L.a.y+60,L.a.z+90)}}
 function tickEconomy(dt,mins){
   if(minutes>=ARR_START&&minutes<ARR_END){arrAcc+=expected()/(ARR_END-ARR_START)*mins;while(arrAcc>=1&&skiers.length<280){arrAcc--;spawnSkier()}}
   const c=(lifts.reduce((a,L)=>a+LT[L.type].upkeep,0)+runs.length*14)/60*mins;money-=c;day.costs+=c;
+  if(minutes>=ARR_START&&minutes<CLOSE-20){const ws=has('workshop');lifts.forEach(L=>{
+    if(!L.broken){if(Math.random()<mins*.00045*(ws?.5:1)*(weather==='storm'?2:1)*(L.type==='tbar'?.7:1))breakLift(L)}
+    else if(ws){L.repairT-=mins;if(L.repairT<=0)repairLift(L,true)}})}
 }
+const has=t=>buildings.some(b=>b.type===t);
 const QUESTS=[
   {t:'Построй подъёмник, нижняя станция — в жёлтом круге у базы',r:3000,tool:'lift',ok:()=>lifts.some(L=>d2(L.a,BASE)<BASE_LINK)},
   {t:'Проложи трассу от верхней станции вниз, до базы',r:3000,tool:'run',ok:()=>runs.some(R=>d2(R.sm[R.sm.length-1],BASE)<BASE_LINK&&lifts.some(L=>d2(L.b,R.sm[0])<LINK))},
   {t:'Построй ресторан или горное кафе — голодные гости платят',r:3000,tool:'build',ok:()=>buildings.some(b=>BT[b.type].food)},
-  {t:'Прими 40 гостей за один день',r:4000,ok:()=>day.visitors>=40},
-  {t:'Сделай зелёную, синюю и чёрную трассы',r:8000,tool:'run',ok:()=>[0,1,2].every(d=>runs.some(r=>Math.min(2,r.diff)===d))},
-  {t:'Построй прокат или шале',r:4000,tool:'build',ok:()=>buildings.some(b=>b.type==='rental'||b.type==='chalet')},
+  {t:'Прими 40 гостей за один день',r:4000,p:()=>[day.visitors,40]},
+  {t:'Сделай зелёную, синюю и чёрную трассы',r:8000,tool:'run',p:()=>[[0,1,2].filter(d=>runs.some(r=>Math.min(2,r.diff)===d)).length,3]},
+  {t:'Построй прокат или шале',r:4000,tool:'build',ok:()=>has('rental')||has('chalet')},
   {t:'Построй гондолу на вершину',r:8000,tool:'lift',ok:()=>lifts.some(L=>L.type==='gondola')},
-  {t:'Подними рейтинг до 4★',r:10000,ok:()=>rating()>=4},
-  {t:'Построй отель',r:12000,tool:'build',ok:()=>buildings.some(b=>b.type==='hotel')},
-  {t:'Прими 150 гостей за день',r:15000,ok:()=>day.visitors>=150},
-  {t:'Накопи $250 000',r:0,ok:()=>money>=250000},
+  {t:'Построй мастерскую — она сама чинит подъёмники',r:6000,tool:'build',ok:()=>has('workshop')},
+  {t:'Подними рейтинг до 4★',r:10000,p:()=>[+rating().toFixed(1),4]},
+  {t:'Построй отель',r:12000,tool:'build',ok:()=>has('hotel')},
+  {t:'Открой 5 трасс',r:10000,tool:'run',p:()=>[runs.length,5]},
+  {t:'Прими 150 гостей за день',r:15000,p:()=>[day.visitors,150]},
+  {t:'Построй 4 подъёмника',r:15000,tool:'lift',p:()=>[lifts.length,4]},
+  {t:'Накопи $250 000',r:20000,p:()=>[money,250000],m:1},
+  {t:'Прими 300 гостей за день',r:40000,p:()=>[day.visitors,300]},
+  {t:'Подними рейтинг до 4.5★',r:50000,p:()=>[+rating().toFixed(1),4.5]},
+  {t:'Накопи $5 000 000',r:250000,p:()=>[money,5000000],m:1},
 ];
-function renderQuest(){const q=QUESTS[questI];$('quest').innerHTML=q?`<small>🎯 Задание ${questI+1}/${QUESTS.length}</small>${q.t}${q.r?` <span class="rw">+${fmt(q.r)}</span>`:''}`:'<small>🏆 Все задания выполнены</small>Ты — легенда гор! Строй дальше в своё удовольствие.'}
-function checkQuest(){const q=QUESTS[questI];if(q&&q.ok()){money+=q.r;toast(`✅ Задание выполнено! +${fmt(q.r)}`);questI++;renderQuest();persist()}}
+const qProg=q=>q.p?q.p():[q.ok()?1:0,1];
+const qDone=q=>{const p=qProg(q);return p[0]>=p[1]};
+const fmtP=(q,p)=>p[1]===1?'':(q.m?fmt(Math.min(p[0],p[1]))+' / '+fmt(p[1]):`${Math.min(p[0],p[1]).toLocaleString('ru-RU')} / ${p[1].toLocaleString('ru-RU')}`);
+let questReady=!!(save&&save.qReady);
+/* daily tasks: 3 new ones every day, rewards grow with the day number */
+const DAILY={
+  guests:{t:n=>`Прими ${n} гостей`,base:30,step:10,v:()=>day.visitors},
+  food:{t:n=>`Заработай ${fmt(n)} на еде и прокате`,base:300,step:150,v:()=>day.food},
+  runs:{t:n=>`Гости проедут ${n} спусков`,base:40,step:20,v:()=>day.runs},
+  rides:{t:n=>`Подъёмники поднимут ${n} человек`,base:50,step:25,v:()=>day.rides},
+  happy:{t:n=>`${n} гостей скажут «Отличная трасса!»`,base:3,step:1,v:()=>day.thoughts.happy||0},
+  tickets:{t:n=>`Продай ски-пассов на ${fmt(n)}`,base:1500,step:600,v:()=>day.tickets},
+  build:{t:()=>'Построй что-нибудь новое',base:1,step:0,v:()=>day.builtN},
+};
+const dailyReward=()=>Math.round((1500+dayN*400)/100)*100;
+function genDaily(){return Object.keys(DAILY).sort(()=>Math.random()-.5).slice(0,3).map(id=>{const D=DAILY[id];return{id,n:Math.round(D.base+D.step*Math.min(dayN-1,15)),done:false,claimed:false}})}
+let daily=(save&&save.daily&&save.dailyDay===(save.day||1))?save.daily:null;
+let lastQHtml='';
+function dailyLine(){if(!daily)return'';const d=daily.filter(x=>x.done).length,c=daily.filter(x=>x.done&&!x.claimed).length;return `<span class="dly">📅 Ежедневные ${d}/3${c?` · <b style="color:#fde047">🎁 приз ждёт (${c})</b>`:''}</span>`}
+function renderQuest(){const q=QUESTS[questI],el=$('quest');let h;
+  if(!q)h='<small>🏆 Все задания выполнены</small>Ты — легенда гор!'+dailyLine();
+  else{const p=qProg(q),pc=clamp(p[0]/p[1],0,1);
+    h=`<small>🎯 Задание ${questI+1}/${QUESTS.length}</small>${q.t}${q.r?` <span class="rw">+${fmt(q.r)}</span>`:''}`+(questReady?`<br><button class="claim" id="qClaim">🎁 Забрать ${fmt(q.r)}</button>`:(p[1]>1?`<div class="bar"><i style="width:${(pc*100).toFixed(1)}%"></i></div><span class="dly">${fmtP(q,p)}</span>`:''))+dailyLine()}
+  if(h===lastQHtml)return;lastQHtml=h;el.innerHTML=h;
+  if($('qClaim'))$('qClaim').onclick=e=>{e.stopPropagation();claimQuest()}}
+function cashFx(v){const c=$('cash');try{c.animate([{transform:'scale(1.4)',color:'#fde047'},{transform:'scale(1)'}],{duration:800,easing:'ease-out'})}catch(e){}burst(controls.target.clone(),'+'+fmt(v))}
+function claimQuest(){const q=QUESTS[questI];if(!q||!questReady)return;money+=q.r;questReady=false;questI++;cashFx(q.r);toast(`🎁 Приз получен: +${fmt(q.r)}`);persist();renderQuest();checkQuest();if($('mQuests').classList.contains('show'))openQuests()}
+function claimDaily(i){const d=daily[i];if(!d||!d.done||d.claimed)return;d.claimed=true;const r=dailyReward();money+=r;cashFx(r);toast(`📅 Приз за задание дня: +${fmt(r)}`);persist();renderQuest();if($('mQuests').classList.contains('show'))openQuests()}
+function checkQuest(){const q=QUESTS[questI];
+  if(q&&!questReady&&qDone(q)){questReady=true;toast('✅ Задание выполнено! Нажми «🎁 Забрать»');window.haptic&&window.haptic('heavy');persist()}
+  if(daily)daily.forEach(d=>{if(!d.done&&DAILY[d.id].v()>=d.n){d.done=true;toast('📅 Задание дня выполнено! Забери приз');persist()}});
+  renderQuest()}
 function endDay(){
   paused=true;
   skiers.forEach(s=>{if(s.state!=='leave')leave(s);scene.remove(s.mesh)});skiers.length=0;
-  lifts.forEach(L=>{L.queue.length=0;L.riders=0});runs.forEach(R=>R.skiers=0);
+  const nightFix=lifts.filter(L=>L.broken).length;lifts.forEach(L=>{L.queue.length=0;L.riders=0;if(L.broken){L.broken=false;if(L.warn){L.g.remove(L.warn);L.warn=null}}});runs.forEach(R=>R.skiers=0);renderAlert();
+  let autoDaily=0;(daily||[]).forEach(d=>{if(d.done&&!d.claimed){d.claimed=true;autoDaily+=dailyReward()}});money+=autoDaily;
+  if(questReady){/* keep the main quest prize waiting for the player */}
   const occ=clamp(.35+rating()/5*.65,0,1);let night=0,bUp=0;buildings.forEach(b=>{const T=BT[b.type];if(T.night){const v=Math.round(T.night*occ);night+=v;b.earned+=v}bUp+=T.upkeep});
   money+=night-bUp;
   const profit=money-day.startMoney;
   const tips=[];
+  if(day.breaks>1&&!has('workshop'))tips.push('🔧 Подъёмники ломались '+day.breaks+' раз(а): построй мастерскую, она чинит сама.');
   if(!lifts.length)tips.push('🚡 Построй подъёмник: нижняя станция — в жёлтом круге у базы.');
   else if(day.noLift>0)tips.push('🚫 '+day.noLift+' гостей не нашли подъёмник у базы.');
   if(lifts.length&&!runs.length)tips.push('⛷️ Нарисуй трассу от верхней станции вниз.');
@@ -738,7 +805,10 @@ function endDay(){
     <div class="r"><span>Ски-пассы</span><b class="pos">${fmt(day.tickets)}</b></div>
     <div class="r"><span>Еда и прокат</span><b class="pos">${fmt(day.food)}</b></div>
     ${night?`<div class="r"><span>Ночёвки в отелях и шале</span><b class="pos">${fmt(night)}</b></div>`:''}
+    ${autoDaily?`<div class="r"><span>Призы заданий дня</span><b class="pos">${fmt(autoDaily)}</b></div>`:''}
     <div class="r"><span>Работа подъёмников и трасс</span><b class="neg">${fmt(-day.costs)}</b></div>
+    ${day.repairs?`<div class="r"><span>Ремонт подъёмников</span><b class="neg">${fmt(-day.repairs)}</b></div>`:''}
+    ${day.breaks?`<div class="r"><span>Поломок за день</span><b>${day.breaks}${nightFix?` · ночью починили ${nightFix}`:''}</b></div>`:''}
     ${bUp?`<div class="r"><span>Содержание зданий</span><b class="neg">${fmt(-bUp)}</b></div>`:''}
     ${day.build?`<div class="r"><span>Стройка</span><b class="neg">${fmt(-(day.build-day.refund))}</b></div>`:''}
     <div class="r tot"><span>Итого за день</span><b class="${profit>=0?'pos':'neg'}">${fmt(profit)}</b></div>
@@ -748,7 +818,7 @@ function endDay(){
     ${tips.length?'<p><b style="color:#fff">Советы:</b><br>'+tips.join('<br>')+'</p>':'<p>🎉 Отличный день на горе!</p>'}
     <div class="row"><button class="btn pri" id="bNext">Начать день ${dayN+1}</button></div>`;
   $('mDay').classList.add('show');
-  $('bNext').onclick=()=>{$('mDay').classList.remove('show');dayN++;minutes=8*60;weather=forecast;forecast=rollWeather();newDay();paused=false;persist();toast(`${WEATHER[weather].i} ${WEATHER[weather].n}: ${WDESC[weather]}`)};
+  $('bNext').onclick=()=>{$('mDay').classList.remove('show');dayN++;minutes=8*60;weather=forecast;forecast=rollWeather();newDay();daily=genDaily();lastQHtml='';paused=false;persist();toast(`${WEATHER[weather].i} ${WEATHER[weather].n}: ${WDESC[weather]}`)};
   persist(dayN+1);
 }
 const starStr=()=>{const r=Math.round(rating()*2)/2;let s='';for(let i=1;i<=5;i++)s+=r>=i?'★':r>=i-.5?'⯪':'☆';return s+' '+rating().toFixed(1)};
@@ -756,7 +826,7 @@ const starStr=()=>{const r=Math.round(rating()*2)/2;let s='';for(let i=1;i<=5;i+
 /* ================= persistence ================= */
 function persist(dayOverride){
   try{const cut=[];for(let i=0;i<BASE_TREES;i++)if(!trees[i].on)cut.push(i);
-    localStorage.setItem(SAVE_KEY,JSON.stringify({v:2,seed,money:Math.round(money),price,day:dayOverride||dayN,ratingHist,quest:questI,weather,forecast,
+    localStorage.setItem(SAVE_KEY,JSON.stringify({v:2,seed,money:Math.round(money),price,day:dayOverride||dayN,ratingHist,quest:questI,qReady:questReady,daily,dailyDay:dayN,gift1m:giftGiven,weather,forecast,
     lifts:lifts.map(L=>({n:L.name,t:L.type,a:[L.a.x,L.a.z],b:[L.b.x,L.b.z]})),runs:runs.map(R=>({n:R.name,p:R.pts.map(p=>[p.x,p.z])})),
     blds:buildings.map(b=>({t:b.type,x:b.x,z:b.z,r:b.rot})),cut,planted:trees.slice(BASE_TREES).filter(t=>t.on).map(t=>[+t.x.toFixed(1),+t.z.toFixed(1)])}))}catch(e){}
 }
@@ -768,6 +838,10 @@ if(save){
   (save.lifts||[]).forEach(l=>makeLift(new THREE.Vector3(l.a[0],heightAt(l.a[0],l.a[1]),l.a[1]),new THREE.Vector3(l.b[0],heightAt(l.b[0],l.b[1]),l.b[1]),l.t||'chair',l.n));
   (save.runs||[]).forEach(r=>makeRun(r.p.map(p=>({x:p[0],z:p[1]})),r.n));
 }
+if(!daily)daily=genDaily();
+const GIFT=0;
+let giftGiven=!!(save&&save.gift1m);
+if(GIFT&&!giftGiven){money+=GIFT;giftGiven=true;persist();setTimeout(()=>{toast('🎁 Подарок от разработчика: +'+fmt(GIFT)+' на счёт!');try{$('cash').animate([{transform:'scale(1.5)',color:'#fde047'},{transform:'scale(1)'}],{duration:1200})}catch(e){}},1200)}
 
 /* ================= picking ================= */
 const ray=new THREE.Raycaster();
@@ -892,11 +966,12 @@ function showInfo(o,live){
   const el=$('info');if(live&&infoObj!==o)return;infoObj=o;el.style.display='block';let h='';
   if(o.kind==='lift'){const T=LT[o.type];
     h=`<h3>${T.icon} ${o.name}<button class="x" id="iX">✕</button></h3>
-    <div class="r"><span>Тип</span><b>${T.n}</b></div><div class="r"><span>Длина</span><b>${M(o.len)} м</b></div><div class="r"><span>Перепад</span><b>${M(o.b.y-o.a.y)} м</b></div>
+    <div class="r"><span>Тип</span><b>${T.n}</b></div><div class="r"><span>Состояние</span><b>${o.broken?'<span class="bad">⚠ сломан</span>':'<span class="okc">✓ работает</span>'}</b></div><div class="r"><span>Длина</span><b>${M(o.len)} м</b></div><div class="r"><span>Перепад</span><b>${M(o.b.y-o.a.y)} м</b></div>
     <div class="r"><span>Пропускная</span><b>${Math.round(3600/o.interval)} чел/час</b></div><div class="r"><span>В очереди</span><b>${o.queue.length}</b></div><div class="r"><span>Едут</span><b>${o.riders}</b></div>
     <div class="r"><span>Подъёмов всего</span><b>${o.ridden}</b></div><div class="r"><span>Расход</span><b>$${T.upkeep}/час</b></div>`;
     if(live){$('iStats').innerHTML=h.replace(/^<h3>.*?<\/h3>/s,'');return}
     h=h.replace(/(<\/h3>)([\s\S]*)$/,'$1<div id="iStats">$2</div>');
+    if(o.broken)h+=`<div class="cb"><button class="btn pri" id="iFix">🔧 Починить ${fmt(repairCost(o))}</button></div>`;
     const up=o.type==='chair'?'gondola':o.type==='tbar'?'chair':null;
     if(up){const c=liftCheck(o.a,o.b,up);const diff=c.ok?Math.max(0,c.cost-o.cost*.6):0;h+=`<div class="cb"><button class="btn pri" id="iUp" ${c.ok&&money>=diff?'':'disabled'}>⬆ Улучшить до «${LT[up].n}» ${c.ok?fmt(diff):''}</button></div>${c.ok?'':`<div class="r"><span class="bad">${c.msg}</span></div>`}`;o._up={to:up,cost:diff}}
   }else if(o.kind==='run'){const d=DIFF[o.diff];
@@ -914,7 +989,7 @@ function showInfo(o,live){
   }
   h+=`<div class="cb"><button class="btn red" id="iDel">🧨 Снести</button></div>`;
   el.innerHTML=h;$('iX').onclick=hideInfo;$('iDel').onclick=()=>{setTool('del');selDel=o;refresh()};
-  if($('iUp'))$('iUp').onclick=()=>upgradeLift(o);
+  if($('iUp'))$('iUp').onclick=()=>upgradeLift(o);if($('iFix'))$('iFix').onclick=()=>repairLift(o);
 }
 function hideInfo(){infoObj=null;$('info').style.display='none'}
 function upgradeLift(L){const u=L._up;if(!u||money<u.cost)return;money-=u.cost;day.build+=u.cost;const a=L.a.clone(),b=L.b.clone(),nm=L.name.replace(/^\S+/,LT[u.to].n);
@@ -929,11 +1004,11 @@ function removeObj(o){
 }
 function buildRun(){
   const c=runCheck(curveSamples(runPts));if(!c.ok)return toast(c.msg,1);if(money<c.cost)return toast('Не хватает денег',1);
-  money-=c.cost;day.build+=c.cost;const R=makeRun(runPts);burst(R.sm[0],`${DIFF[R.diff].s} -${fmt(c.cost)}`);toast(`${DIFF[R.diff].s} ${R.name} открыта!`);runPts=[];hover=null;refreshRings();refresh();persist();checkQuest();
+  money-=c.cost;day.build+=c.cost;day.builtN++;const R=makeRun(runPts);burst(R.sm[0],`${DIFF[R.diff].s} -${fmt(c.cost)}`);toast(`${DIFF[R.diff].s} ${R.name} открыта!`);runPts=[];hover=null;refreshRings();refresh();persist();checkQuest();
 }
 function placeBuilding(){
   if(!bType||!ghostAt)return;const c=bCheck(bType,ghostAt.x,ghostAt.z,bRot);if(!c.ok)return toast(c.msg,1);if(money<c.cost)return toast('Не хватает денег',1);
-  money-=c.cost;day.build+=c.cost;const B=makeBuilding(bType,ghostAt.x,ghostAt.z,bRot);burst(new THREE.Vector3(B.x,B.y+6,B.z),`-${fmt(c.cost)}`);toast(`${BT[bType].icon} ${BT[bType].n} построено!`);ghostAt=null;refresh();persist();checkQuest();
+  money-=c.cost;day.build+=c.cost;day.builtN++;const B=makeBuilding(bType,ghostAt.x,ghostAt.z,bRot);burst(new THREE.Vector3(B.x,B.y+6,B.z),`-${fmt(c.cost)}`);toast(`${BT[bType].icon} ${BT[bType].n} построено!`);ghostAt=null;refresh();persist();checkQuest();
 }
 function onTap(cx,cy){
   const p=pickGround(cx,cy);if(!p)return;
@@ -946,7 +1021,7 @@ function onTap(cx,cy){
   if(tool==='lift'){
     if(!liftA){if(!inBounds(q))return toast('Это за границей твоей земли',1);liftA=q;hover=null}
     else{const c=liftCheck(liftA,q,liftType);if(!c.ok){hover=q;refresh();return toast(c.msg,1)}if(money<c.cost)return toast('Не хватает денег: нужно '+fmt(c.cost),1);
-      money-=c.cost;day.build+=c.cost;const L=makeLift(liftA,q,liftType);burst(q,'-'+fmt(c.cost));toast(`${LT[liftType].icon} ${L.name} построен!`);liftA=null;hover=null;refreshRings();persist();checkQuest()}
+      money-=c.cost;day.build+=c.cost;day.builtN++;const L=makeLift(liftA,q,liftType);burst(q,'-'+fmt(c.cost));toast(`${LT[liftType].icon} ${L.name} построен!`);liftA=null;hover=null;refreshRings();persist();checkQuest()}
   }else if(tool==='run'){
     if(!inBounds(q))return toast('Это за границей твоей земли',1);
     if(runPts.length&&d2(q,runPts[runPts.length-1])<3)return;
@@ -1028,8 +1103,18 @@ $('bQ').onclick=()=>{setQuality(!HIQ,true);fpsWarm=8};
 const openHelp=()=>{paused=true;$('mMenu').classList.remove('show');$('mIntro').classList.add('show')};
 $('bHelp').onclick=openHelp;$('bHelpTop').onclick=openHelp;
 function openQuests(){paused=true;$('mMenu').classList.remove('show');
-  $('qCard').innerHTML=`<h2>🎯 Задания</h2><p>Выполняй по порядку — они научат всему и дадут денег.</p><ul class="ql">${QUESTS.map((q,i)=>`<li><span>${i<questI?'✅':i===questI?'▶️':'⬜'}</span><span style="${i>questI?'color:var(--mut)':''}">${q.t}</span>${q.r?`<span class="rw">+${fmt(q.r)}</span>`:''}</li>`).join('')}</ul><div class="row">${QUESTS[questI]&&QUESTS[questI].tool?`<button class="btn" id="qGo">Показать инструмент</button>`:''}<button class="btn pri" id="qClose">Понятно</button></div>`;
+  const q=QUESTS[questI];
+  const main=QUESTS.map((x,i)=>{const p=qProg(x),pc=clamp(p[0]/p[1],0,1);const cur=i===questI;
+    return `<li><span>${i<questI?'✅':cur?(questReady?'🎁':'▶️'):'⬜'}</span><div><span style="${i>questI?'color:var(--mut)':''}">${x.t}</span>${cur&&!questReady&&p[1]>1?`<div class="pb"><i style="width:${pc*100}%"></i></div><small>${fmtP(x,p)}</small>`:''}</div>${cur&&questReady?`<button class="claim" data-q="1">Забрать ${fmt(x.r)}</button>`:`<span class="rw">${x.r?'+'+fmt(x.r):''}</span>`}</li>`}).join('');
+  const dl=(daily||[]).map((d,i)=>{const D=DAILY[d.id],v=D.v(),pc=clamp(v/d.n,0,1);
+    return `<li><span>${d.claimed?'✅':d.done?'🎁':'📅'}</span><div>${D.t(d.n)}${d.done?'':`<div class="pb"><i style="width:${pc*100}%"></i></div><small>${Math.min(v,d.n).toLocaleString('ru-RU')} / ${d.n.toLocaleString('ru-RU')}</small>`}</div>${d.claimed?'<span class="rw" style="color:var(--mut)">получено</span>':d.done?`<button class="claim" data-d="${i}">Забрать ${fmt(dailyReward())}</button>`:`<span class="rw">+${fmt(dailyReward())}</span>`}</li>`}).join('');
+  $('qCard').innerHTML=`<h2>🎯 Задания</h2><p>Выполнил — нажми «Забрать», и приз упадёт на счёт.</p>
+    <div class="qh">📅 Задания дня ${dayN}</div><ul class="ql">${dl}</ul><p style="font-size:12px;margin:2px 0 0">Новые задания каждое утро. Незабранные призы зачислятся сами в конце дня.</p>
+    <div class="qh">🏔️ Путь курорта</div><ul class="ql">${main}</ul>
+    <div class="row">${q&&q.tool&&!questReady?`<button class="btn" id="qGo">Показать инструмент</button>`:''}<button class="btn pri" id="qClose">Понятно</button></div>`;
   $('mQuests').classList.add('show');$('qClose').onclick=()=>{$('mQuests').classList.remove('show');paused=false};
+  $('qCard').querySelectorAll('[data-q]').forEach(b=>b.onclick=claimQuest);
+  $('qCard').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>claimDaily(+b.dataset.d));
   if($('qGo'))$('qGo').onclick=()=>{$('mQuests').classList.remove('show');paused=false;setTool(QUESTS[questI].tool)}}
 $('quest').onclick=openQuests;$('bQuests').onclick=openQuests;
 let newArm=0;$('bNew').onclick=()=>{if(Date.now()-newArm>4000){newArm=Date.now();$('bNew').textContent='Нажми ещё раз — курорт удалится';setTimeout(()=>$('bNew').textContent='Новая гора (сбросить всё)',4000);return}
