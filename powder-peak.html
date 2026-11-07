@@ -265,13 +265,13 @@ body.building #quest,body.building #info{display:none!important}
 <div class="modal" id="mPre"><div class="pn mcard" id="preCard"></div></div>
 <div class="modal" id="mRide"><div class="pn mcard" id="rideCard"></div></div>
 <div id="ride" hidden>
-  <div class="pn" id="rTop"><span id="rName"></span><b id="rGates" style="min-width:0;font-size:15px"></b><b id="rScore" style="min-width:0;font-size:15px;color:#f9a8d4"></b><b id="rTime">0.0 с</b><b id="rSpd">0 км/ч</b><button class="btn" id="rCam" title="Камера (C)">🎥</button><button class="btn" id="rSnd" title="Звук (M)">🔊</button><button class="btn red" id="rExit">✕</button></div>
+  <div class="pn" id="rTop"><span id="rName"></span><b id="rGates" style="min-width:0;font-size:15px"></b><b id="rScore" style="min-width:0;font-size:15px;color:#f9a8d4"></b><b id="rTime">0.0 с</b><b id="rSpd">0 км/ч</b><button class="btn" id="rReset" title="Вернуться на трассу (R)">↺</button><button class="btn" id="rCam" title="Камера (C)">🎥</button><button class="btn" id="rSnd" title="Звук (M)">🔊</button><button class="btn red" id="rExit">✕</button></div>
   <div id="rMsg"></div>
   <div id="rThumb"><div id="rKnobBase"><div id="rKnob"></div></div><span>Веди пальцем влево-вправо</span></div>
   <div class="pn" id="rProf"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><path id="rProfA"/><path id="rProfL"/><circle id="rProfDot" r="3.2"/></svg></div>
   <div class="rpad rleft"><button class="rb" id="rL" aria-label="Влево">◀</button><button class="rb" id="rR" aria-label="Вправо">▶</button></div>
   <div class="rpad rright"><button class="rb sm" id="rJump">⤴<small>Прыжок</small></button><button class="rb sm" id="rTuck">🚀<small>Разгон</small></button><button class="rb sm" id="rBrake">✋<small>Тормоз</small></button></div>
-  <div class="pn" id="rHelp">← → поворот · ↑ разгон · ↓ тормоз · пробел прыжок · C камера · M звук · Esc выход</div>
+  <div class="pn" id="rHelp">← → поворот · ↑ разгон · ↓ тормоз · пробел прыжок · R на трассу · C камера · M звук · Esc выход</div>
 </div>
 
 <div class="modal" id="mMenu"><div class="pn mcard">
@@ -1578,6 +1578,12 @@ function finishRide(){const r=ride;r.done=true;const total=r.t+r.pen,key=r.key,p
   $('mRide').classList.add('show');const again=()=>{const o=r.R?[r.R]:[null,{lift:r.lift}];endRide(true);startRide(...o)};
   $('rAgain').onclick=again;$('rOther').onclick=()=>{$('mRide').classList.remove('show');endRide();setTool('ride')};$('rOut').onclick=()=>{$('mRide').classList.remove('show');endRide()}}
 const _cam=new THREE.Vector3(),_look=new THREE.Vector3(),_hp=new THREE.Vector3();let camLook=new THREE.Vector3();
+function safeSpot(x,z){return !hitTree(x,z)&&!hitHouse(x,z)&&inBounds({x,z})}
+function unstick(r,msg){const p=r.p;let q,q2;
+  if(r.R){const sm=r.R.sm;let i=Math.min(sm.length-2,r.idx+3);while(i<sm.length-2&&!safeSpot(sm[i].x,sm[i].z))i++;q=sm[i];q2=sm[Math.min(sm.length-1,i+5)];r.idx=Math.max(r.idx,i)}
+  else{const dx=BASE.x-p.x,dz=BASE.z-p.z,l=Math.hypot(dx,dz)||1;let k=3;q={x:p.x+dx/l*k,z:p.z+dz/l*k};while(k<30&&!safeSpot(q.x,q.z)){k+=2;q={x:p.x+dx/l*k,z:p.z+dz/l*k}}q2={x:q.x+dx/l*5,z:q.z+dz/l*5}}
+  p.set(q.x,heightAt(q.x,q.z),q.z);r.f=Math.atan2(q2.x-q.x,q2.z-q.z);r.vx=Math.sin(r.f)*6;r.vz=Math.cos(r.f)*6;r.air=false;r.vy=0;r.prevVy=0;r.lastG=p.y;r.stuckT=0;r.slowT=0;r.blockT=0;r.spin=0;
+  if(msg)rideMsg(msg,900)}
 function crash(r,why){r.crashT=1.4;r.slow=.7;r.crashes++;r.vx=r.vz=0;rideMsg(why||'💥 Упал!');thud();window.haptic&&window.haptic('heavy');for(let k=0;k<40;k++)emitSpray(r.p,(Math.random()-.5)*9,Math.random()*7,(Math.random()-.5)*9)}
 function updRide(dt0){const r=ride;if(!r||r.done)return;dt0=Math.min(dt0,.033);
   if(r.cd>0){r.cd-=dt0;const n=Math.ceil(r.cd);if(n!==r.cdShown&&n>0){r.cdShown=n;rideMsg(String(n),700,true);tone(520,.12)}if(r.cd<=0){rideMsg('СТАРТ!',700,true);tone(880,.25);r.vx=Math.sin(r.f)*5;r.vz=Math.cos(r.f)*5}}
@@ -1597,8 +1603,11 @@ function updRide(dt0){const r=ride;if(!r||r.done)return;dt0=Math.min(dt0,.033);
     sp=Math.hypot(r.vx,r.vz);if(sp>38){r.vx*=38/sp;r.vz*=38/sp;sp=38}r.top=Math.max(r.top,sp);
     const nx=p.x+r.vx*dt,nz=p.z+r.vz*dt;
     if(!inBounds({x:nx,z:nz})){r.vx*=-.3;r.vz*=-.3;r.f+=Math.PI*.6;if(r.warnT<=0){rideMsg('🚧 Граница твоей земли');r.warnT=2}}
-    else if(!r.air&&!(hitTree(p.x,p.z)||hitHouse(p.x,p.z))&&(hitTree(nx,nz)||hitHouse(nx,nz))){if(sp>5)crash(r);else{r.vx*=-.4;r.vz*=-.4}}
-    else{p.x=nx;p.z=nz}
+    else if(!r.air&&!(hitTree(p.x,p.z)||hitHouse(p.x,p.z))&&(hitTree(nx,nz)||hitHouse(nx,nz))){if(sp>7)crash(r);else{
+      // slow: try to glance off to the side instead of stopping dead
+      let moved=false;for(const a of [.5,-.5,1,-1,1.5,-1.5]){const c=Math.cos(a),sn=Math.sin(a),vx=r.vx*c+r.vz*sn,vz=-r.vx*sn+r.vz*c,tx=p.x+vx*dt,tz=p.z+vz*dt;if(!hitTree(tx,tz)&&!hitHouse(tx,tz)){r.vx=vx*.85;r.vz=vz*.85;p.x=tx;p.z=tz;moved=true;break}}
+      if(!moved){r.vx*=.3;r.vz*=.3}r.blockT=(r.blockT||0)+dt;if(r.blockT>.8)unstick(r,'↺ Объехали препятствие')}}
+    else{p.x=nx;p.z=nz;r.blockT=Math.max(0,(r.blockT||0)-dt)}
     const g=heightAt(p.x,p.z);
     if(!r.air){const vyG=(g-r.lastG)/dt;const jump=keys.jump&&!r.jumpLatch;if(jump)r.jumpLatch=true;if(!keys.jump)r.jumpLatch=false;
       if(jump||(sp>12&&(vyG-r.prevVy)/dt<-95)){r.air=true;r.airT=0;r.vy=r.prevVy+(jump?8.5:0);p.y=g+.05;if(jump)tone(300,.08,.08)}
@@ -1616,15 +1625,17 @@ function updRide(dt0){const r=ride;if(!r||r.done)return;dt0=Math.min(dt0,.033);
     if(r.R){const sm=r.R.sm;let bi=r.idx,bd=1e9;for(let i=Math.max(0,r.idx-6);i<Math.min(sm.length,r.idx+30);i++){const d=(sm[i].x-p.x)**2+(sm[i].z-p.z)**2;if(d<bd){bd=d;bi=i}}if(bi>r.idx)r.idx=bi;
       let passed=0;for(const G of r.gates.list){if(G.ok===null&&r.idx>=G.i){const d=(p.x-G.x)*G.lx+(p.z-G.z)*G.lz;if(Math.abs(d)<=G.w+.6){G.ok=true;G.fm.color.setHex(0x22c55e);tone(990,.09,.1)}else{G.ok=false;r.pen+=2;G.fm.color.setHex(0x64748b);rideMsg('🚩 Ворота пропущены: +2 с',1000);tone(200,.2,.12)}}if(G.ok)passed++}
       $('rGates').textContent=`🚩 ${passed}/${r.gates.list.length}`;
-      const e=sm[sm.length-1];if(r.t>2&&((r.idx>=sm.length-5&&Math.hypot(p.x-e.x,p.z-e.z)<14)||Math.hypot(p.x-BASE.x,p.z-BASE.z)<20)){finishRide();return}}
+      const e=sm[sm.length-1];if(r.t>2&&((r.idx>=sm.length-5&&Math.hypot(p.x-e.x,p.z-e.z)<20)||r.idx>=sm.length-2||Math.hypot(p.x-BASE.x,p.z-BASE.z)<20)){finishRide();return}}
     else if(r.t>2&&Math.hypot(p.x-BASE.x,p.z-BASE.z)<24){finishRide();return}
     // effects: spray, tracks, record ghost
     if(!r.air&&sp>4){const n=Math.min(6,Math.round(skid/6+(brake?3:0)));for(let k=0;k<n;k++)emitSpray(p,-r.vx*.15+lx*inp*5+(Math.random()-.5)*2,1.2+Math.random()*2.2,-r.vz*.15+lz*inp*5+(Math.random()-.5)*2)}
     if(!r.air&&sp>1){const s=.3,a={x:p.x-lx*s,y:heightAt(p.x-lx*s,p.z-lz*s)+.07,z:p.z-lz*s},b={x:p.x+lx*s,y:heightAt(p.x+lx*s,p.z+lz*s)+.07,z:p.z+lz*s};if(trLast&&Math.hypot(a.x-trLast[0].x,a.z-trLast[0].z)>.6){addTrack(trLast[0],a);addTrack(trLast[1],b);trLast=[a,b]}else if(!trLast)trLast=[a,b]}else trLast=null;
     r.recT+=dt;if(r.recT>=.1){r.recT=0;r.rec.push([+p.x.toFixed(1),+p.y.toFixed(1),+p.z.toFixed(1),+r.f.toFixed(2)])}
-    if(sp<.6&&!tuck){r.stuckT+=dt;if(r.stuckT>2.5){rideMsg('Встал? Жми 🚀 Разгон — оттолкнёшься палками',1700);r.stuckT=-3}}else r.stuckT=Math.min(r.stuckT,0);
+    if(!r.air&&sp<3.2&&!brake){const k=(3.2-sp)*2.2*dt;r.vx+=Math.sin(r.f)*k;r.vz+=Math.cos(r.f)*k}
+    if(sp<1.2&&!brake&&!r.air){r.stuckT+=dt;if(r.stuckT>1.6)unstick(r,'↺ Подтолкнули — едем дальше')}else r.stuckT=0;
+    if(r.R&&!r.air){const q=r.R.sm[r.idx];if(Math.hypot(p.x-q.x,p.z-q.z)>45){r.farT=(r.farT||0)+dt;if(r.farT>2.5){r.farT=0;unstick(r,'↺ Вернули на трассу')}}else r.farT=0}
     r.warnT-=dt}
-  else if(r.crashT>0){r.crashT-=dt0;r.tumble+=dt*11;if(r.crashT<=0){r.tumble=0;if(r.R){const q=r.R.sm[Math.min(r.R.sm.length-2,r.idx+2)],q2=r.R.sm[Math.min(r.R.sm.length-1,r.idx+6)];p.set(q.x,q.y,q.z);r.f=Math.atan2(q2.x-q.x,q2.z-q.z)}r.vx=Math.sin(r.f)*2;r.vz=Math.cos(r.f)*2;r.lastG=heightAt(p.x,p.z);rideMsg('Поехали дальше!',700)}}
+  else if(r.crashT>0){r.crashT-=dt0;r.tumble+=dt*11;if(r.crashT<=0){r.tumble=0;unstick(r,'Поехали дальше!')}}
   r.sp=sp;r.skid=skid;
   // rider pose
   r.lean+=((r.st*clamp(sp/14,0,1)*.6)-r.lean)*Math.min(1,dt*8);
@@ -1651,6 +1662,7 @@ function updRide(dt0){const r=ride;if(!r||r.done)return;dt0=Math.min(dt0,.033);
 const KEYMAP={ArrowLeft:'l',a:'l',ф:'l',ArrowRight:'r',d:'r',в:'r',ArrowUp:'tuck',w:'tuck',ц:'tuck',ArrowDown:'brake',s:'brake',ы:'brake',' ':'jump'};
 addEventListener('keydown',e=>{if(!ride)return;const k=KEYMAP[e.key]||KEYMAP[e.key.toLowerCase()];if(k){keys[k]=true;e.preventDefault()}const kl=e.key.toLowerCase();
   if(kl==='c'||kl==='с'){camMode=(camMode+1)%3;rideMsg('🎥 '+CAM_N[camMode],800);try{localStorage.setItem('powderpeak-cam',camMode)}catch(_){}rideHud()}
+  if((kl==='r'||kl==='к')&&ride&&!ride.done&&ride.cd<=0&&ride.crashT<=0)unstick(ride,'↺ На трассе');
   if(kl==='m'||kl==='ь'){muted=!muted;try{localStorage.setItem('powderpeak-mute',muted?'1':'0')}catch(_){}rideHud()}
   if(e.key==='Escape'){$('mRide').classList.remove('show');endRide()}},true);
 addEventListener('keyup',e=>{const k=KEYMAP[e.key]||KEYMAP[(e.key||'').toLowerCase()];if(k)keys[k]=false});
@@ -1662,6 +1674,7 @@ const thumb={on:false,v:0,x0:0,id:null};
  z.addEventListener('pointerdown',e=>{e.preventDefault();thumb.on=true;thumb.id=e.pointerId;thumb.x0=e.clientX;thumb.v=0;try{z.setPointerCapture(e.pointerId)}catch(_){}z.querySelector('span').style.opacity=0});
  z.addEventListener('pointermove',e=>{if(!thumb.on||e.pointerId!==thumb.id)return;const dx=e.clientX-thumb.x0;thumb.v=clamp(dx/55,-1,1);k.style.transform=`translateX(${thumb.v*42}px)`});
  const up=e=>{if(e.pointerId!==thumb.id)return;thumb.on=false;thumb.v=0;k.style.transform=''};z.addEventListener('pointerup',up);z.addEventListener('pointercancel',up);z.addEventListener('lostpointercapture',up)}
+$('rReset').onclick=()=>{if(ride&&!ride.done&&ride.cd<=0&&ride.crashT<=0)unstick(ride,'↺ На трассе')};
 $('rCam').onclick=()=>{camMode=(camMode+1)%3;rideMsg('🎥 '+CAM_N[camMode],800);try{localStorage.setItem('powderpeak-cam',camMode)}catch(_){}rideHud()};
 $('rSnd').onclick=()=>{muted=!muted;try{localStorage.setItem('powderpeak-mute',muted?'1':'0')}catch(_){}if(!muted)audioInit();rideHud()};
 /* ================= performance ================= */
