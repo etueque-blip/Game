@@ -28,6 +28,26 @@ button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 #quest .rw{color:#86efac;font-weight:700}
 #side{position:fixed;left:max(10px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 62px);display:flex;flex-direction:column;gap:6px;align-items:flex-start;width:min(300px,calc(100vw - 180px));pointer-events:none;z-index:2}
 #side>*{pointer-events:auto}
+.xpb{height:4px;border-radius:4px;background:#ffffff22;margin-top:3px;overflow:hidden}.xpb i{display:block;height:100%;width:0;background:linear-gradient(90deg,#38bdf8,#a78bfa);transition:width .4s}
+.tool.ridebtn{color:#fde68a}.tool.ridebtn span{filter:drop-shadow(0 0 6px #facc15aa)}
+body.riding #top,body.riding #bottom,body.riding #side,body.riding #miniWrap,body.riding #toast{display:none!important}
+#ride{position:fixed;inset:0;pointer-events:none;z-index:6}#ride[hidden]{display:none}
+#ride>*{pointer-events:auto}
+#rTop{position:absolute;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 10px);display:flex;gap:14px;align-items:center;padding:6px 8px 6px 14px;font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#rTop b{font-size:18px;min-width:70px;text-align:right}#rSpd{color:#fde047}
+#rMsg{position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);font-size:30px;font-weight:800;color:#fff;text-shadow:0 2px 14px #000a;pointer-events:none;text-align:center;opacity:0;transition:opacity .3s}
+#rMsg.show{opacity:1}
+.rpad{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);display:flex;gap:12px}
+.rleft{left:max(16px,env(safe-area-inset-left,0px))}.rright{right:max(16px,env(safe-area-inset-right,0px));flex-direction:column;gap:8px;align-items:flex-end}
+.rb{width:84px;height:84px;border-radius:50%;background:rgba(14,22,38,.55);border:2px solid #ffffff55;color:#fff;font-size:30px;font-weight:800;touch-action:none;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.rb.sm{width:auto;height:auto;border-radius:14px;padding:8px 14px;font-size:20px;display:flex;align-items:center;gap:6px}.rb small{font-size:12px}
+.rb.on{background:rgba(56,189,248,.6);border-color:#bae6fd}
+#rHelp{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);padding:6px 12px;font-size:12px;color:var(--mut);white-space:nowrap}
+@media (pointer:coarse){#rHelp{display:none}}
+@media (max-width:640px){#rTop{gap:8px;font-size:12px;max-width:calc(100vw - 16px);padding:5px 6px 5px 10px}#rName{display:none}#rTop b{font-size:15px;min-width:58px}.rb{width:76px;height:76px}}
+@media (pointer:fine){.rpad{opacity:.55}}
+.rres .big{font-size:40px;font-weight:800;text-align:center;margin:8px 0 2px;font-variant-numeric:tabular-nums}
+.rl{list-style:none;padding:0;margin:8px 0}.rl li{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--ln)}.rl li div{flex:1;min-width:0}.rl small{color:var(--mut)}
 #side #quest,#side #info,#side #alert{position:static;max-width:100%}
 #side #info{width:100%}
 #alert[hidden]{display:none}
@@ -132,7 +152,7 @@ body.building #quest,body.building #info{display:none!important}
   <div class="pn stat"><small>Деньги</small><b id="cash">$0</b></div>
   <div class="pn stat"><small id="dayL">День 1</small><b id="clock">8:00</b></div>
   <div class="pn stat"><small>Гостей</small><b id="nSk">0</b></div>
-  <div class="pn stat"><small>Рейтинг</small><div id="stars">★★★☆☆</div></div>
+  <div class="pn stat" id="lvlStat" title="Уровень курорта и рейтинг"><small id="lvlL">Ур. 1 · рейтинг</small><div id="stars">★★★☆☆</div><div class="xpb"><i id="xpF"></i></div></div>
   <div class="sp"></div>
   <div class="pn grp" id="speed" title="Скорость времени"><button data-s="0" title="Пауза">❚❚</button><button data-s="1" class="on" title="Обычная скорость">▶</button><button data-s="2" title="Быстрее">▶▶</button><button data-s="4" title="Очень быстро">▶▶▶</button></div>
   <div class="pn grp"><button id="bHelpTop" title="Как играть">?</button><button id="gear" title="Меню">⚙</button></div>
@@ -168,6 +188,7 @@ body.building #quest,body.building #info{display:none!important}
     <button class="tool" data-t="del" title="Убрать постройку и вернуть часть денег"><span>🧨</span>Снос</button>
     <button class="tool" data-t="land" title="Купить соседний участок земли"><span>🏞️</span>Земля</button>
     <button class="tool" data-t="price" title="Цена ски-пасса"><span>🎟️</span>Билеты</button>
+    <button class="tool ridebtn" data-t="ride" title="Скатиться самому по своей трассе"><span>⛷️</span>Кататься</button>
   </div>
 </div>
 
@@ -188,11 +209,21 @@ body.building #quest,body.building #info{display:none!important}
 
 <div class="modal" id="mDay"><div class="pn mcard" id="dayCard"></div></div>
 <div class="modal" id="mQuests"><div class="pn mcard" id="qCard"></div></div>
+<div class="modal" id="mResorts"><div class="pn mcard" id="resCard"></div></div>
+<div class="modal" id="mRide"><div class="pn mcard" id="rideCard"></div></div>
+<div id="ride" hidden>
+  <div class="pn" id="rTop"><span id="rName"></span><b id="rTime">0.0 с</b><b id="rSpd">0 км/ч</b><button class="btn red" id="rExit">✕ Выйти</button></div>
+  <div id="rMsg"></div>
+  <div class="rpad rleft"><button class="rb" id="rL" aria-label="Влево">◀</button><button class="rb" id="rR" aria-label="Вправо">▶</button></div>
+  <div class="rpad rright"><button class="rb sm" id="rJump">⤴<small>Прыжок</small></button><button class="rb sm" id="rTuck">🚀<small>Разгон</small></button><button class="rb sm" id="rBrake">✋<small>Тормоз</small></button></div>
+  <div class="pn" id="rHelp">← → поворот · ↑ разгон · ↓ тормоз · пробел прыжок · Esc выход</div>
+</div>
 
 <div class="modal" id="mMenu"><div class="pn mcard">
   <h2>Меню</h2>
   <p>Игра сохраняется сама после каждой постройки и в конце каждого дня.</p>
   <div class="row"><button class="btn" id="bHelp">Как играть</button><button class="btn" id="bQuests">Задания</button></div>
+  <div class="row"><button class="btn pri" id="bResorts">🗺️ Мои курорты</button></div>
   <div class="row"><button class="btn" id="bQ">Графика</button></div>
   <div class="row"><button class="btn red" id="bNew">Новая гора (сбросить всё)</button></div>
   <div class="row"><button class="btn pri" id="bClose">Вернуться на склон</button></div>
@@ -205,9 +236,14 @@ body.building #quest,body.building #info{display:none!important}
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-const SAVE_KEY='powderpeak-v2';
+let META={cur:'powderpeak-v2',list:[{key:'powderpeak-v2',n:1}],gift:false};
+try{const m=JSON.parse(localStorage.getItem('powderpeak-meta')||'null');if(m&&m.cur&&m.list)META=m}catch(e){}
+const SAVE_KEY=META.cur;
+const RESORT=(META.list.find(r=>r.key===SAVE_KEY)||{n:1}).n;
+const saveMeta=()=>{try{localStorage.setItem('powderpeak-meta',JSON.stringify(META))}catch(e){}};
+const startMoney=n=>Math.round(60000*Math.pow(2.5,n-1)/1000)*1000;
 let save=null;
-try{save=JSON.parse(localStorage.getItem(SAVE_KEY)||'null')||JSON.parse(localStorage.getItem('powderpeak-v1')||'null')}catch(e){}
+try{save=JSON.parse(localStorage.getItem(SAVE_KEY)||'null')||(RESORT===1?JSON.parse(localStorage.getItem('powderpeak-v1')||'null'):null)}catch(e){}
 let seed=save&&save.seed||((Math.random()*1e6)|0);
 
 /* ================= terrain ================= */
@@ -346,9 +382,10 @@ function clearTreesRect(cx,cz,hw,hd,rot){let n=0;const c=Math.cos(rot),s=Math.si
   trees.forEach((t,i)=>{if(!t.on)return;const dx=t.x-cx,dz=t.z-cz,lx=dx*c-dz*s,lz=dx*s+dz*c;if(Math.abs(lx)<hw+1.5&&Math.abs(lz)<hd+1.5){t.on=false;setTree(i);n++}});if(n)treesChanged()}
 
 // rocks on steep ground
+const ROCKS=[];
 {const pts=[];for(let k=0;k<1400;k++){const x=(hash(k,11)-.5)*RS*.9,z=(hash(k,12)-.5)*RS*.9;const n=normalAt(x,z);if(n[1]<.86&&n[1]>.55)pts.push([x,z])}
  const rm=new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.4,0),new THREE.MeshLambertMaterial({color:0x8a8f99,flatShading:true}),pts.length);
- pts.forEach((p,i)=>{const s=.6+hash(i,13)*1.6;_m.makeRotationY(hash(i,14)*6);_m.scale(new THREE.Vector3(s,s*.7,s));_m.setPosition(p[0],heightAt(p[0],p[1])-.2,p[1]);rm.setMatrixAt(i,_m)});scene.add(rm)}
+ pts.forEach((p,i)=>{const s=.6+hash(i,13)*1.6;_m.makeRotationY(hash(i,14)*6);_m.scale(new THREE.Vector3(s,s*.7,s));_m.setPosition(p[0],heightAt(p[0],p[1])-.2,p[1]);rm.setMatrixAt(i,_m);ROCKS.push({x:p[0],z:p[1],s:s*1.1,on:true})});rm.castShadow=true;scene.add(rm)}
 
 // base lodge, parking, road
 const BASE=new THREE.Vector3(0,heightAt(0,108),108);
@@ -369,9 +406,6 @@ function car(g,x,z,r){const c=new THREE.Group();c.add(box(1.8,.9,3.4,CARC[(Math.
   for(let k=0;k<9;k++)car(g,-12+k*3,13+(k%2?2.5:-2.5));
   const sg=label('🏔️ База',null,.17);sg.position.set(0,13,0);g.add(sg);
   g.userData.chimney=[4,10.2,1];g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});g.position.copy(BASE);g.position.y-=.3;scene.add(g);
-  // road from the valley
-  const pts=[];for(let z=BASE.z+19;z<RS/2;z+=2)pts.push({x:6+Math.sin(z*.03)*4*(z>150?1:0),z,y:0});
-  const r=ribbon(pts,2.6,0x6b7280,.95);scene.add(r);
 }
 
 /* ================= helpers ================= */
@@ -519,7 +553,7 @@ function addCannons(R){const pts=edgePoints(R.sm,22,5.6,false),n=pts.length;if(!
   const pm=new THREE.Points(geo,new THREE.PointsMaterial({color:0xffffff,size:.9,transparent:true,opacity:.9,depthWrite:false}));pm.frustumCulled=false;R.g.add(barrel,pole,pm);sprays.push({R,geo,meta,pm})}
 function updSprays(dt){const on=isNight()||weather==='thaw'||weather==='cloud';for(let i=sprays.length-1;i>=0;i--){const S=sprays[i];if(!runs.includes(S.R)){sprays.splice(i,1);continue}S.pm.visible=on;if(!on)continue;const a=S.geo.attributes.position.array;
   S.meta.forEach((m,k)=>{m.ph+=dt*.7;if(m.ph>1)m.ph-=1;const t=m.ph;a[k*3]=m.x+(m.dx+m.sp*m.dz)*t*12;a[k*3+1]=m.y+t*3.5-t*t*6;a[k*3+2]=m.z+(m.dz-m.sp*m.dx)*t*12});S.geo.attributes.position.needsUpdate=true}}
-function buyRunUpgrade(R,kind){const c=kind==='lit'?lampCost(R):snowCost(R);if(money<c)return toast('Не хватает денег',1);money-=c;day.build+=c;day.builtN++;
+function buyRunUpgrade(R,kind){const c=kind==='lit'?lampCost(R):snowCost(R);if(money<c)return toast('Не хватает денег',1);money-=c;day.build+=c;day.builtN++;addXP(15);
   if(kind==='lit'){R.lit=true;addLamps(R);toast('💡 Фонари горят! Теперь на трассе катаются до 21:00')}else{R.snow=true;addCannons(R);toast('❄️ Снежные пушки стоят: оттепель трассе не страшна')}
   burst(R.sm[(R.sm.length/2)|0],'-'+fmt(c));showInfo(R);persist();checkQuest()}
 function makeRun(pts,name){
@@ -616,7 +650,7 @@ function drawBorder(){while(borderG.children.length)borderG.remove(borderG.child
     [[0,-1,x0,z0,x0+CELL,z0],[0,1,x0,z0+CELL,x0+CELL,z0+CELL],[-1,0,x0,z0,x0,z0+CELL],[1,0,x0+CELL,z0,x0+CELL,z0+CELL]].forEach(([di,dj,ax,az,bx,bz])=>{
       if(ownedCell(i+di,j+dj))return;const pts=[];for(let t=0;t<=1.0001;t+=1/32)pts.push({x:ax+(bx-ax)*t,z:az+(bz-az)*t,y:0});borderG.add(ribbon(pts,.35,0xfbbf24,.9,false,dashTex))})})}
 const dashTex=(()=>{const cv=document.createElement('canvas');cv.width=8;cv.height=32;const g=cv.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,8,16);const t=new THREE.CanvasTexture(cv);t.wrapT=THREE.RepeatWrapping;return t})();
-function buyLand(){if(!selLand)return;const pr=landPrice();if(money<pr)return toast('Не хватает денег',1);money-=pr;day.build+=pr;day.builtN++;owned.add(selLand[0]+','+selLand[1]);
+function buyLand(){if(!selLand)return;const pr=landPrice();if(money<pr)return toast('Не хватает денег',1);money-=pr;day.build+=pr;day.builtN++;addXP(15);owned.add(selLand[0]+','+selLand[1]);
   const cx=GMIN+(selLand[0]+.5)*CELL,cz=GMIN+(selLand[1]+.5)*CELL;burst(new THREE.Vector3(cx,heightAt(cx,cz)+4,cz),'🏞️ -'+fmt(pr));toast('🏞️ Участок куплен! Граница расширена');
   selLand=null;drawLand();drawBorder();refresh();persist();checkQuest()}
 
@@ -657,7 +691,7 @@ function spawnSkier(){
   const r=Math.random(),skill=r<.4?0:r<.8?1:r<.95?2:3;
   const s={mesh:makeSkierMesh(),skill,state:'walk',pos:new THREE.Vector3(BASE.x+(Math.random()-.5)*22,0,BASE.z+10+Math.random()*6),happy:70,runsDone:0,goal:2+((Math.random()*5)|0),wait:0,phase:Math.random()*6,seen:new Set(),fade:1,ate:false};
   s.pos.y=heightAt(s.pos.x,s.pos.z);s.dest={x:BASE.x+(Math.random()-.5)*10,z:BASE.z-6};s.after=null;
-  skiers.push(s);day.visitors++;day.tickets+=price;money+=price;
+  if(Math.random()<.34)spawnCar(-1);skiers.push(s);day.visitors++;xp+=1;if(levelOf(xp)>level)addXP(0);day.tickets+=price;money+=price;
   if(price>fairValue()*1.2){s.happy-=10;if(Math.random()<.4)think(s,'price')}
   const rent=buildings.find(b=>b.type==='rental');if(rent&&skill<=1){money+=BT.rental.rent;day.food+=BT.rental.rent;rent.earned+=BT.rental.rent;s.happy+=5}
   return s;
@@ -687,7 +721,7 @@ function decide(s){
   if(c.lift)s.dest={x:c.lift.a.x-c.lift.dir.x*2.5,z:c.lift.a.z-c.lift.dir.z*2.5};
   else s.dest={x:c.run.sm[0].x,z:c.run.sm[0].z};
 }
-function leave(s,delay){s.state='leave';s.fade=1+(delay||0);const f=Math.max(0,Math.round(6*s.happy/70));day.food+=f;money+=f;pushRating(s.happy)}
+function leave(s,delay){if(Math.random()<.3)spawnCar(1);s.state='leave';s.fade=1+(delay||0);const f=Math.max(0,Math.round(6*s.happy/70));day.food+=f;money+=f;pushRating(s.happy)}
 const ratingHist=save&&save.ratingHist||[];
 function pushRating(h){ratingHist.push(clamp(h,0,100));if(ratingHist.length>80)ratingHist.shift()}
 function rating(){const base=ratingHist.length?ratingHist.reduce((a,b)=>a+b,0)/ratingHist.length/20:3;const mix=new Set(runs.map(r=>Math.min(2,r.diff))).size;return clamp(base+(mix>=3?.25:0)+Math.min(.25,buildings.filter(b=>BT[b.type].food).length*.1),0,5)}
@@ -755,7 +789,7 @@ function rollWeather(){const r=Math.random();return r<.34?'sun':r<.55?'powder':r
 let weather=save&&save.weather||'sun',forecast=save&&save.forecast||rollWeather();
 const liftSpeed=L=>L.broken?0:L.speed*(weather==='storm'&&L.type!=='gondola'?.6:1);
 function cannonCovers(R){return R.snow||buildings.some(b=>b.type==='cannon'&&R.sm.some((p,i)=>i%4===0&&Math.hypot(p.x-b.x,p.z-b.z)<50))}
-let money=save?save.money:60000,price=save?save.price:45,dayN=save?save.day:1,questI=save&&save.quest||0;
+let money=save&&save.money!=null?save.money:startMoney(RESORT),price=save?save.price:45,dayN=save?save.day:1,questI=save&&save.quest||0;
 let minutes=8*60,speed=1,paused=false;
 let day;function newDay(){day={nightGuests:0,visitors:0,tickets:0,food:0,costs:0,build:0,refund:0,runs:0,rides:0,builtN:0,breaks:0,repairs:0,noLift:0,stranded:0,falls:0,thoughts:{},startMoney:money}}newDay();
 function fairValue(){const v=new Set(runs.map(r=>r.diff)).size;return Math.round(22+Math.min(runs.length,12)*5+v*4+lifts.length*3+buildings.length*2+rating()*4)}
@@ -789,10 +823,17 @@ function tickEconomy(dt,mins){
     else if(ws){L.repairT-=mins;if(L.repairT<=0)repairLift(L,true)}})}
 }
 const has=t=>buildings.some(b=>b.type===t);
+let xp=save&&save.xp||0,rideDone=save&&save.rideDone||0,best=save&&save.best||{};
+const LV=[0,80,200,400,700,1100,1600,2300,3200,4300,5600,7200,9000,11000,13500];
+const levelOf=x=>{let l=1;while(l<LV.length&&x>=LV[l])l++;return l};
+let level=levelOf(xp);const MOVE_LEVEL=6;
+function addXP(n){xp+=n;const l=levelOf(xp);if(l>level){level=l;const r=l*5000;money+=r;toast(`⭐ Уровень курорта ${l}! +${fmt(r)}`+(l>=MOVE_LEVEL?' · можно открыть новый курорт (⚙ → Мои курорты)':''));window.haptic&&window.haptic('heavy');persist()}}
+function xpLine(){const a=LV[level-1]||0,b=LV[level];return b?clamp((xp-a)/(b-a),0,1):1}
 const QUESTS=[
   {t:'Построй подъёмник, нижняя станция — в жёлтом круге у базы',r:3000,tool:'lift',ok:()=>lifts.some(L=>d2(L.a,BASE)<BASE_LINK)},
   {t:'Проложи трассу от верхней станции вниз, до базы',r:3000,tool:'run',ok:()=>runs.some(R=>d2(R.sm[R.sm.length-1],BASE)<BASE_LINK&&lifts.some(L=>d2(L.b,R.sm[0])<LINK))},
   {t:'Построй ресторан или горное кафе — голодные гости платят',r:3000,tool:'build',ok:()=>buildings.some(b=>BT[b.type].food)},
+  {t:'Прокатись сам по своей трассе: кнопка ⛷️ «Кататься»',r:5000,tool:'ride',ok:()=>rideDone>0},
   {t:'Прими 40 гостей за один день',r:4000,p:()=>[day.visitors,40]},
   {t:'Сделай зелёную, синюю и чёрную трассы',r:8000,tool:'run',p:()=>[[0,1,2].filter(d=>runs.some(r=>Math.min(2,r.diff)===d)).length,3]},
   {t:'Построй прокат или шале',r:4000,tool:'build',ok:()=>has('rental')||has('chalet')},
@@ -809,6 +850,7 @@ const QUESTS=[
   {t:'Накопи $250 000',r:20000,p:()=>[money,250000],m:1},
   {t:'Прими 300 гостей за день',r:40000,p:()=>[day.visitors,300]},
   {t:'Подними рейтинг до 4.5★',r:50000,p:()=>[+rating().toFixed(1),4.5]},
+  {t:'Подними курорт до 6 уровня — откроется новая гора',r:30000,p:()=>[level,MOVE_LEVEL]},
   {t:'Накопи $5 000 000',r:250000,p:()=>[money,5000000],m:1},
 ];
 const qProg=q=>q.p?q.p():[q.ok()?1:0,1];
@@ -837,8 +879,8 @@ function renderQuest(){const q=QUESTS[questI],el=$('quest');let h;
   if(h===lastQHtml)return;lastQHtml=h;el.innerHTML=h;
   if($('qClaim'))$('qClaim').onclick=e=>{e.stopPropagation();claimQuest()}}
 function cashFx(v){const c=$('cash');try{c.animate([{transform:'scale(1.4)',color:'#fde047'},{transform:'scale(1)'}],{duration:800,easing:'ease-out'})}catch(e){}burst(controls.target.clone(),'+'+fmt(v))}
-function claimQuest(){const q=QUESTS[questI];if(!q||!questReady)return;money+=q.r;questReady=false;questI++;cashFx(q.r);toast(`🎁 Приз получен: +${fmt(q.r)}`);persist();renderQuest();checkQuest();if($('mQuests').classList.contains('show'))openQuests()}
-function claimDaily(i){const d=daily[i];if(!d||!d.done||d.claimed)return;d.claimed=true;const r=dailyReward();money+=r;cashFx(r);toast(`📅 Приз за задание дня: +${fmt(r)}`);persist();renderQuest();if($('mQuests').classList.contains('show'))openQuests()}
+function claimQuest(){const q=QUESTS[questI];if(!q||!questReady)return;money+=q.r;questReady=false;questI++;addXP(50);cashFx(q.r);toast(`🎁 Приз получен: +${fmt(q.r)}`);persist();renderQuest();checkQuest();if($('mQuests').classList.contains('show'))openQuests()}
+function claimDaily(i){const d=daily[i];if(!d||!d.done||d.claimed)return;d.claimed=true;const r=dailyReward();money+=r;addXP(25);cashFx(r);toast(`📅 Приз за задание дня: +${fmt(r)}`);persist();renderQuest();if($('mQuests').classList.contains('show'))openQuests()}
 function checkQuest(){const q=QUESTS[questI];
   if(q&&!questReady&&qDone(q)){questReady=true;toast('✅ Задание выполнено! Нажми «🎁 Забрать»');window.haptic&&window.haptic('heavy');persist()}
   if(daily)daily.forEach(d=>{if(!d.done&&DAILY[d.id].v()>=d.n){d.done=true;toast('📅 Задание дня выполнено! Забери приз');persist()}});
@@ -892,7 +934,7 @@ const starStr=()=>{const r=Math.round(rating()*2)/2;let s='';for(let i=1;i<=5;i+
 /* ================= persistence ================= */
 function persist(dayOverride){
   try{const cut=[];for(let i=0;i<BASE_TREES;i++)if(!trees[i].on)cut.push(i);
-    localStorage.setItem(SAVE_KEY,JSON.stringify({v:2,seed,money:Math.round(money),price,day:dayOverride||dayN,ratingHist,quest:questI,owned:[...owned],qReady:questReady,daily,dailyDay:dayN,gift1m:giftGiven,weather,forecast,
+    localStorage.setItem(SAVE_KEY,JSON.stringify({v:2,seed,money:Math.round(money),price,day:dayOverride||dayN,ratingHist,quest:questI,xp,rideDone,best,owned:[...owned],qReady:questReady,daily,dailyDay:dayN,gift1m:giftGiven,weather,forecast,
     lifts:lifts.map(L=>({n:L.name,t:L.type,a:[L.a.x,L.a.z],b:[L.b.x,L.b.z]})),runs:runs.map(R=>({n:R.name,p:R.pts.map(p=>[p.x,p.z]),l:R.lit?1:0,s:R.snow?1:0})),
     blds:buildings.map(b=>({t:b.type,x:b.x,z:b.z,r:b.rot})),cut,planted:trees.slice(BASE_TREES).filter(t=>t.on).map(t=>[+t.x.toFixed(1),+t.z.toFixed(1)])}))}catch(e){}
 }
@@ -906,8 +948,8 @@ if(save){
 }
 if(!daily)daily=genDaily();
 const GIFT=0;
-let giftGiven=!!(save&&save.gift1m);
-if(GIFT&&!giftGiven){money+=GIFT;giftGiven=true;persist();setTimeout(()=>{toast('🎁 Подарок от разработчика: +'+fmt(GIFT)+' на счёт!');try{$('cash').animate([{transform:'scale(1.5)',color:'#fde047'},{transform:'scale(1)'}],{duration:1200})}catch(e){}},1200)}
+let giftGiven=!!(save&&save.gift1m)||!!META.gift;
+if(GIFT&&!giftGiven){money+=GIFT;giftGiven=true;META.gift=true;saveMeta();persist();setTimeout(()=>{toast('🎁 Подарок от разработчика: +'+fmt(GIFT)+' на счёт!');try{$('cash').animate([{transform:'scale(1.5)',color:'#fde047'},{transform:'scale(1)'}],{duration:1200})}catch(e){}},1200)}
 
 /* ================= picking ================= */
 const ray=new THREE.Raycaster();
@@ -942,6 +984,7 @@ const TOOLS={
   run:{icon:'⛷️',t:'Трасса',steps:['Нажми у верхней станции подъёмника (синий круг)','Ставь точки вниз по склону (цвет = крутизна, красный = в гору)','Закончи в жёлтом круге и нажми «Построить»']},
   build:{icon:'🏠',t:'Здания',steps:['Выбери здание в списке сверху','Нажми на ровное место (на карте «Крутизна» — зелёное)','Поверни, если нужно, и нажми «Построить»']},
   trees:{icon:'🌲',t:'Деревья',steps:['Выбери: вырубить или посадить','Нажимай на склон: кисть радиусом ~60 м']},
+  ride:{icon:'⛷️',t:'Кататься',steps:['Выбери трассу в списке сверху и прокатись по ней сам','Управление: ← → поворот, ↑ разгон, ↓ тормоз, пробел прыжок (на телефоне — кнопки на экране)']},
   land:{icon:'🏞️',t:'Земля',steps:['Нажми на зелёный участок рядом с твоей землёй','Нажми «Купить» — граница расширится, можно строить дальше']},
   del:{icon:'🧨',t:'Снос',steps:['Нажми на подъёмник, трассу или здание — оно подсветится красным','Нажми «Снести», вернём 40% стоимости']},
 };
@@ -959,15 +1002,17 @@ function renderPicker(){
   const p=$('picker');let items=[];
   if(tool==='lift')items=Object.entries(LT).map(([k,T])=>({k,on:k===liftType,i:T.icon,n:T.n,c:'от '+fmt(Math.round(T.cost(40,15)/50)*50),d:T.desc,f:()=>{liftType=k;liftA=null;pickerOpen=false;refresh()}}));
   else if(tool==='build')items=Object.entries(BT).map(([k,T])=>{const lock=T.need&&rating()<T.need&&!buildings.some(b=>b.type===k);return{k,on:k===bType,lock,i:T.icon,n:T.n,c:lock?`🔒 рейтинг ${T.need}★`:fmt(T.cost),d:T.desc,f:()=>{if(lock)return toast(`Откроется при рейтинге ${T.need}★`,1);bType=k;ghostAt=null;pickerOpen=false;refresh()}}});
+  else if(tool==='ride')items=runs.map(R=>({k:R.id,i:DIFF[R.diff].s,n:R.name,c:best[R.name]?`🏆 ${best[R.name].toFixed(1)} с`:`${M(R.len)} м · ${DIFF[R.diff].n}`,d:'',f:()=>startRide(R)}));
   else if(tool==='trees')items=[{k:'cut',on:treeMode==='cut',i:'🪓',n:'Вырубить',c:'$12 за дерево',d:'Освободи место под стройку или трассу.',f:()=>{treeMode='cut';pickerOpen=false;refresh()}},{k:'plant',on:treeMode==='plant',i:'🌱',n:'Посадить',c:'$20 за дерево',d:'Лес делает курорт красивее.',f:()=>{treeMode='plant';pickerOpen=false;refresh()}}];
   p.classList.toggle('show',items.length>0&&pickerOpen);$('cPick').hidden=!(items.length>0)||pickerOpen;p.innerHTML='';
   items.forEach(x=>{const e=document.createElement('button');e.className='pk'+(x.on?' on':'')+(x.lock?' lock':'');e.innerHTML=`<span class="i">${x.i}</span><b>${x.n}</b><span class="c">${x.c}</span><span class="d">${x.d}</span>`;e.onclick=x.f;p.appendChild(e)});
 }
 function setTool(t){
   if(t==='price'){$('price').classList.toggle('show');updatePrice();return}
+  if(t==='ride'&&!runs.length){toast('Сначала построй трассу — потом сможешь по ней прокатиться',1);return}
   tool=t;liftA=null;runPts=[];hover=null;ghostAt=null;selDel=null;bType=t==='build'?bType:null;hideInfo();
   selLand=null;landG.visible=t==='land';if(t==='land')drawLand();
-  pickerOpen=t==='lift'||t==='trees'||(t==='build'&&!bType);$('card').classList.remove('full');document.body.classList.toggle('building',t!=='look');
+  pickerOpen=t==='ride'||t==='lift'||t==='trees'||(t==='build'&&!bType);$('card').classList.remove('full');document.body.classList.toggle('building',t!=='look');
   document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   rings.visible=t==='lift'||t==='run';if(rings.visible)refreshRings();
   if(t!=='look')$('price').classList.remove('show');
@@ -1053,7 +1098,7 @@ function showInfo(o,live){
     if(live){$('iStats').innerHTML=h.replace(/^<h3>.*?<\/h3>/s,'');return}
     h=h.replace(/(<\/h3>)([\s\S]*)$/,'$1<div id="iStats">$2</div>');
     const lc=lampCost(o),sc=snowCost(o);
-    h+=`<div class="cb">${o.lit?'':`<button class="btn pri" id="iLamp" ${money>=lc?'':'disabled'}>💡 Фонари ${fmt(lc)}</button>`}${o.snow?'':`<button class="btn" id="iSnow" ${money>=sc?'':'disabled'}>❄️ Оснежение ${fmt(sc)}</button>`}</div>`;
+    h+=`<div class="cb"><button class="btn pri" id="iRide">⛷️ Прокатиться${best[o.name]?` · 🏆 ${best[o.name].toFixed(1)} с`:''}</button></div><div class="cb">${o.lit?'':`<button class="btn pri" id="iLamp" ${money>=lc?'':'disabled'}>💡 Фонари ${fmt(lc)}</button>`}${o.snow?'':`<button class="btn" id="iSnow" ${money>=sc?'':'disabled'}>❄️ Оснежение ${fmt(sc)}</button>`}</div>`;
     if(!o.lit||!o.snow)h+=`<div class="r" style="display:block;line-height:1.35;margin-top:4px"><span>${o.lit?'':'💡 Фонари: на трассе катаются ночью, курорт открыт до 21:00. '}${o.snow?'':'❄️ Пушки: в оттепель трасса не раскисает.'}</span></div>`;
   }else{const T=BT[o.type];
     h=`<h3>${T.icon} ${T.n}<button class="x" id="iX">✕</button></h3><div class="r" style="display:block;line-height:1.35"><span>${T.desc}</span></div>
@@ -1063,7 +1108,7 @@ function showInfo(o,live){
   }
   h+=`<div class="cb"><button class="btn red" id="iDel">🧨 Снести</button></div>`;
   el.innerHTML=h;$('iX').onclick=hideInfo;$('iDel').onclick=()=>{setTool('del');selDel=o;refresh()};
-  if($('iUp'))$('iUp').onclick=()=>upgradeLift(o);if($('iFix'))$('iFix').onclick=()=>repairLift(o);if($('iLamp'))$('iLamp').onclick=()=>buyRunUpgrade(o,'lit');if($('iSnow'))$('iSnow').onclick=()=>buyRunUpgrade(o,'snow');
+  if($('iUp'))$('iUp').onclick=()=>upgradeLift(o);if($('iFix'))$('iFix').onclick=()=>repairLift(o);if($('iRide'))$('iRide').onclick=()=>startRide(o);if($('iLamp'))$('iLamp').onclick=()=>buyRunUpgrade(o,'lit');if($('iSnow'))$('iSnow').onclick=()=>buyRunUpgrade(o,'snow');
 }
 function hideInfo(){infoObj=null;$('info').style.display='none'}
 function upgradeLift(L){const u=L._up;if(!u||money<u.cost)return;money-=u.cost;day.build+=u.cost;const a=L.a.clone(),b=L.b.clone(),nm=L.name.replace(/^\S+/,LT[u.to].n);
@@ -1078,11 +1123,11 @@ function removeObj(o){
 }
 function buildRun(){
   const c=runCheck(curveSamples(runPts));if(!c.ok)return toast(c.msg,1);if(money<c.cost)return toast('Не хватает денег',1);
-  money-=c.cost;day.build+=c.cost;day.builtN++;const R=makeRun(runPts);burst(R.sm[0],`${DIFF[R.diff].s} -${fmt(c.cost)}`);toast(`${DIFF[R.diff].s} ${R.name} открыта!`);runPts=[];hover=null;refreshRings();refresh();persist();checkQuest();
+  money-=c.cost;day.build+=c.cost;day.builtN++;addXP(15);const R=makeRun(runPts);burst(R.sm[0],`${DIFF[R.diff].s} -${fmt(c.cost)}`);toast(`${DIFF[R.diff].s} ${R.name} открыта!`);runPts=[];hover=null;refreshRings();refresh();persist();checkQuest();
 }
 function placeBuilding(){
   if(!bType||!ghostAt)return;const c=bCheck(bType,ghostAt.x,ghostAt.z,bRot);if(!c.ok)return toast(c.msg,1);if(money<c.cost)return toast('Не хватает денег',1);
-  money-=c.cost;day.build+=c.cost;day.builtN++;const B=makeBuilding(bType,ghostAt.x,ghostAt.z,bRot);burst(new THREE.Vector3(B.x,B.y+6,B.z),`-${fmt(c.cost)}`);toast(`${BT[bType].icon} ${BT[bType].n} построено!`);ghostAt=null;refresh();persist();checkQuest();
+  money-=c.cost;day.build+=c.cost;day.builtN++;addXP(15);const B=makeBuilding(bType,ghostAt.x,ghostAt.z,bRot);burst(new THREE.Vector3(B.x,B.y+6,B.z),`-${fmt(c.cost)}`);toast(`${BT[bType].icon} ${BT[bType].n} построено!`);ghostAt=null;refresh();persist();checkQuest();
 }
 function onTap(cx,cy){
   const p=pickGround(cx,cy);if(!p)return;
@@ -1096,7 +1141,7 @@ function onTap(cx,cy){
   if(tool==='lift'){
     if(!liftA){if(!inBounds(q))return toast(NOT_OWN,1);liftA=q;hover=null}
     else{const c=liftCheck(liftA,q,liftType);if(!c.ok){hover=q;refresh();return toast(c.msg,1)}if(money<c.cost)return toast('Не хватает денег: нужно '+fmt(c.cost),1);
-      money-=c.cost;day.build+=c.cost;day.builtN++;const L=makeLift(liftA,q,liftType);burst(q,'-'+fmt(c.cost));toast(`${LT[liftType].icon} ${L.name} построен!`);liftA=null;hover=null;refreshRings();persist();checkQuest()}
+      money-=c.cost;day.build+=c.cost;day.builtN++;addXP(15);const L=makeLift(liftA,q,liftType);burst(q,'-'+fmt(c.cost));toast(`${LT[liftType].icon} ${L.name} построен!`);liftA=null;hover=null;refreshRings();persist();checkQuest()}
   }else if(tool==='run'){
     if(!inBounds(q))return toast(NOT_OWN,1);
     if(runPts.length&&d2(q,runPts[runPts.length-1])<3)return;
@@ -1123,13 +1168,13 @@ function updBursts(dt){for(let i=bursts.length-1;i>=0;i--){const b=bursts[i];b.t
 
 $('cX').onclick=cancelTool;$('cPick').onclick=()=>{pickerOpen=true;refresh()};$('cHelp').onclick=()=>$('card').classList.toggle('full');
 document.querySelectorAll('.tool').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
-addEventListener('keydown',e=>{if(e.key==='Escape'){if(tool==='run'&&runPts.length){runPts=[];refresh()}else if(tool==='lift'&&liftA){liftA=null;refresh()}else cancelTool()}
+addEventListener('keydown',e=>{if(ride)return;if(e.key==='Escape'){if(tool==='run'&&runPts.length){runPts=[];refresh()}else if(tool==='lift'&&liftA){liftA=null;refresh()}else cancelTool()}
   if(e.key==='Backspace'&&tool==='run'&&runPts.length){runPts.pop();refresh()}if(e.key==='Enter'&&tool==='run')buildRun();if((e.key==='r'||e.key==='к')&&tool==='build'){bRot=(bRot+1)%4;refresh()}});
 let down=null;
 const cv=renderer.domElement;
 cv.addEventListener('contextmenu',e=>{if(tool!=='look'){e.preventDefault()}});
 cv.addEventListener('pointerdown',e=>{if(e.isPrimary)down={x:e.clientX,y:e.clientY,t:performance.now(),b:e.button}});
-cv.addEventListener('pointerup',e=>{if(!down||!e.isPrimary)return;const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(moved<8&&performance.now()-down.t<600&&down.b===0)onTap(e.clientX,e.clientY);down=null});
+cv.addEventListener('pointerup',e=>{if(ride){down=null;return}if(!down||!e.isPrimary)return;const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(moved<8&&performance.now()-down.t<600&&down.b===0)onTap(e.clientX,e.clientY);down=null});
 let hoverReq=null;
 cv.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse'||e.buttons)return;hoverReq={x:e.clientX,y:e.clientY}});
 
@@ -1192,9 +1237,22 @@ function openQuests(){paused=true;$('mMenu').classList.remove('show');
   $('qCard').querySelectorAll('[data-q]').forEach(b=>b.onclick=claimQuest);
   $('qCard').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>claimDaily(+b.dataset.d));
   if($('qGo'))$('qGo').onclick=()=>{$('mQuests').classList.remove('show');paused=false;setTool(QUESTS[questI].tool)}}
+function resortInfo(r){try{const d=JSON.parse(localStorage.getItem(r.key)||'null')||{};return{day:d.day||1,money:d.money!=null?d.money:startMoney(r.n),lvl:levelOf(d.xp||0),lifts:(d.lifts||[]).length,runs:(d.runs||[]).length}}catch(e){return{day:1,money:0,lvl:1,lifts:0,runs:0}}}
+function openResorts(){paused=true;$('mMenu').classList.remove('show');persist();
+  const maxN=Math.max(...META.list.map(r=>r.n)),nextN=maxN+1,canMove=RESORT===maxN&&level>=MOVE_LEVEL;
+  const li=META.list.map(r=>{const I=r.key===SAVE_KEY?{day:dayN,money,lvl:level,lifts:lifts.length,runs:runs.length}:resortInfo(r);
+    return `<li><span style="font-size:24px">${r.key===SAVE_KEY?'📍':'🏔️'}</span><div><b>Курорт №${r.n}</b>${r.key===SAVE_KEY?' <small>(ты здесь)</small>':''}<br><small>Ур. ${I.lvl} · день ${I.day} · ${fmt(I.money)} · ${I.lifts} подъёмн. · ${I.runs} трасс</small></div>${r.key===SAVE_KEY?'':`<button class="btn" data-go="${r.key}">Перейти</button>`}</li>`}).join('');
+  $('resCard').innerHTML=`<h2>🗺️ Мои курорты</h2><p>Подними курорт до ${MOVE_LEVEL} уровня, и откроется новая гора. Там всё строишь заново, но стартовый капитал каждый раз больше. Старые курорты остаются: они видны на горизонте, и в них можно вернуться.</p><ul class="rl">${li}</ul>
+    ${RESORT===maxN?(canMove?`<div class="row"><button class="btn pri" id="bMove">🏔️ Открыть курорт №${nextN} · старт ${fmt(startMoney(nextN))}</button></div>`:`<p>🔒 Курорт №${nextN} (старт ${fmt(startMoney(nextN))}) откроется на ${MOVE_LEVEL} уровне. Сейчас уровень ${level}: опыт дают гости, стройка и задания.</p>`):''}
+    <div class="row"><button class="btn" id="bResClose">Закрыть</button></div>`;
+  $('mResorts').classList.add('show');$('bResClose').onclick=()=>{$('mResorts').classList.remove('show');paused=false};
+  $('resCard').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{persist();META.cur=b.dataset.go;saveMeta();location.reload()});
+  if($('bMove'))$('bMove').onclick=()=>{persist();const key='powderpeak-r'+nextN;try{localStorage.setItem(key,JSON.stringify({seed:(Math.random()*1e6)|0,money:startMoney(nextN),price:45,day:1,lifts:[],runs:[],blds:[],gift1m:true}))}catch(e){}META.list.push({key,n:nextN});META.cur=key;saveMeta();location.reload()}}
+$('bResorts').onclick=openResorts;
 $('quest').onclick=openQuests;$('bQuests').onclick=openQuests;
 let newArm=0;$('bNew').onclick=()=>{if(Date.now()-newArm>4000){newArm=Date.now();$('bNew').textContent='Нажми ещё раз — курорт удалится';setTimeout(()=>$('bNew').textContent='Новая гора (сбросить всё)',4000);return}
-  try{localStorage.setItem(SAVE_KEY,JSON.stringify({seed:(Math.random()*1e6)|0,money:60000,price:45,day:1,lifts:[],runs:[],blds:[]}));localStorage.removeItem('powderpeak-v1')}catch(e){}location.reload()};
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({seed:(Math.random()*1e6)|0,money:startMoney(RESORT),price:45,day:1,lifts:[],runs:[],blds:[],gift1m:true}));localStorage.removeItem('powderpeak-v1')}catch(e){}location.reload()};
+if(RESORT>1){document.querySelector('#mIntro h2').textContent='🏔️ Курорт №'+RESORT;document.querySelector('#mIntro p').textContent='Новая гора, новый старт! Стартовый капитал '+fmt(startMoney(RESORT))+'. Прошлые курорты видны на горизонте, вернуться можно через ⚙ → Мои курорты.'}
 $('bStart').onclick=()=>{$('mIntro').classList.remove('show');paused=false};
 if(!save||(!save.lifts||!save.lifts.length)&&(save.day||1)===1){$('mIntro').classList.add('show');paused=true}
 
@@ -1218,9 +1276,9 @@ function sky(){const h=minutes/60,W=WEATHER[weather];
   const cl=W.cloud*(1-nightF*.7);_tc.lerp(grey,cl*.85*(dayF+twF*.5));_hc.lerp(grey,cl*.7*(dayF+twF*.5));
   skyU.top.value.copy(_tc);skyU.hor.value.copy(_hc);scene.background.copy(_hc);scene.fog.color.copy(_hc);scene.fog.near=360*W.fog;scene.fog.far=1100*W.fog*(1-nightF*.25);
   const a=Math.PI*(h-6.8)/11.4;_sd.set(Math.cos(a)*-.8,Math.sin(a)*.55+.04,.4).normalize();skyU.sunDir.value.copy(_sd);skyU.sunCol.value.setRGB(1,.9-.35*twF,.78-.5*twF).multiplyScalar((1-W.cloud*.85)*(1-nightF));
-  sun.target.position.copy(controls.target);
-  if(nightF>.5){sun.position.copy(controls.target).addScaledVector(_md,450);sun.color.setRGB(.62,.72,1);sun.intensity=.32*nightF*(1-W.cloud*.6)}
-  else{const sd=_sd.y<.08?_sd.clone().setY(.08).normalize():_sd;sun.position.copy(controls.target).addScaledVector(sd,450);sun.color.setRGB(1,.94-.3*twF,.84-.48*twF);sun.intensity=(.15+1.05*dayF+.35*twF)*W.sunI*(1-nightF)}
+  const ctr=ride?ride.p:controls.target;sun.target.position.copy(ctr);
+  if(nightF>.5){sun.position.copy(ctr).addScaledVector(_md,450);sun.color.setRGB(.62,.72,1);sun.intensity=.32*nightF*(1-W.cloud*.6)}
+  else{const sd=_sd.y<.08?_sd.clone().setY(.08).normalize():_sd;sun.position.copy(ctr).addScaledVector(sd,450);sun.color.setRGB(1,.94-.3*twF,.84-.48*twF);sun.intensity=(.15+1.05*dayF+.35*twF)*W.sunI*(1-nightF)}
   hemi.color.copy(hemiDay).lerp(hemiNight,nightF);hemi.intensity=(.5*dayF+.34*twF+.2*nightF)+.2*W.cloud*dayF;
   renderer.toneMappingExposure=1.22+nightF*.25;
   winMat.color.copy(winDay).lerp(winNight,Math.max(nightF,twF*.8,.15));
@@ -1242,6 +1300,99 @@ function updSmoke(dt){chimT-=dt;if(chimT<=0){chimT=1;chimCache=chimneys()}
   for(const p of smoke){if(p.t>=1)continue;p.t+=dt/4;p.sp.position.y+=dt*2.4*p.v;p.sp.position.x+=dt*.9;const s=1.2+p.t*6;p.sp.scale.set(s,s,1);p.sp.material.opacity=.5*(1-p.t)*(p.t<.1?p.t*10:1);if(p.t>=1)p.sp.visible=false}}
 const grows=[];
 function updGrows(dt){for(let i=grows.length-1;i>=0;i--){const g=grows[i];g.t+=dt/.7;const t=Math.min(1,g.t),c=1.70158,e=1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);g.o.scale.set(1,Math.max(.01,e),1);if(t>=1){g.o.scale.set(1,1,1);grows.splice(i,1)}}}
+/* ================= road to the resort + cars ================= */
+const ROAD=[];
+function buildRoad(){for(let z=BASE.z+19;z<RS/2-2;z+=2)ROAD.push({x:6+Math.sin(z*.025)*9*sstep(BASE.z+40,BASE.z+90,z),z,y:0});
+  let c=0;ROAD.forEach((p,i)=>{if(i)c+=Math.hypot(p.x-ROAD[i-1].x,p.z-ROAD[i-1].z);p.c=c;p.y=heightAt(p.x,p.z)});ROAD.len=c;
+  clearTrees(ROAD,7);
+  scene.add(ribbon(ROAD,4.2,0x384150,1));
+  const bank=ROAD.map(p=>({...p}));scene.add(ribbon(bank,5.2,0xe2e8f0,.9));
+  const mid=ribbon(ROAD,.16,0xfacc15,1,false,dashTex);mid.position.y=.03;scene.add(mid)}
+function roadAt(d,side,out){d=clamp(d,0,ROAD.len);let i=0;while(i<ROAD.length-2&&ROAD[i+1].c<d)i++;const a=ROAD[i],b=ROAD[i+1],t=(d-a.c)/((b.c-a.c)||1);
+  let tx=b.x-a.x,tz=b.z-a.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;const x=a.x+(b.x-a.x)*t-tz*1.7*side,z=a.z+(b.z-a.z)*t+tx*1.7*side;out.set(x,heightAt(x,z)+.15,z);return Math.atan2(tx,tz)}
+const cars=[];
+function spawnCar(dir){if(!ROAD.length||cars.length>=18)return;const g=new THREE.Group();g.add(box(1.9,.95,3.6,CARC[(Math.random()*7)|0],0,.65,0),box(1.7,.75,1.9,0x1f2937,0,1.45,-.2),box(.5,.25,.1,0xfff3c4,-.55,.75,1.82),box(.5,.25,.1,0xfff3c4,.55,.75,1.82),box(.5,.22,.1,0xdc2626,-.55,.75,-1.82),box(.5,.22,.1,0xdc2626,.55,.75,-1.82));
+  g.traverse(o=>{if(o.isMesh)o.castShadow=true});scene.add(g);cars.push({g,dir,d:dir<0?ROAD.len:0,v:11+Math.random()*4})}
+function updCars(dt){for(let i=cars.length-1;i>=0;i--){const c=cars[i];c.d+=c.dir*c.v*dt;const end=c.dir<0?c.d<=0:c.d>=ROAD.len;
+  const yaw=roadAt(c.d,c.dir<0?1:-1,c.g.position);c.g.rotation.y=yaw+(c.dir<0?Math.PI:0);if(end){scene.remove(c.g);cars.splice(i,1)}}}
+/* ================= ride mode: ski your own run ================= */
+let ride=null;const keys={};
+const rider=(()=>{const g=new THREE.Group(),b=new THREE.Group();g.add(b);
+  b.add(box(.75,1.1,.5,0xf97316,0,1.35,0),box(.65,.8,.45,0x1e3a8a,0,.45,0));
+  const hd=new THREE.Mesh(new THREE.SphereGeometry(.33,12,10),mat(0xfacc15));hd.position.y=2.15;b.add(hd);b.add(box(.5,.16,.1,0x0f172a,0,2.15,.3));
+  const skiL=box(.16,.07,2.1,0xdc2626,-.2,.05,.15),skiR=box(.16,.07,2.1,0xdc2626,.2,.05,.15);g.add(skiL,skiR);
+  const pole=()=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,1.6,5),mat(0x334155));return m};const pL=pole(),pR=pole();pL.position.set(-.6,.9,-.1);pR.position.set(.6,.9,-.1);pL.rotation.x=pR.rotation.x=-.45;b.add(pL,pR);
+  g.traverse(o=>{if(o.isMesh)o.castShadow=true});g.scale.setScalar(1.3);g.visible=false;scene.add(g);g.userData.body=b;return g})();
+const sprayN=140,sprayPos=new Float32Array(sprayN*3),sprayV=[];for(let i=0;i<sprayN;i++)sprayV.push({x:0,y:-999,z:0,vx:0,vy:0,vz:0,t:1});
+const sprayG=new THREE.BufferGeometry();sprayG.setAttribute('position',new THREE.BufferAttribute(sprayPos,3));
+const sprayPts=new THREE.Points(sprayG,new THREE.PointsMaterial({color:0xffffff,size:.55,transparent:true,opacity:.9,depthWrite:false}));sprayPts.frustumCulled=false;scene.add(sprayPts);
+let treeHash=null;
+function buildTreeHash(){treeHash=new Map();trees.concat(ROCKS).forEach((t,i)=>{if(!t.on)return;const k=Math.floor(t.x/4)+','+Math.floor(t.z/4);(treeHash.get(k)||treeHash.set(k,[]).get(k)).push(t)})}
+function hitTree(x,z){const cx=Math.floor(x/4),cz=Math.floor(z/4);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const L=treeHash.get((cx+a)+','+(cz+b));if(L)for(const t of L)if(Math.hypot(t.x-x,t.z-z)<1.25*t.s)return true}return false}
+function rideMsg(t,ms){const m=$('rMsg');m.textContent=t;m.classList.add('show');clearTimeout(m._t);m._t=setTimeout(()=>m.classList.remove('show'),ms||1200)}
+function startRide(R){if(!R)return;$('mRide').classList.remove('show');setTool('look');hideInfo();
+  const s0=R.sm[Math.min(3,R.sm.length-1)],s1=R.sm[Math.min(9,R.sm.length-1)];
+  ride={R,p:new THREE.Vector3(s0.x,s0.y,s0.z),h:Math.atan2(s1.x-s0.x,s1.z-s0.z),v:3,vy:0,air:false,airT:0,lastG:s0.y,prevVy:0,t:0,top:0,dist:0,crashes:0,crashT:0,stuckT:0,lean:0,prevSpeed:speed,warnT:0,jumpLatch:false};
+  speed=1;document.querySelectorAll('#speed button').forEach(x=>x.classList.toggle('on',x.dataset.s==='1'));
+  buildTreeHash();rider.visible=true;controls.enabled=false;document.body.classList.add('riding');$('ride').hidden=false;
+  $('rName').innerHTML=`<b style="color:${DIFF[R.diff].css};min-width:0;font-size:14px">${DIFF[R.diff].s} ${R.name}</b>`;
+  camera.position.set(ride.p.x-Math.sin(ride.h)*10,ride.p.y+5,ride.p.z-Math.cos(ride.h)*10);rideMsg('3… 2… 1… Вперёд!',1300)}
+function endRide(){if(!ride)return;const R=ride.R;ride=null;rider.visible=false;controls.enabled=true;document.body.classList.remove('riding');$('ride').hidden=true;
+  for(const k in keys)keys[k]=false;document.querySelectorAll('.rb').forEach(b=>b.classList.remove('on'));
+  const e=R.sm[R.sm.length-1];controls.target.set(e.x,e.y,e.z);camera.position.set(e.x-50,e.y+55,e.z+80);camera.fov=innerWidth<innerHeight?68:50;camera.updateProjectionMatrix()}
+function finishRide(){const r=ride,R=r.R,t=r.t,key=R.name,prev=best[key],rec=!prev||t<prev;if(rec)best[key]=+t.toFixed(2);
+  const bonus=Math.max(150,Math.round((300+R.len*4)*(R.diff+1)*.6-t*8-r.crashes*150));money+=bonus;rideDone++;addXP(10+R.diff*5);persist();checkQuest();
+  const top=Math.round(r.top*5);ride.done=true;
+  $('rideCard').innerHTML=`<div class="rres"><h2>🏁 Финиш! ${DIFF[R.diff].s} ${R.name}</h2><div class="big">${t.toFixed(2)} с</div>
+   <p style="text-align:center;margin:0 0 10px">${rec?(prev?`🏆 Новый рекорд! Было ${prev.toFixed(2)} с`:'🏆 Первый рекорд трассы!'):`Рекорд: ${prev.toFixed(2)} с`}</p>
+   <div class="r"><span>Макс. скорость</span><b>${top} км/ч</b></div><div class="r"><span>Падений</span><b>${r.crashes}</b></div><div class="r"><span>Призовые</span><b class="pos">+${fmt(bonus)}</b></div>
+   <div class="row"><button class="btn" id="rAgain">🔁 Ещё раз</button><button class="btn pri" id="rOut">Вернуться к курорту</button></div></div>`;
+  $('mRide').classList.add('show');$('rAgain').onclick=()=>{endRide();startRide(R)};$('rOut').onclick=()=>{$('mRide').classList.remove('show');endRide()}}
+const _cam=new THREE.Vector3(),_look=new THREE.Vector3();let camLook=new THREE.Vector3();
+function updRide(dt){const r=ride;if(r.done)return;dt=Math.min(dt,.033);
+  const L=keys.l,Rt=keys.r,tuck=keys.tuck,brake=keys.brake,steer=(Rt?1:0)-(L?1:0);r.t+=dt;
+  if(r.crashT>0){r.crashT-=dt;rider.userData.body.rotation.x+=dt*9;if(r.crashT<=0){rider.userData.body.rotation.x=0;r.v=1.5}}
+  else{
+    r.h-=steer*(2.5/(1+r.v*.04))*dt;
+    const dx=Math.sin(r.h),dz=Math.cos(r.h),p=r.p;
+    const sl=(heightAt(p.x+dx,p.z+dz)-heightAt(p.x-dx,p.z-dz))/2;
+    let acc=r.air?0:-sl*19-.7;
+    acc-=r.v*r.v*(tuck?.011:.021);acc-=Math.abs(steer)*r.v*.16;
+    if(brake&&!r.air)acc-=6+r.v*.5;if(tuck&&r.v<4&&!r.air)acc+=4;
+    r.v=clamp(r.v+acc*dt,0,32);r.top=Math.max(r.top,r.v);
+    const nx=p.x+dx*r.v*dt,nz=p.z+dz*r.v*dt;
+    if(!inBounds({x:nx,z:nz})){r.v*=.2;r.h+=Math.PI*.5*(Math.random()<.5?1:-1);if(r.warnT<=0){rideMsg('🚧 Граница твоей земли');r.warnT=2}}
+    else if(!r.air&&r.v>4.5&&(hitTree(nx,nz)||buildings.some(b=>Math.abs(nx-b.x)<b.fw/2+.5&&Math.abs(nz-b.z)<b.fd/2+.5))){r.crashT=1.1;r.crashes++;r.v=0;rideMsg('💥 Упал!');window.haptic&&window.haptic('heavy');for(let k=0;k<30;k++)emitSpray(p,(Math.random()-.5)*8,Math.random()*6,(Math.random()-.5)*8)}
+    else{p.x=nx;p.z=nz;r.dist+=r.v*dt}
+    const g=heightAt(p.x,p.z);
+    if(!r.air){const vyG=(g-r.lastG)/dt;
+      const jump=keys.jump&&!r.jumpLatch;if(jump)r.jumpLatch=true;if(!keys.jump)r.jumpLatch=false;
+      if(jump||(r.v>9&&(vyG-r.prevVy)/dt<-45)){r.air=true;r.airT=0;r.vy=r.prevVy+(jump?8:0);p.y=g+.05}
+      else{p.y=g;r.prevVy=clamp(vyG,-40,40)}}
+    if(r.air){r.airT+=dt;r.vy-=30*dt;p.y+=r.vy*dt;if(p.y<=g){p.y=g;r.air=false;r.prevVy=0;if(r.airT>.6)rideMsg(`✈ Прыжок ${r.airT.toFixed(1)} с!`,900)}}
+    r.lastG=g;
+    if((Math.abs(steer)||brake)&&r.v>5&&!r.air)for(let k=0;k<3;k++)emitSpray(p,Math.cos(r.h)*steer*4+(Math.random()-.5)*2,1.5+Math.random()*2,-Math.sin(r.h)*steer*4+(Math.random()-.5)*2);
+    if(r.v<.6&&!tuck){r.stuckT+=dt;if(r.stuckT>2.5){rideMsg('Остановился: жми 🚀 Разгон, чтобы оттолкнуться',1600);r.stuckT=-3}}else r.stuckT=Math.min(r.stuckT,0);
+    r.warnT-=dt;
+    const e=r.R.sm[r.R.sm.length-1];if(r.t>2&&(Math.hypot(p.x-e.x,p.z-e.z)<11||Math.hypot(p.x-BASE.x,p.z-BASE.z)<22)){finishRide();return}
+    r.lean+=((steer*.45)-r.lean)*Math.min(1,dt*8);
+    rider.position.copy(p);rider.rotation.set(0,r.h,0);rider.userData.body.rotation.z=-r.lean;rider.userData.body.scale.y=tuck?.82:1;
+    rider.children[1].position.x=-.2-(brake?.12:0);rider.children[2].position.x=.2+(brake?.12:0);rider.children[1].rotation.y=brake?.25:0;rider.children[2].rotation.y=brake?-.25:0;
+  }
+  // chase camera
+  const p=r.p,dx=Math.sin(r.h),dz=Math.cos(r.h);_cam.set(p.x-dx*9.5,0,p.z-dz*9.5);_cam.y=Math.max(p.y+4.3,heightAt(_cam.x,_cam.z)+2.5);
+  camera.position.lerp(_cam,1-Math.exp(-dt*6));_look.set(p.x+dx*6,p.y+1.4,p.z+dz*6);camLook.lerp(_look,1-Math.exp(-dt*10));camera.lookAt(camLook);
+  const fv=(innerWidth<innerHeight?72:58)+r.v*.6;if(Math.abs(camera.fov-fv)>.3){camera.fov+=(fv-camera.fov)*.1;camera.updateProjectionMatrix()}
+  $('rTime').textContent=r.t.toFixed(1)+' с';$('rSpd').textContent=Math.round(r.v*5)+' км/ч'}
+function emitSpray(p,vx,vy,vz){const q=sprayV.find(x=>x.t>=1);if(!q)return;q.x=p.x;q.y=p.y+.2;q.z=p.z;q.vx=vx;q.vy=vy;q.vz=vz;q.t=0}
+function updSpray(dt){for(let i=0;i<sprayN;i++){const q=sprayV[i];if(q.t<1){q.t+=dt/.6;q.vy-=14*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.z+=q.vz*dt}sprayPos[i*3]=q.x;sprayPos[i*3+1]=q.t<1?q.y:-999;sprayPos[i*3+2]=q.z}sprayG.attributes.position.needsUpdate=true}
+// controls: keyboard + on-screen buttons
+const KEYMAP={ArrowLeft:'l',a:'l',ф:'l',ArrowRight:'r',d:'r',в:'r',ArrowUp:'tuck',w:'tuck',ц:'tuck',ArrowDown:'brake',s:'brake',ы:'brake',' ':'jump'};
+addEventListener('keydown',e=>{if(!ride)return;const k=KEYMAP[e.key]||KEYMAP[e.key.toLowerCase()];if(k){keys[k]=true;e.preventDefault()}if(e.key==='Escape'){$('mRide').classList.remove('show');endRide()}},true);
+addEventListener('keyup',e=>{const k=KEYMAP[e.key]||KEYMAP[(e.key||'').toLowerCase()];if(k)keys[k]=false});
+[['rL','l'],['rR','r'],['rTuck','tuck'],['rBrake','brake'],['rJump','jump']].forEach(([id,k])=>{const b=$(id);const on=e=>{e.preventDefault();keys[k]=true;b.classList.add('on');try{b.setPointerCapture(e.pointerId)}catch(_){}};const off=()=>{keys[k]=false;b.classList.remove('on')};
+  b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);b.addEventListener('contextmenu',e=>e.preventDefault())});
+$('rExit').onclick=()=>{$('mRide').classList.remove('show');endRide()};
 /* ================= performance ================= */
 let fpsT=0,fpsN=0,fpsWarm=6;
 function setQuality(hi,persistIt){HIQ=hi;sun.castShadow=hi;renderer.setPixelRatio(Math.min(hi?2:1.25,devicePixelRatio||1));resize();$('bQ').textContent='Графика: '+(hi?'красивая':'быстрая');if(persistIt)try{localStorage.setItem('powderpeak-q',hi?'high':'low')}catch(e){}}
@@ -1260,23 +1411,23 @@ function frame(now){
       const mins=sd*2;minutes+=mins;tickEconomy(sd,mins);
       lifts.forEach(L=>updateLift(L,sd));
       for(let i=skiers.length-1;i>=0;i--){updateSkier(skiers[i],sd);if(skiers[i].dead)skiers.splice(i,1)}
-      if(minutes>=closeTime()){endDay();break}
+      if(minutes>=closeTime()&&!ride){endDay();break}
     }
   }
-  updBursts(rdt);updSmoke(rdt);updGrows(rdt);updSprays(rdt*Math.max(1,speed));
+  updBursts(rdt);updSmoke(rdt);updCars(rdt*Math.max(1,speed));updSpray(rdt);if(ride)updRide(rdt);updGrows(rdt);updSprays(rdt*Math.max(1,speed));
   if(hoverReq&&((tool==='lift'&&liftA)||(tool==='run'&&runPts.length)||(tool==='build'&&bType&&!ghostAt)||tool==='trees')){const p=pickGround(hoverReq.x,hoverReq.y);hover=p?(tool==='build'||tool==='trees'?p:snap(p)):null;hoverReq=null;
     if(tool==='lift'||tool==='run')refresh();else drawPreview()}
-  const sp=snowG.attributes.position.array,cx=controls.target.x,cz=controls.target.z,cy=controls.target.y;
+  const sp=snowG.attributes.position.array,ctr=ride?ride.p:controls.target,cx=ctr.x,cz=ctr.z,cy=ctr.y;
   for(let i=0;i<SN;i++){let y=sp[i*3+1]-rdt*(snowSpeed+(i%5));if(y<cy-40)y+=140;sp[i*3+1]=y;sp[i*3]+=Math.sin(now/1500+i)*rdt*.8;
     if(sp[i*3]-cx>120)sp[i*3]-=240;else if(sp[i*3]-cx<-120)sp[i*3]+=240;if(sp[i*3+2]-cz>120)sp[i*3+2]-=240;else if(sp[i*3+2]-cz<-120)sp[i*3+2]+=240}
   snowG.attributes.position.needsUpdate=true;
-  const tg2=controls.target;tg2.x=clamp(tg2.x,-258,258);tg2.z=clamp(tg2.z,-258,258);const gy=heightAt(tg2.x,tg2.z);tg2.y+=(gy+8-tg2.y)*.05;
+  if(!ride){const tg2=controls.target;tg2.x=clamp(tg2.x,-258,258);tg2.z=clamp(tg2.z,-258,258);const gy=heightAt(tg2.x,tg2.z);tg2.y+=(gy+8-tg2.y)*.05;
   if(camera.position.y<heightAt(camera.position.x,camera.position.z)+6)camera.position.y=heightAt(camera.position.x,camera.position.z)+6;
-  controls.update();sky();
+  controls.update()}sky();
   uiT-=rdt;if(uiT<=0){uiT=.25;
     $('cash').textContent=fmt(money);$('cash').style.color=money<0?'#fda4af':'';
     const hh=Math.floor(minutes/60),mm=Math.floor(minutes%60);$('clock').textContent=hh+':'+String(mm).padStart(2,'0')+' '+(isNight()&&(weather==='sun'||weather==='thaw')?'🌙':WEATHER[weather].i);$('clock').parentNode.title='Погода: '+WEATHER[weather].n+' — '+WDESC[weather];
-    $('dayL').textContent='День '+dayN+(minutes<ARR_END?' · открыто':isNight()?' · 🌙 ночное катание':' · последние спуски');$('nSk').textContent=skiers.filter(s=>s.state!=='leave').length;$('stars').textContent=starStr();
+    $('dayL').textContent='День '+dayN+(minutes<ARR_END?' · открыто':isNight()?' · 🌙 ночное катание':' · последние спуски');$('nSk').textContent=skiers.filter(s=>s.state!=='leave').length;$('stars').textContent=starStr();$('lvlL').textContent='Ур. '+level+' · рейтинг';$('xpF').style.width=(xpLine()*100).toFixed(1)+'%';
     if(infoObj&&tool==='look'&&$('iStats'))showInfo(infoObj,true);if($('price').classList.contains('show'))updatePrice();
     checkQuest();
   }
@@ -1285,6 +1436,10 @@ function frame(now){
   renderer.render(scene,camera);
 }
 {const vl=[];for(let k=-2;k<=2;k++)vl.push({x:BASE.x+k*9,z:BASE.z+21});[[-14,-8],[14,-8],[-14,6],[14,6]].forEach(([dx,dz])=>vl.push({x:BASE.x+dx,z:BASE.z+dz}));for(let z=BASE.z+32;z<BASE.z+120;z+=16)vl.push({x:10+Math.sin(z*.03)*4*(z>150?1:0),z});const vg=new THREE.Group();lampSet(vl,vg);scene.add(vg)}
+// former resorts glow on the far horizon behind the mountain
+META.list.filter(r=>r.n<RESORT).forEach((r,i,a)=>{const I=resortInfo(r),x=(i-(a.length-1)/2)*260,z=-760,y=300;const l=label(`🏔️ Курорт №${r.n} · ур. ${I.lvl}`,'#fde68a',.15);l.material.fog=false;l.position.set(x,y+60,z);scene.add(l);
+  const pts=[];for(let k=0;k<40;k++)pts.push(x+(Math.random()-.5)*120,y-60+Math.random()*90,z+(Math.random()-.5)*40);const p=new THREE.Points(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(pts,3)),lampGlowMat);p.material.fog=false;scene.add(p)});
+buildRoad();
 drawBorder();renderQuest();setTool('look');setQuality(HIQ,false);
 requestAnimationFrame(frame);
 /*PWA*/(function(){const inTg=/tgWebApp/.test(location.hash+location.search);
