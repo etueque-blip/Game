@@ -44,18 +44,23 @@ button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .pk.on{border-color:var(--ac);background:#38bdf822}
 .pk .i{font-size:20px}.pk b{font-size:13px}.pk .c{font-size:12px;color:#86efac;font-weight:700}.pk .d{font-size:11px;color:var(--mut);line-height:1.25;white-space:normal}
 .pk.lock{opacity:.45}
-#card{display:none;width:min(470px,100%);padding:10px 12px}
+#card{display:none;width:min(440px,100%);padding:8px 10px}
 #card.show{display:block}
-.ch{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.ch{display:flex;align-items:center;gap:6px;margin-bottom:3px}
 .ch b{font-size:15px;flex:1}
 .ch .x{font-size:16px;color:var(--mut);padding:2px 8px;border-radius:8px;background:var(--pn2)}
 #cSteps{display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.3}
 .st{display:flex;gap:7px;color:#7d8aa3}.st i{font-style:normal;width:18px;height:18px;border-radius:50%;background:#ffffff14;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none;margin-top:1px}
 .st.cur{color:#fff}.st.cur i{background:var(--ac);color:#04121f}
+#card:not(.full) .st:not(.cur){display:none}
+#cPick[hidden]{display:none}
+.ch .x{font-size:12px;font-weight:700;white-space:nowrap}
+#card.full #cHelp{background:var(--ac);color:#04121f}
+body.building #quest,body.building #info{display:none!important}
 .st.done{color:#86a99a}.st.done i{background:#22c55e55;color:#bbf7d0}
-#cStat{margin-top:6px;font-size:13px;line-height:1.4;min-height:0}
+#cStat{margin-top:4px;font-size:13px;line-height:1.4;min-height:0}
 #cStat:empty{display:none}
-.cb{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.cb{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .cb:empty{display:none}
 .btn{padding:7px 12px;border-radius:10px;font-weight:700;background:#ffffff1c;font-size:13px}
 .btn.pri{background:var(--ac);color:#04121f}
@@ -99,7 +104,9 @@ button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
   #info{top:calc(env(safe-area-inset-top,0px) + 150px)}
   #toast{top:calc(env(safe-area-inset-top,0px) + 92px)}
   .pk{min-width:92px;padding:6px 8px}.pk .d{display:none}.pk .i{font-size:17px}
-  .st:not(.cur){display:none}#card{padding:8px 10px}#cSteps{font-size:12.5px}
+  #card{padding:7px 9px}#cSteps{font-size:12.5px}.ch b{font-size:13px}#cIcon{font-size:17px!important}
+  body.building #miniWrap{display:none}
+  .pk{flex:none;display:grid;grid-template-columns:auto auto;column-gap:7px;row-gap:0;align-items:center;min-width:0;max-width:none;padding:6px 10px}.pk .i{grid-row:1/3}.pk b{font-size:12px;white-space:nowrap}.pk .c{font-size:11px;white-space:nowrap}
 }
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style></head><body>
@@ -132,7 +139,7 @@ button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
   </div>
   <div class="pn" id="picker"></div>
   <div class="pn" id="card">
-    <div class="ch"><span id="cIcon" style="font-size:20px"></span><b id="cTitle"></b><button class="x" id="cX" title="Закрыть инструмент">✕</button></div>
+    <div class="ch"><span id="cIcon" style="font-size:20px"></span><b id="cTitle"></b><button class="x" id="cPick" title="Выбрать другой тип">сменить ▾</button><button class="x" id="cHelp" title="Показать все шаги">?</button><button class="x" id="cX" title="Закрыть инструмент">✕</button></div>
     <div id="cSteps"></div>
     <div id="cStat"></div>
     <div class="cb" id="cBtns"></div>
@@ -745,14 +752,14 @@ function nearest(p){
 }
 
 /* ================= tools & UI ================= */
-let tool='look',liftType='chair',bType=null,bRot=0,treeMode='cut',liftA=null,runPts=[],hover=null,ghostAt=null,selDel=null;
+let pickerOpen=false,tool='look',liftType='chair',bType=null,bRot=0,treeMode='cut',liftA=null,runPts=[],hover=null,ghostAt=null,selDel=null;
 const prev=new THREE.Group();scene.add(prev);
 const markerG=new THREE.CylinderGeometry(.9,.9,3,10);markerG.translate(0,1.5,0);
 function clearPrev(){while(prev.children.length){const c=prev.children[0];prev.remove(c);c.traverse&&c.traverse(o=>{if(o.geometry&&o.geometry!==markerG&&!o.isSprite)o.geometry.dispose()})}}
 function marker(p,c){const m=new THREE.Mesh(markerG,new THREE.MeshBasicMaterial({color:c}));m.position.copy(p);prev.add(m)}
 const TOOLS={
-  lift:{icon:'🚡',t:'Подъёмник',steps:['Выбери тип подъёмника в списке сверху','Нажми, где будет НИЖНЯЯ станция. Жёлтый круг у базы — туда приходят гости','Нажми выше по горе, где будет ВЕРХНЯЯ станция']},
-  run:{icon:'⛷️',t:'Трасса',steps:['Нажми у верхней станции подъёмника (синий круг)','Ставь точки вниз по склону. Цвет полосы = крутизна, красный = в гору','Закончи в жёлтом круге (база или низ подъёмника) и нажми «Построить»']},
+  lift:{icon:'🚡',t:'Подъёмник',steps:['Выбери тип подъёмника в списке сверху','Нажми, где будет НИЖНЯЯ станция (лучше в жёлтом круге у базы)','Нажми выше по горе, где будет ВЕРХНЯЯ станция']},
+  run:{icon:'⛷️',t:'Трасса',steps:['Нажми у верхней станции подъёмника (синий круг)','Ставь точки вниз по склону (цвет = крутизна, красный = в гору)','Закончи в жёлтом круге и нажми «Построить»']},
   build:{icon:'🏠',t:'Здания',steps:['Выбери здание в списке сверху','Нажми на ровное место (на карте «Крутизна» — зелёное)','Поверни, если нужно, и нажми «Построить»']},
   trees:{icon:'🌲',t:'Деревья',steps:['Выбери: вырубить или посадить','Нажимай на склон: кисть радиусом ~60 м']},
   del:{icon:'🧨',t:'Снос',steps:['Нажми на подъёмник, трассу или здание — оно подсветится красным','Нажми «Снести», вернём 40% стоимости']},
@@ -763,21 +770,22 @@ function renderCard(stat,btns){
   $('card').classList.add('show');$('cIcon').textContent=T.icon;
   $('cTitle').textContent=T.t+(tool==='lift'?' · '+LT[liftType].n:tool==='build'&&bType?' · '+BT[bType].n:'');
   const cur=stepOf();
-  $('cSteps').innerHTML=T.steps.map((s,i)=>`<div class="st ${i<cur?'done':i===cur?'cur':''}"><i>${i<cur?'✓':i+1}</i><span>${s}</span></div>`).join('');
+  $('cSteps').innerHTML=T.steps.map((s,i)=>`<div class="st ${i<cur?'done':i===cur?'cur':''}"><i>${i<cur?'✓':i+1}</i><span>${i===cur&&!$('card').classList.contains('full')?`<b style="color:var(--mut);font-weight:500">${i+1}/${T.steps.length}</b> `:''}${s}</span></div>`).join('');
   $('cStat').innerHTML=stat||'';
   const b=$('cBtns');b.innerHTML='';(btns||[]).forEach(x=>{const e=document.createElement('button');e.className='btn '+(x.c||'');e.innerHTML=x.l;e.disabled=!!x.dis;e.onclick=x.f;b.appendChild(e)});
 }
 function renderPicker(){
   const p=$('picker');let items=[];
-  if(tool==='lift')items=Object.entries(LT).map(([k,T])=>({k,on:k===liftType,i:T.icon,n:T.n,c:'от '+fmt(Math.round(T.cost(40,15)/50)*50),d:T.desc,f:()=>{liftType=k;liftA=null;refresh()}}));
-  else if(tool==='build')items=Object.entries(BT).map(([k,T])=>{const lock=T.need&&rating()<T.need&&!buildings.some(b=>b.type===k);return{k,on:k===bType,lock,i:T.icon,n:T.n,c:lock?`🔒 рейтинг ${T.need}★`:fmt(T.cost),d:T.desc,f:()=>{bType=k;ghostAt=null;refresh()}}});
-  else if(tool==='trees')items=[{k:'cut',on:treeMode==='cut',i:'🪓',n:'Вырубить',c:'$12 за дерево',d:'Освободи место под стройку или трассу.',f:()=>{treeMode='cut';refresh()}},{k:'plant',on:treeMode==='plant',i:'🌱',n:'Посадить',c:'$20 за дерево',d:'Лес делает курорт красивее.',f:()=>{treeMode='plant';refresh()}}];
-  p.classList.toggle('show',items.length>0);p.innerHTML='';
+  if(tool==='lift')items=Object.entries(LT).map(([k,T])=>({k,on:k===liftType,i:T.icon,n:T.n,c:'от '+fmt(Math.round(T.cost(40,15)/50)*50),d:T.desc,f:()=>{liftType=k;liftA=null;pickerOpen=false;refresh()}}));
+  else if(tool==='build')items=Object.entries(BT).map(([k,T])=>{const lock=T.need&&rating()<T.need&&!buildings.some(b=>b.type===k);return{k,on:k===bType,lock,i:T.icon,n:T.n,c:lock?`🔒 рейтинг ${T.need}★`:fmt(T.cost),d:T.desc,f:()=>{if(lock)return toast(`Откроется при рейтинге ${T.need}★`,1);bType=k;ghostAt=null;pickerOpen=false;refresh()}}});
+  else if(tool==='trees')items=[{k:'cut',on:treeMode==='cut',i:'🪓',n:'Вырубить',c:'$12 за дерево',d:'Освободи место под стройку или трассу.',f:()=>{treeMode='cut';pickerOpen=false;refresh()}},{k:'plant',on:treeMode==='plant',i:'🌱',n:'Посадить',c:'$20 за дерево',d:'Лес делает курорт красивее.',f:()=>{treeMode='plant';pickerOpen=false;refresh()}}];
+  p.classList.toggle('show',items.length>0&&pickerOpen);$('cPick').hidden=!(items.length>0)||pickerOpen;p.innerHTML='';
   items.forEach(x=>{const e=document.createElement('button');e.className='pk'+(x.on?' on':'')+(x.lock?' lock':'');e.innerHTML=`<span class="i">${x.i}</span><b>${x.n}</b><span class="c">${x.c}</span><span class="d">${x.d}</span>`;e.onclick=x.f;p.appendChild(e)});
 }
 function setTool(t){
   if(t==='price'){$('price').classList.toggle('show');updatePrice();return}
   tool=t;liftA=null;runPts=[];hover=null;ghostAt=null;selDel=null;bType=t==='build'?bType:null;hideInfo();
+  pickerOpen=t==='lift'||t==='trees'||(t==='build'&&!bType);$('card').classList.remove('full');document.body.classList.toggle('building',t!=='look');
   document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   rings.visible=t==='lift'||t==='run';if(rings.visible)refreshRings();
   if(t!=='look')$('price').classList.remove('show');
@@ -795,7 +803,7 @@ function refresh(){
   if(tool==='lift'){
     let stat='';
     const b=hover||null;
-    if(!liftA){stat=`<span style="color:var(--mut)">${LT[liftType].desc}</span>`}
+    if(!liftA){stat=''}
     else if(b){const c=liftCheck(liftA,b,liftType);stat=c.ok?`📏 ${M(c.len)} м · ⬆ ${M(c.vert)} м · 👥 ${c.cap}/час · <b class="${money>=c.cost?'okc':'bad'}">${fmt(c.cost)}</b>`:`<span class="bad">✕ ${c.msg}</span>`}
     else stat=d2(liftA,BASE)<BASE_LINK?'<span class="okc">✓ Нижняя станция у базы — гости смогут прийти</span>':'<span class="wrn">ℹ Не у базы: сюда должна вести какая-то трасса</span>';
     renderCard(stat,liftA?[{l:'↶ Заново',f:()=>{liftA=null;hover=null;refresh()}}]:[]);
@@ -813,7 +821,7 @@ function refresh(){
     let stat='',btns=[];
     if(bType&&ghostAt){const c=bCheck(bType,ghostAt.x,ghostAt.z,bRot);stat=c.ok?`<span class="okc">✓ Место подходит</span>${c.cut?` · вырубим ${c.cut} дер.`:''} · <b class="${money>=c.cost?'okc':'bad'}">${fmt(c.cost)}</b>`:`<span class="bad">✕ ${c.msg}</span>`;
       btns=[{l:'⟳ Повернуть',f:()=>{bRot=(bRot+1)%4;refresh()}},{l:c.ok?`Построить ${fmt(c.cost)}`:'Построить',c:'pri',dis:!(c.ok&&money>=c.cost),f:placeBuilding}]}
-    else if(bType)stat=`<span style="color:var(--mut)">${BT[bType].desc}</span>`;
+    else if(bType)stat='';
     renderCard(stat,btns);
   }else if(tool==='trees'){renderCard(treeMode==='cut'?'🪓 Режим: вырубка':'🌱 Режим: посадка',[])}
   else if(tool==='del'){
@@ -889,6 +897,7 @@ function placeBuilding(){
 }
 function onTap(cx,cy){
   const p=pickGround(cx,cy);if(!p)return;
+  if(pickerOpen&&tool!=='build'){pickerOpen=false}
   if(tool==='look'){const o=nearest(p);o?showInfo(o):hideInfo();return}
   if(tool==='del'){const o=nearest(p);selDel=o||null;if(!o)toast('Здесь нечего сносить. Нажми прямо на постройку');refresh();return}
   if(tool==='trees'){hover=p;applyTrees(p);refresh();return}
@@ -922,7 +931,7 @@ function burst(p,text){const s=label(text,'#86efac',.12);s.position.set(p.x,p.y+
 function updBursts(dt){for(let i=bursts.length-1;i>=0;i--){const b=bursts[i];b.t-=dt;if(b.s){b.s.position.y+=dt*4;b.s.material.opacity=clamp(b.t,0,1)}else{b.m.userData.v.y-=20*dt;b.m.position.addScaledVector(b.m.userData.v,dt);b.m.material.opacity=clamp(b.t,0,1)}
   if(b.t<=0){scene.remove(b.s||b.m);bursts.splice(i,1)}}}
 
-$('cX').onclick=cancelTool;
+$('cX').onclick=cancelTool;$('cPick').onclick=()=>{pickerOpen=true;refresh()};$('cHelp').onclick=()=>$('card').classList.toggle('full');
 document.querySelectorAll('.tool').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
 addEventListener('keydown',e=>{if(e.key==='Escape'){if(tool==='run'&&runPts.length){runPts=[];refresh()}else if(tool==='lift'&&liftA){liftA=null;refresh()}else cancelTool()}
   if(e.key==='Backspace'&&tool==='run'&&runPts.length){runPts.pop();refresh()}if(e.key==='Enter'&&tool==='run')buildRun();if((e.key==='r'||e.key==='к')&&tool==='build'){bRot=(bRot+1)%4;refresh()}});
