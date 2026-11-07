@@ -188,6 +188,11 @@ local ef = { t = 0, at = 0, side = 0, done = false }
 local function engCount(c: any): number
 	return if c.engines == "wing4" then 4 elseif c.engines == "wing2" or c.engines == "tail2" or c.engines == "turboprop2" then 2 else 1
 end
+-- состояние фото-режима и паузы (объявлено до onAction: раньше стояло ниже, и фото-режим писал в глобальную переменную — самолёт не замирал)
+local photoMode, photoPrevCam = false, 1
+local paused = false
+local pauseSummary: () -> string
+local againFlight: () -> ()
 local function onAction(a: string)
 	if a == "hangar" then
 		ui.showHangar()
@@ -206,6 +211,21 @@ local function onAction(a: string)
 			end
 			ui.setPhoto(photoMode)
 		end
+		return
+	elseif a == "pause" then
+		if flight and not flight.crashed then
+			paused = not paused
+			ui.setPause(paused, pauseSummary())
+		else
+			paused = false
+			ui.setPause(false)
+		end
+		return
+	elseif a == "again" then
+		againFlight()
+		return
+	elseif a == "settings" then
+		ui.openSettings()
 		return
 	elseif a == "restart" then
 		if flight and ((flight :: any).engOut or 0) > 0 and engRestart <= 0 then
@@ -297,7 +317,6 @@ end
 -- объявлена заранее: кнопка «Выйти из самолёта» (onExit) вызывает её раньше определения ниже
 local stopFlight: () -> ()
 local logFlight: (result: string) -> ()
-local photoMode, photoPrevCam = false, 1
 ui = Ui.new({
 	onPick = requestFlight,
 	onAction = onAction,
@@ -329,6 +348,10 @@ cameraRig = CameraRig.new(ui)
 
 function stopFlight()
 	logFlight("ok")
+	if paused then
+		paused = false
+		ui.setPause(false)
+	end
 	if photoMode then
 		photoMode = false
 		cameraRig.mode = photoPrevCam
@@ -357,6 +380,15 @@ local function playerPoints(): number
 	local ls = Players.LocalPlayer:FindFirstChild("leaderstats")
 	local v = ls and ls:FindFirstChild("Очки")
 	return if v and v:IsA("IntValue") then v.Value else 0
+end
+function pauseSummary(): string
+	local name = if flight then flight.cfg.name else ""
+	return string.format("%s\nВ воздухе %d:%02d · посадок %d · очки за полёт +%d", name, math.floor(fstats.time / 60), math.floor(fstats.time % 60), fstats.landings, math.max(0, playerPoints() - fstats.startPts))
+end
+function againFlight()
+	if lastPlaneId then
+		requestFlight(lastPlaneId, lastMode, lastDest)
+	end
 end
 
 -- бортовой журнал: итог полёта уходит на сервер один раз (при крушении, выходе или новом полёте)
@@ -637,6 +669,10 @@ local function handleEvents(f: FlightPhysics.Flight)
 			ui.toast("💥 " .. ev.text, "red")
 			addLog("КРУШЕНИЕ: " .. ev.text)
 			logFlight("crash")
+			if paused then
+				paused = false
+				ui.setPause(false)
+			end
 			crashPose = FlightPhysics.pose(f)
 			crashTimer = 1.8
 			apTarget = nil
@@ -686,7 +722,7 @@ RunService.PreSimulation:Connect(function(dt)
 		simulating = true
 	end
 	-- фото-режим: самолёт замер в воздухе (держим позу, скорость обнулена)
-	if photoMode then
+	if photoMode or paused then
 		root.CFrame = FlightPhysics.pose(f)
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.AssemblyAngularVelocity = Vector3.zero

@@ -136,6 +136,7 @@ function Ui.new(cb: Callbacks)
 	local bDebug = button(top, "Отладка")
 	local bGuide = button(top, "Инструкция")
 	local bHelp = button(top, "Клавиши")
+	local bPause = button(top, "II")
 	local bPhoto = button(top, "📷")
 	local planeName = new("TextLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -4, 0, 48), Size = UDim2.fromOffset(260, 20), Font = FONT_TITLE, TextSize = 15, TextColor3 = C.fg, TextXAlignment = Enum.TextXAlignment.Right, Text = "", TextStrokeTransparency = 0.6 }, root)
 	self.bCam, self.bMouse, self.bAP = bCam, bMouse, bAP
@@ -604,6 +605,9 @@ function Ui.new(cb: Callbacks)
 	bSet.Activated:Connect(function()
 		sO.Visible = true
 	end)
+	function self.openSettings()
+		sO.Visible = true
+	end
 	local bBack = button(navRow, "Назад", { ZIndex = 23, LayoutOrder = 2 })
 	local bNext = button(navRow, "Далее →", { ZIndex = 23, LayoutOrder = 3 })
 	primary(bNext)
@@ -1248,6 +1252,35 @@ function Ui.new(cb: Callbacks)
 		root.Visible = not on
 		photoBar.Visible = on
 	end
+	-- меню паузы (как в веб-версии, tools/web_pause.py): сводка полёта и действия
+	local pO, pS = overlay("Pause", 440)
+	h2(pS, "II  Пауза", nil, 1)
+	local pSum = para(pS, "", 2)
+	pSum.TextSize = 15
+	pSum.TextColor3 = C.fg
+	local pList = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 22 }, pS)
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, pList)
+	for i, it in { { "▶  Продолжить  ( ` )", "pause" }, { "↻  Начать полёт заново", "again" }, { "⚙  Настройки", "settings" }, { "Инструкция", "guide" }, { "✈  В ангар", "hangar" } } do
+		local b = button(pList, it[1], { ZIndex = 23, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 40), AutomaticSize = Enum.AutomaticSize.None })
+		if i == 1 then
+			primary(b)
+		end
+		b.Activated:Connect(function()
+			if it[2] ~= "pause" and it[2] ~= "settings" and it[2] ~= "guide" then
+				cb.onAction("pause")
+			end
+			cb.onAction(it[2])
+		end)
+	end
+	function self.setPause(on: boolean, summary: string?)
+		pO.Visible = on
+		if summary then
+			pSum.Text = summary
+		end
+	end
+	bPause.Activated:Connect(function()
+		cb.onAction("pause")
+	end)
 	bGuide.Activated:Connect(function()
 		cb.onAction("guide")
 	end)

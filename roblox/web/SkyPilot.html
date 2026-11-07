@@ -594,6 +594,15 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   .logrow .p { font-weight: 800; color: var(--gold); font-size: 15px; } .logrow.crash { border-color: rgba(255,77,94,0.45); }
   .logempty { color: var(--dim); font-size: 14px; padding: 18px 4px; }
   @media (max-width: 560px) { .logtot { grid-template-columns: repeat(2, 1fr); } }</style>
+  <div class="overlay" id="pauseO" style="z-index:38" hidden>
+    <div class="sheet" style="max-width:440px">
+      <h2>❚❚ Пауза</h2>
+      <div class="logtot" id="pauseSum" style="grid-template-columns:repeat(2,1fr)"></div>
+      <div class="pbtns"><button class="tb primary" id="pResume">▶ Продолжить <small>Esc</small></button><button class="tb" id="pAgain">↻ Начать полёт заново</button>
+        <button class="tb" id="pSet">⚙ Настройки</button><button class="tb" id="pGuide">📖 Инструкция</button><button class="tb" id="pMenu">✈ В меню</button></div>
+    </div>
+  </div>
+  <style>.pbtns { display: grid; gap: 8px; margin-top: 6px; } .pbtns .tb { width: 100%; justify-content: center; font-size: 15px; padding: 11px 16px; } .pbtns small { opacity: .6; margin-left: 6px; font-size: 11px; }</style>
   <div class="overlay" id="setO" style="z-index:40" hidden>
     <div class="sheet">
       <h2>⚙ Настройки</h2>
@@ -1962,6 +1971,7 @@ function startFlight(cfg, mode) {
 }
 
 function doCrash(reason) {
+  if (PAUSE) togglePause(false);
   logFlight("crash");
   soundCrash(); updateSound(null);
   addLog("КРУШЕНИЕ: " + reason);
@@ -3110,7 +3120,7 @@ function frame(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t; fps += ((1 / Math.max(dt, 1e-3)) - fps) * 0.05;
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $("toast").hidden = true; }
   const f = flight;
-  if (f && !f.crashed && !PHOTO) {
+  if (f && !f.crashed && !PHOTO && !PAUSE) {
     windStep(dt); f.wind = windVec();
     const k = (c) => keys.has(c);
     padPoll();
@@ -3338,6 +3348,22 @@ function renderSettings() {
 $("mSet").onclick = () => { renderSettings(); $("setO").hidden = false; }; $("setClose").onclick = () => ($("setO").hidden = true);
 $("photoSave").onclick = savePhoto; $("photoExit").onclick = () => togglePhoto(false); $("bHelp") && $("bHelp").insertAdjacentHTML("beforebegin", '<button class="tb" id="bPhoto">📷 Фото</button>'); $("bPhoto") && ($("bPhoto").onclick = () => togglePhoto());
 $("mLog").onclick = () => { renderLog(); $("logO").hidden = false; }; $("logClose").onclick = () => ($("logO").hidden = true);
+
+// ===== пауза
+var PAUSE = false;
+function togglePause(on) {
+  if (!flight || flight.crashed) on = false;
+  PAUSE = on === undefined ? !PAUSE : on; $("pauseO").hidden = !PAUSE;
+  if (PAUSE) { const cell = (v, k) => `<div><b>${v}</b><small>${k}</small></div>`;
+    $("pauseSum").innerHTML = cell(flight.cfg.name.replace(/^(Boeing|Airbus|Bombardier|Gulfstream|Cessna) /, ""), "самолёт") + cell(fmtMS(Math.round(FST.time)), "в воздухе") + cell(FST.landings, "посадок") + cell("+" + fmt(Math.max(0, SCORE.points - FST.startPts)), "очки за полёт"); }
+}
+$("pResume").onclick = () => togglePause(false);
+$("pAgain").onclick = () => { togglePause(false); if (lastCfg) { flightDest = lastDest; startFlight(lastCfg, lastMode); } };
+$("pSet").onclick = () => { renderSettings(); $("setO").hidden = false; };
+$("pGuide").onclick = () => { if (flight) showGuide(flight.cfg); };
+$("pMenu").onclick = () => { togglePause(false); openMenu(); };
+addEventListener("keydown", (e) => { if (e.code === "Escape" && !e.repeat) { if (!$("setO").hidden) $("setO").hidden = true; else if (flight && !flight.crashed && $("menu").hidden && $("flow").hidden) togglePause(); } });
+$("bPhoto") && $("bPhoto").insertAdjacentHTML("beforebegin", '<button class="tb" id="bPause">❚❚ Пауза</button>'); $("bPause") && ($("bPause").onclick = () => togglePause());
 $("loading").hidden = true;
 requestAnimationFrame(frame);
 try { navigator.wakeLock && navigator.wakeLock.request("screen").catch(() => {}); } catch (e) {}
