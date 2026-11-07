@@ -591,7 +591,7 @@ $('pr').value=price;$('pr').oninput=e=>{price=+e.target.value;updatePrice();pers
 $('gear').onclick=()=>{paused=true;$('mMenu').classList.add('show')};
 $('bClose').onclick=()=>{paused=false;$('mMenu').classList.remove('show')};
 $('bHelp').onclick=()=>{$('mMenu').classList.remove('show');$('mIntro').classList.add('show')};
-$('bNew').onclick=()=>{if(!confirm('Start over on a brand new mountain?'))return;try{localStorage.setItem(SAVE_KEY,JSON.stringify({seed:(Math.random()*1e6)|0,money:60000,price:45,day:1,lifts:[],runs:[]}))}catch(e){}location.reload()};
+let newArm=0;$('bNew').onclick=()=>{if(Date.now()-newArm>4000){newArm=Date.now();$('bNew').textContent='Tap again to erase this resort';setTimeout(()=>$('bNew').textContent='New mountain (reset)',4000);return}try{localStorage.setItem(SAVE_KEY,JSON.stringify({seed:(Math.random()*1e6)|0,money:60000,price:45,day:1,lifts:[],runs:[]}))}catch(e){}location.reload()};
 $('bStart').onclick=()=>{$('mIntro').classList.remove('show');paused=false};
 if(!save||(!save.lifts||!save.lifts.length)&&dayN===1){$('mIntro').classList.add('show');paused=true}
 
