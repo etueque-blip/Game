@@ -65,6 +65,27 @@ body.riding #top,body.riding #bottom,body.riding #side,body.riding #miniWrap,bod
 .rb{width:84px;height:84px;border-radius:50%;background:rgba(14,22,38,.55);border:2px solid #ffffff55;color:#fff;font-size:30px;font-weight:800;touch-action:none;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .rb.sm{width:auto;height:auto;border-radius:14px;padding:8px 14px;font-size:20px;display:flex;align-items:center;gap:6px}.rb small{font-size:12px}
 .rb.on{background:rgba(56,189,248,.6);border-color:#bae6fd}
+#mPre{background:radial-gradient(90% 60% at 50% 100%,#3b2a5c 0,#0b1424 70%)}
+#mPre .mcard{text-align:center;background:rgba(20,24,48,.82)}
+.pre-chip{display:inline-block;background:#f43f5e2a;color:#fda4af;border-radius:999px;padding:5px 14px;font-weight:700;font-size:14px}
+.pre-res{color:#fbbf24;font-weight:700;letter-spacing:1.5px;font-size:12px;text-transform:uppercase;margin-top:14px}
+.pre-name{font-size:34px;font-weight:800;margin:4px 0 2px;display:flex;justify-content:center;align-items:center;gap:10px}
+.pre-dot{width:20px;height:20px;border-radius:50%;flex:none;box-shadow:0 0 0 2px #ffffffcc}
+.pre-meta{color:var(--mut);font-size:15px}
+.pre-prof{width:100%;height:90px;margin:14px 0 6px}
+.pre-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 14px}
+.pre-stats div{background:#ffffff0d;border-radius:12px;padding:8px}.pre-stats b{display:block;font-size:18px;color:#fff;font-variant-numeric:tabular-nums}.pre-stats span{font-size:11px;color:var(--mut)}
+.pre-go{width:100%;padding:16px;font-size:20px;border-radius:14px;background:linear-gradient(180deg,#fb7185,#e11d48);color:#fff;font-weight:800}
+.pre-hint{color:var(--mut);font-size:13px;margin-top:12px}
+.pre-alt{margin-top:10px;color:#cbd5e1;font-weight:600;font-size:14px;background:none;text-decoration:underline;text-underline-offset:3px}
+#rThumb{position:absolute;left:0;bottom:0;width:50%;height:46%;touch-action:none;display:none}
+#rThumb span{position:absolute;left:24px;bottom:calc(env(safe-area-inset-bottom,0px) + 128px);font-size:12px;color:#ffffffaa;text-shadow:0 1px 4px #000a;pointer-events:none;transition:opacity .4s}
+#rKnobBase{position:absolute;left:30px;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);width:150px;height:84px;border-radius:44px;background:rgba(14,22,38,.45);border:2px solid #ffffff44;pointer-events:none}
+#rKnob{position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 4px 14px #0006;transition:transform .05s}
+@media (pointer:coarse){#rThumb{display:block}.rleft{display:none!important}}
+#rProf{position:absolute;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 62px);width:min(260px,60vw);padding:4px 6px}
+#rProf svg{display:block;width:100%;height:34px}
+#rProfA{fill:#60a5fa33}#rProfL{fill:none;stroke:#93c5fd;stroke-width:1.5;vector-effect:non-scaling-stroke}#rProfDot{fill:#fb7185;stroke:#fff;stroke-width:1.2;vector-effect:non-scaling-stroke}
 #rHelp{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);padding:6px 12px;font-size:12px;color:var(--mut);white-space:nowrap}
 @media (pointer:coarse){#rHelp{display:none}}
 #rTop .btn{padding:6px 9px}
@@ -241,10 +262,13 @@ body.building #quest,body.building #info{display:none!important}
 <div class="modal" id="mQuests"><div class="pn mcard" id="qCard"></div></div>
 <div class="modal" id="mGfx"><div class="pn mcard" id="gfxCard" style="width:min(760px,100%)"></div></div>
 <div class="modal" id="mResorts"><div class="pn mcard" id="resCard"></div></div>
+<div class="modal" id="mPre"><div class="pn mcard" id="preCard"></div></div>
 <div class="modal" id="mRide"><div class="pn mcard" id="rideCard"></div></div>
 <div id="ride" hidden>
   <div class="pn" id="rTop"><span id="rName"></span><b id="rGates" style="min-width:0;font-size:15px"></b><b id="rTime">0.0 с</b><b id="rSpd">0 км/ч</b><button class="btn" id="rCam" title="Камера (C)">🎥</button><button class="btn" id="rSnd" title="Звук (M)">🔊</button><button class="btn red" id="rExit">✕</button></div>
   <div id="rMsg"></div>
+  <div id="rThumb"><div id="rKnobBase"><div id="rKnob"></div></div><span>Веди пальцем влево-вправо</span></div>
+  <div class="pn" id="rProf"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><path id="rProfA"/><path id="rProfL"/><circle id="rProfDot" r="3.2"/></svg></div>
   <div class="rpad rleft"><button class="rb" id="rL" aria-label="Влево">◀</button><button class="rb" id="rR" aria-label="Вправо">▶</button></div>
   <div class="rpad rright"><button class="rb sm" id="rJump">⤴<small>Прыжок</small></button><button class="rb sm" id="rTuck">🚀<small>Разгон</small></button><button class="rb sm" id="rBrake">✋<small>Тормоз</small></button></div>
   <div class="pn" id="rHelp">← → поворот · ↑ разгон · ↓ тормоз · пробел прыжок · C камера · M звук · Esc выход</div>
@@ -1063,7 +1087,7 @@ function renderPicker(){
   const p=$('picker');let items=[];
   if(tool==='lift')items=Object.entries(LT).map(([k,T])=>({k,on:k===liftType,i:T.icon,n:T.n,c:'от '+fmt(Math.round(T.cost(40,15)/50)*50),d:T.desc,f:()=>{liftType=k;liftA=null;pickerOpen=false;refresh()}}));
   else if(tool==='build')items=Object.entries(BT).map(([k,T])=>{const lock=T.need&&rating()<T.need&&!buildings.some(b=>b.type===k);return{k,on:k===bType,lock,i:T.icon,n:T.n,c:lock?`🔒 рейтинг ${T.need}★`:fmt(T.cost),d:T.desc,f:()=>{if(lock)return toast(`Откроется при рейтинге ${T.need}★`,1);bType=k;ghostAt=null;pickerOpen=false;refresh()}}});
-  else if(tool==='ride')items=runs.map(R=>({k:R.id,i:DIFF[R.diff].s,n:R.name,c:best[R.name]?`🏆 ${best[R.name].toFixed(1)} с`:`${M(R.len)} м · ${DIFF[R.diff].n}`,d:'',f:()=>startRide(R)})).concat(lifts.map(L=>({k:'f'+L.id,i:'🏔️',n:'Фрирайд',c:best['free:'+L.name]?`🏆 ${best['free:'+L.name].toFixed(1)} с`:'с вершины',d:L.name,f:()=>startRide(null,{lift:L})})));
+  else if(tool==='ride')items=runs.map(R=>({k:R.id,i:DIFF[R.diff].s,n:R.name,c:best[R.name]?`🏆 ${best[R.name].toFixed(1)} с`:`${M(R.len)} м · ${DIFF[R.diff].n}`,d:'',f:()=>rideIntro(R)})).concat(lifts.map(L=>({k:'f'+L.id,i:'🏔️',n:'Фрирайд',c:best['free:'+L.name]?`🏆 ${best['free:'+L.name].toFixed(1)} с`:'с вершины',d:L.name,f:()=>rideIntro(null,{lift:L})})));
   else if(tool==='trees')items=[{k:'cut',on:treeMode==='cut',i:'🪓',n:'Вырубить',c:'$12 за дерево',d:'Освободи место под стройку или трассу.',f:()=>{treeMode='cut';pickerOpen=false;refresh()}},{k:'plant',on:treeMode==='plant',i:'🌱',n:'Посадить',c:'$20 за дерево',d:'Лес делает курорт красивее.',f:()=>{treeMode='plant';pickerOpen=false;refresh()}}];
   p.classList.toggle('show',items.length>0&&pickerOpen);$('cPick').hidden=!(items.length>0)||pickerOpen;p.innerHTML='';
   items.forEach(x=>{const e=document.createElement('button');e.className='pk'+(x.on?' on':'')+(x.lock?' lock':'');e.innerHTML=`<span class="i">${x.i}</span><b>${x.n}</b><span class="c">${x.c}</span><span class="d">${x.d}</span>`;e.onclick=x.f;p.appendChild(e)});
@@ -1169,7 +1193,7 @@ function showInfo(o,live){
   }
   h+=`<div class="cb"><button class="btn red" id="iDel">🧨 Снести</button></div>`;
   el.innerHTML=h;$('iX').onclick=hideInfo;$('iDel').onclick=()=>{setTool('del');selDel=o;refresh()};
-  if($('iUp'))$('iUp').onclick=()=>upgradeLift(o);if($('iFix'))$('iFix').onclick=()=>repairLift(o);if($('iRide'))$('iRide').onclick=()=>startRide(o);if($('iLamp'))$('iLamp').onclick=()=>buyRunUpgrade(o,'lit');if($('iSnow'))$('iSnow').onclick=()=>buyRunUpgrade(o,'snow');
+  if($('iUp'))$('iUp').onclick=()=>upgradeLift(o);if($('iFix'))$('iFix').onclick=()=>repairLift(o);if($('iRide'))$('iRide').onclick=()=>rideIntro(o);if($('iLamp'))$('iLamp').onclick=()=>buyRunUpgrade(o,'lit');if($('iSnow'))$('iSnow').onclick=()=>buyRunUpgrade(o,'snow');
 }
 function hideInfo(){infoObj=null;$('info').style.display='none'}
 function upgradeLift(L){const u=L._up;if(!u||money<u.cost)return;money-=u.cost;day.build+=u.cost;const a=L.a.clone(),b=L.b.clone(),nm=L.name.replace(/^\S+/,LT[u.to].n);
@@ -1446,6 +1470,31 @@ function tone(f,d,v){if(!AC||muted)return;try{const o=AC.createOscillator(),g=AC
 function thud(){if(!AC||muted)return;try{const o=AC.createOscillator(),g=AC.createGain();o.type='triangle';o.frequency.value=110;o.frequency.exponentialRampToValueAtTime(35,AC.currentTime+.35);g.gain.value=.6;g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.4);o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+.4)}catch(e){}}
 function rideMsg(t,ms,big){const m=$('rMsg');m.textContent=t;m.style.fontSize=big?'64px':'30px';m.classList.add('show');clearTimeout(m._t);m._t=setTimeout(()=>m.classList.remove('show'),ms||1200)}
 function rideHud(){$('rCam').title='Камера: '+CAM_N[camMode];$('rSnd').textContent=muted?'🔇':'🔊'}
+function profilePath(ys,W,Hh,pad){const mn=Math.min(...ys),mx=Math.max(...ys),rg=(mx-mn)||1,n=ys.length;
+  const pt=i=>[(i/(n-1))*W,pad+(1-(ys[i]-mn)/rg)*(Hh-pad*2)];let l='';for(let i=0;i<n;i++){const [x,y]=pt(i);l+=(i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)}
+  return{line:l,area:l+`L${W} ${Hh}L0 ${Hh}Z`,pt}}
+function freeProfile(L){const ys=[];const a={x:L.b.x+L.dir.x*6,z:L.b.z+L.dir.z*6};for(let k=0;k<=40;k++){const t=k/40,x=a.x+(BASE.x-a.x)*t,z=a.z+(BASE.z-a.z)*t;ys.push(heightAt(x,z))}return ys}
+function rideIntro(R,opt){opt=opt||{};if(!R&&!opt.lift)return;setTool('look');hideInfo();$('mRide').classList.remove('show');paused=true;
+  const ys=R?R.sm.filter((_,i)=>i%2===0).map(p=>p.y):freeProfile(opt.lift);
+  const len=R?R.len:Math.hypot(opt.lift.b.x-BASE.x,opt.lift.b.z-BASE.z),drop=R?R.vert:opt.lift.b.y-BASE.y,diff=R?R.diff:2;
+  const key=R?R.name:'free:'+opt.lift.name,pb=best[key],est=Math.round(len/(10+diff*2.4)+3);
+  const P=profilePath(ys,400,90,8);const [sx,sy]=P.pt(0);const D=DIFF[diff];
+  const dotCol=['#22c55e','#3b82f6','#111827','#000'][diff];
+  $('preCard').innerHTML=`<span class="pre-chip">${pb?`🏆 Рекорд · ${pb.toFixed(1)} с`:`Твой первый заезд · около ${est} с`}</span>
+    <div class="pre-res">Курорт №${RESORT} · ${R?(D.n+' трасса'):'Фрирайд с вершины'}</div>
+    <div class="pre-name">${R?`<i class="pre-dot" style="background:${dotCol}"></i>${R.name.replace(/^Трасса /,'')}`:`🏔️ ${opt.lift.name}`}</div>
+    <div class="pre-meta">${R?D.n:'Целина'} · ${M(len)} м · ${M(drop)} м ↓${R&&R.gates!==undefined?'':''}</div>
+    <svg class="pre-prof" viewBox="0 0 400 90" preserveAspectRatio="none"><defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#60a5fa" stop-opacity=".45"/><stop offset="1" stop-color="#60a5fa" stop-opacity="0"/></linearGradient></defs>
+      <path d="${P.area}" fill="url(#pg)"/><path d="${P.line}" fill="none" stroke="#93c5fd" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <line x1="${sx}" y1="${sy}" x2="${sx}" y2="90" stroke="#fb7185" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/><circle cx="${sx+4}" cy="${sy}" r="6" fill="#fb7185" stroke="#fff" stroke-width="2"/></svg>
+    <div class="pre-stats"><div><b>${M(len)} м</b><span>длина</span></div><div><b>${Math.round(Math.atan((R?R.maxG:drop/len))*180/Math.PI)}°</b><span>макс. крутизна</span></div><div><b>${R?Math.max(1,Math.floor((R.sm.length-32)/24)+1):'—'}</b><span>ворот</span></div></div>
+    <button class="pre-go" id="preGo">⛷️ Поехали!</button>
+    <button class="pre-alt" id="preAlt">Сменить трассу</button>
+    <div class="pre-hint">${coarse?'Левый большой палец рулит · справа ПРЫЖОК, разгон и тормоз':'← → руль · ↑ разгон · ↓ тормоз · пробел прыжок · C камера'}</div>`;
+  $('mPre').classList.add('show');
+  $('preGo').onclick=()=>{$('mPre').classList.remove('show');paused=false;startRide(R,opt)};
+  $('preAlt').onclick=()=>{$('mPre').classList.remove('show');paused=false;setTool('ride')};
+  const kh=e=>{if(!$('mPre').classList.contains('show')){removeEventListener('keydown',kh);return}if(e.key==='Enter'||e.key===' '){e.preventDefault();removeEventListener('keydown',kh);$('preGo').click()}if(e.key==='Escape'){removeEventListener('keydown',kh);$('mPre').classList.remove('show');paused=false}};addEventListener('keydown',kh)}
 function startRide(R,opt){opt=opt||{};$('mRide').classList.remove('show');if(!R&&!opt.lift)return;setTool('look');hideInfo();if(ride)endRide(true);
   let s0,f0;
   if(R){s0=R.sm[Math.min(6,R.sm.length-1)];const s1=R.sm[Math.min(10,R.sm.length-1)];f0=Math.atan2(s1.x-s0.x,s1.z-s0.z)}
@@ -1459,6 +1508,9 @@ function startRide(R,opt){opt=opt||{};$('mRide').classList.remove('show');if(!R&
   const gh=ghosts[key];ghost.visible=!!(gh&&gh.length>3);
   $('rName').innerHTML=R?`<b style="color:${DIFF[R.diff].css};min-width:0;font-size:14px">${DIFF[R.diff].s} ${R.name}</b>`:`<b style="min-width:0;font-size:14px">🏔️ Фрирайд</b>`;
   $('rGates').textContent=R?`🚩 0/${ride.gates.list.length}`:'';rideHud();audioInit();
+  {const ys=R?R.sm.filter((_,i)=>i%2===0).map(p=>p.y):freeProfile(opt.lift);const P=profilePath(ys,200,40,4);ride.prof={P,n:ys.length,ys};$('rProfA').setAttribute('d',P.area);$('rProfL').setAttribute('d',P.line);
+   const mn=Math.min(...ys),mx=Math.max(...ys);ride.prof.mn=mn;ride.prof.mx=mx}
+  thumb.on=false;thumb.v=0;$('rKnob').style.transform='';$('rThumb').querySelector('span').style.opacity=1;
   camera.position.set(ride.p.x-Math.sin(f0)*10,ride.p.y+5,ride.p.z-Math.cos(f0)*10);camLook.copy(ride.p)}
 function endRide(silent){if(!ride)return;const r=ride;ride=null;if(r.gates)scene.remove(r.gates.g);rider.visible=false;ghost.visible=false;controls.enabled=true;document.body.classList.remove('riding');$('ride').hidden=true;
   for(const k in keys)keys[k]=false;document.querySelectorAll('.rb').forEach(b=>b.classList.remove('on'));audioUpd(0,0);slMat.opacity=0;trG.setDrawRange(0,0);
@@ -1482,7 +1534,7 @@ function crash(r,why){r.crashT=1.4;r.slow=.7;r.crashes++;r.vx=r.vz=0;rideMsg(why
 function updRide(dt0){const r=ride;if(!r||r.done)return;dt0=Math.min(dt0,.033);
   if(r.cd>0){r.cd-=dt0;const n=Math.ceil(r.cd);if(n!==r.cdShown&&n>0){r.cdShown=n;rideMsg(String(n),700,true);tone(520,.12)}if(r.cd<=0){rideMsg('СТАРТ!',700,true);tone(880,.25);r.vx=Math.sin(r.f)*5;r.vz=Math.cos(r.f)*5}}
   const dt=dt0*(r.slow>0?.35:1);r.slow-=dt0;
-  const L=keys.l,Rt=keys.r,tuck=keys.tuck,brake=keys.brake,inp=(Rt?1:0)-(L?1:0),p=r.p;
+  const L=keys.l,Rt=keys.r,tuck=keys.tuck,brake=keys.brake,inp=thumb.on?thumb.v:(Rt?1:0)-(L?1:0),p=r.p;
   r.st+=(inp-r.st)*Math.min(1,dt*9);let sp=Math.hypot(r.vx,r.vz),skid=0;
   if(r.cd<=0&&r.crashT<=0){r.t+=dt;
     r.f-=r.st*(2.7/(1+sp*.03))*dt*(r.air?.55:1);
@@ -1538,6 +1590,8 @@ function updRide(dt0){const r=ride;if(!r||r.done)return;dt0=Math.min(dt0,.033);
   camera.lookAt(camLook);if(fp)camera.rotateZ(-r.lean*.35);
   const fv=(innerWidth<innerHeight?72:60)+sp*.55;if(Math.abs(camera.fov-fv)>.3){camera.fov+=(fv-camera.fov)*.1;camera.updateProjectionMatrix()}
   updStreaks(dt0,sp);audioUpd(sp,skid);
+  if(r.prof){let fr;if(r.R)fr=r.idx/(r.R.sm.length-1);else{const a=r.lift.b,tot=Math.hypot(a.x-BASE.x,a.z-BASE.z)||1;fr=clamp(1-Math.hypot(p.x-BASE.x,p.z-BASE.z)/tot,0,1)}
+    const x=fr*200,y=4+(1-(clamp(p.y,r.prof.mn,r.prof.mx)-r.prof.mn)/((r.prof.mx-r.prof.mn)||1))*32;const d=$('rProfDot');d.setAttribute('cx',x.toFixed(1));d.setAttribute('cy',y.toFixed(1))}
   $('rTime').textContent=(r.t+r.pen).toFixed(1)+' с';$('rSpd').textContent=Math.round(sp*5)+' км/ч'}
 // controls: keyboard + on-screen buttons
 const KEYMAP={ArrowLeft:'l',a:'l',ф:'l',ArrowRight:'r',d:'r',в:'r',ArrowUp:'tuck',w:'tuck',ц:'tuck',ArrowDown:'brake',s:'brake',ы:'brake',' ':'jump'};
@@ -1549,6 +1603,11 @@ addEventListener('keyup',e=>{const k=KEYMAP[e.key]||KEYMAP[(e.key||'').toLowerCa
 [['rL','l'],['rR','r'],['rTuck','tuck'],['rBrake','brake'],['rJump','jump']].forEach(([id,k])=>{const b=$(id);const on=e=>{e.preventDefault();keys[k]=true;b.classList.add('on');try{b.setPointerCapture(e.pointerId)}catch(_){}};const off=()=>{keys[k]=false;b.classList.remove('on')};
   b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);b.addEventListener('contextmenu',e=>e.preventDefault())});
 $('rExit').onclick=()=>{$('mRide').classList.remove('show');endRide()};
+const thumb={on:false,v:0,x0:0,id:null};
+{const z=$('rThumb'),k=$('rKnob');
+ z.addEventListener('pointerdown',e=>{e.preventDefault();thumb.on=true;thumb.id=e.pointerId;thumb.x0=e.clientX;thumb.v=0;try{z.setPointerCapture(e.pointerId)}catch(_){}z.querySelector('span').style.opacity=0});
+ z.addEventListener('pointermove',e=>{if(!thumb.on||e.pointerId!==thumb.id)return;const dx=e.clientX-thumb.x0;thumb.v=clamp(dx/55,-1,1);k.style.transform=`translateX(${thumb.v*42}px)`});
+ const up=e=>{if(e.pointerId!==thumb.id)return;thumb.on=false;thumb.v=0;k.style.transform=''};z.addEventListener('pointerup',up);z.addEventListener('pointercancel',up);z.addEventListener('lostpointercapture',up)}
 $('rCam').onclick=()=>{camMode=(camMode+1)%3;rideMsg('🎥 '+CAM_N[camMode],800);try{localStorage.setItem('powderpeak-cam',camMode)}catch(_){}rideHud()};
 $('rSnd').onclick=()=>{muted=!muted;try{localStorage.setItem('powderpeak-mute',muted?'1':'0')}catch(_){}if(!muted)audioInit();rideHud()};
 /* ================= performance ================= */
