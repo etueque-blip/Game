@@ -3,6 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>Powder Peak Tycoon</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&display=swap">
+<!--PWA--><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0e1626"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><!--/PWA-->
 <style>
 :root{--pn:rgba(14,22,38,.82);--pn2:rgba(255,255,255,.08);--ln:rgba(255,255,255,.14);--tx:#f1f5fb;--mut:#a9b6cc;--ac:#38bdf8;--ok:#4ade80;--warn:#fbbf24;--bad:#fb7185;color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
@@ -177,12 +178,15 @@ body.building #quest,body.building #info{display:none!important}
   <h2>Меню</h2>
   <p>Игра сохраняется сама после каждой постройки и в конце каждого дня.</p>
   <div class="row"><button class="btn" id="bHelp">Как играть</button><button class="btn" id="bQuests">Задания</button></div>
+  <div class="row"><button class="btn" id="bQ">Графика</button></div>
   <div class="row"><button class="btn red" id="bNew">Новая гора (сбросить всё)</button></div>
   <div class="row"><button class="btn pri" id="bClose">Вернуться на склон</button></div>
 </div></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<!--LIBS--><script src="lib/three.min.js"></script>
+<script>window.THREE||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>')</script>
+<script src="lib/OrbitControls.js"></script>
+<script>THREE.OrbitControls||document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>')</script><!--/LIBS-->
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -221,8 +225,12 @@ const inBounds=p=>Math.abs(p.x)<H-4&&Math.abs(p.z)<H-4;
 const onLake=p=>Math.hypot(p.x-LAKE.x,p.z-LAKE.z)<LAKE.r+2;
 
 /* ================= three setup ================= */
-const renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true});
-renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));
+let Q='high';try{Q=localStorage.getItem('powderpeak-q')||((matchMedia('(pointer:coarse)').matches||(navigator.hardwareConcurrency||8)<=4)?'low':'high')}catch(e){}
+let HIQ=Q==='high';
+const renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(HIQ?2:1.5,devicePixelRatio||1));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.22;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0xa9cdee);scene.fog=new THREE.Fog(0xa9cdee,360,1100);
 const camera=new THREE.PerspectiveCamera(50,1,.5,3000);
@@ -231,10 +239,20 @@ const controls=new THREE.OrbitControls(camera,renderer.domElement);
 controls.target.set(0,45,20);controls.enableDamping=true;controls.dampingFactor=.12;
 controls.maxPolarAngle=1.40;controls.minDistance=18;controls.maxDistance=560;controls.screenSpacePanning=false;
 controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};
-const hemi=new THREE.HemisphereLight(0xe6f0ff,0x7d8aa0,.78);scene.add(hemi);
-const sun=new THREE.DirectionalLight(0xfff4e0,.85);sun.position.set(-150,220,120);scene.add(sun);
+const hemi=new THREE.HemisphereLight(0xd6e6ff,0x8c9cc0,.55);scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xfff4e0,.95);sun.position.set(-150,220,120);scene.add(sun);scene.add(sun.target);
+sun.castShadow=HIQ;sun.shadow.mapSize.set(2048,2048);{const sc=sun.shadow.camera;sc.left=-150;sc.right=150;sc.top=150;sc.bottom=-150;sc.near=20;sc.far=1000}sun.shadow.bias=-.0008;sun.shadow.normalBias=.5;
+// sky dome with sun glow
+const skyU={top:{value:new THREE.Color(0x3d7fd0)},hor:{value:new THREE.Color(0xd4e6f7)},sunDir:{value:new THREE.Vector3(0,1,0)},sunCol:{value:new THREE.Color(0xfff1d0)}};
+const skyDome=new THREE.Mesh(new THREE.SphereGeometry(1500,32,16),new THREE.ShaderMaterial({uniforms:skyU,side:THREE.BackSide,depthWrite:false,fog:false,
+  vertexShader:'varying vec3 vP;void main(){vP=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+  fragmentShader:'uniform vec3 top,hor,sunDir,sunCol;varying vec3 vP;void main(){float h=clamp(vP.y,0.,1.);vec3 c=mix(hor,top,pow(h,.5));float s=max(dot(normalize(vP),normalize(sunDir)),0.);c+=sunCol*(pow(s,900.)*2.+pow(s,14.)*.22);gl_FragColor=vec4(c,1.);}'}));
+skyDome.renderOrder=-1;skyDome.frustumCulled=false;scene.add(skyDome);
+// drifting clouds
+const cloudTex=(()=>{const cv=document.createElement('canvas');cv.width=cv.height=128;const g=cv.getContext('2d');for(let k=0;k<7;k++){const x=30+Math.random()*68,y=50+Math.random()*28,r=22+Math.random()*24;const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(255,255,255,.9)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,128,128)}return new THREE.CanvasTexture(cv)})();
+const clouds=[];for(let k=0;k<16;k++){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:cloudTex,transparent:true,opacity:.85,depthWrite:false,fog:false}));const a=Math.random()*6.3,r=250+Math.random()*450;sp.position.set(Math.cos(a)*r,210+Math.random()*120,Math.sin(a)*r-80);const sc=180+Math.random()*220;sp.scale.set(sc,sc*.45,1);scene.add(sp);clouds.push(sp)}
 
-const RS=600,SEG=260;
+const RS=600,SEG=HIQ?260:170;
 const tg=new THREE.PlaneGeometry(RS,RS,SEG,SEG);tg.rotateX(-Math.PI/2);
 let colNormal,colSteep;
 {
@@ -256,12 +274,12 @@ let colNormal,colSteep;
   }
   tg.setAttribute('color',new THREE.BufferAttribute(colNormal.slice(),3));tg.computeVertexNormals();
 }
-const terrain=new THREE.Mesh(tg,new THREE.MeshLambertMaterial({vertexColors:true}));scene.add(terrain);
+const terrain=new THREE.Mesh(tg,new THREE.MeshLambertMaterial({vertexColors:true}));terrain.receiveShadow=true;scene.add(terrain);
 let steepView=false;
 function setSteep(on){steepView=on;tg.attributes.color.array.set(on?colSteep:colNormal);tg.attributes.color.needsUpdate=true;$('bSteep').classList.toggle('on',on);$('sLeg').hidden=!on}
 
 // frozen lake
-{const ice=new THREE.Mesh(new THREE.CircleGeometry(LAKE.r+1.5,48),new THREE.MeshLambertMaterial({color:0xbfe3f5,transparent:true,opacity:.95}));ice.rotation.x=-Math.PI/2;ice.position.set(LAKE.x,LAKE_Y,LAKE.z);scene.add(ice);
+{const ice=new THREE.Mesh(new THREE.CircleGeometry(LAKE.r+1.5,48),new THREE.MeshPhongMaterial({color:0xb4dcf2,shininess:120,specular:0xc8d8e8,transparent:true,opacity:.96}));ice.rotation.x=-Math.PI/2;ice.position.set(LAKE.x,LAKE_Y,LAKE.z);scene.add(ice);
  const rim=new THREE.Mesh(new THREE.RingGeometry(LAKE.r-1,LAKE.r+1.6,48),new THREE.MeshLambertMaterial({color:0xe8f4fb}));rim.rotation.x=-Math.PI/2;rim.position.set(LAKE.x,LAKE_Y+.05,LAKE.z);scene.add(rim)}
 // distant mountain ring
 {const g=new THREE.Group(),m1=new THREE.MeshLambertMaterial({color:0xdfe8f3,flatShading:true}),m2=new THREE.MeshLambertMaterial({color:0x9fb0c6,flatShading:true});
@@ -283,8 +301,8 @@ for(let x=-RS/2+4;x<RS/2-4;x+=2.4)for(let z=-RS/2+4;z<RS/2-4;z+=2.4){
   trees.push({x:jx,z:jz,y,s:.75+hash(jz*3|0,jx*2|0)*.6,on:true});
 }
 const BASE_TREES=trees.length,TREE_CAP=trees.length+6000;
-const treeGeo=new THREE.ConeGeometry(1.5,5,7);treeGeo.translate(0,2.9,0);
-const trunkGeo=new THREE.CylinderGeometry(.25,.3,1.2,5);trunkGeo.translate(0,.4,0);
+const treeGeo=new THREE.ConeGeometry(1.5,5,HIQ?7:5,1,true);treeGeo.translate(0,2.9,0);
+const trunkGeo=new THREE.CylinderGeometry(.25,.3,1.2,4,1,true);trunkGeo.translate(0,.4,0);
 const treeMesh=new THREE.InstancedMesh(treeGeo,new THREE.MeshLambertMaterial({color:0xffffff}),TREE_CAP);
 const trunkMesh=new THREE.InstancedMesh(trunkGeo,new THREE.MeshLambertMaterial({color:0x5b3a24}),TREE_CAP);
 const _m=new THREE.Matrix4(),_c=new THREE.Color();
@@ -292,7 +310,7 @@ function setTree(i){const t=trees[i],s=t.on?t.s:0;_m.makeScale(s,s*(1+.25*(t.s-1
 function colorTree(i){_c.setHSL(.36+hash(i,7)*.06,.35+hash(i,9)*.2,.17+hash(i,3)*.08);treeMesh.setColorAt(i,_c)}
 trees.forEach((t,i)=>{setTree(i);colorTree(i)});
 treeMesh.count=trunkMesh.count=trees.length;
-scene.add(treeMesh,trunkMesh);
+treeMesh.castShadow=true;scene.add(treeMesh);if(HIQ)scene.add(trunkMesh);
 let treesDirty=true;
 function treesChanged(){treeMesh.instanceMatrix.needsUpdate=true;trunkMesh.instanceMatrix.needsUpdate=true;if(treeMesh.instanceColor)treeMesh.instanceColor.needsUpdate=true;treeMesh.count=trunkMesh.count=trees.length;treesDirty=true}
 function clearTrees(pts,w){
@@ -328,7 +346,7 @@ function car(g,x,z,r){const c=new THREE.Group();c.add(box(1.8,.9,3.4,CARC[(Math.
   const lot=new THREE.Mesh(new THREE.PlaneGeometry(32,12),mat(0x9aa3b2));lot.rotation.x=-Math.PI/2;lot.position.set(0,.18,13);g.add(lot);
   for(let k=0;k<9;k++)car(g,-12+k*3,13+(k%2?2.5:-2.5));
   const sg=label('🏔️ База',null,.17);sg.position.set(0,13,0);g.add(sg);
-  g.position.copy(BASE);g.position.y-=.3;scene.add(g);
+  g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});g.position.copy(BASE);g.position.y-=.3;scene.add(g);
   // road from the valley
   const pts=[];for(let z=BASE.z+19;z<RS/2;z+=2)pts.push({x:6+Math.sin(z*.03)*4*(z>150?1:0),z,y:0});
   const r=ribbon(pts,2.6,0x6b7280,.95);scene.add(r);
@@ -399,17 +417,13 @@ function makeLift(a,b,type,name){
   // cables (sagging)
   [1,-1].forEach(s=>{const pts=[];for(let k=0;k<=24;k++){const t=k/24;const v=new THREE.Vector3();if(type==='tbar'){v.set(a.x+(b.x-a.x)*t,0,a.z+(b.z-a.z)*t);v.y=a.y+T.cable+(b.y-a.y)*t;v.addScaledVector(perp,1.3*s)}else cablePos(L,t,s,v);pts.push(v)}
     L.g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),cableMat))});
-  if(type==='gondola'){
-    const nc=Math.floor(L.len/14);const cabG=new THREE.BoxGeometry(2.2,2.4,2.6),hangG=new THREE.BoxGeometry(.12,1.2,.12);hangG.translate(0,1.8,0);
-    const cc=[0xef4444,0x2563eb,0xf8fafc,0xfacc15];
-    for(let k=0;k<nc*2;k++){const c=new THREE.Group();const cab=new THREE.Mesh(cabG,mat(cc[k%4]));const win=box(2.25,.9,2.65,0x1e293b,0,.4,0);c.add(cab,win,new THREE.Mesh(hangG,matChair));c.rotation.y=ang;L.chairs.push(c);L.g.add(c)}
-  }else if(type==='tbar'){
-    const nc=Math.floor(L.len/5);const bar=new THREE.BoxGeometry(1.4,.12,.12),pole=new THREE.BoxGeometry(.08,2.6,.08);pole.translate(0,1.3,0);
-    for(let k=0;k<nc*2;k++){const c=new THREE.Group();const b1=new THREE.Mesh(bar,matChair);c.add(b1,new THREE.Mesh(pole,matChair));c.rotation.y=ang+Math.PI/2;L.chairs.push(c);L.g.add(c)}
-  }else{
-    const nc=Math.floor(L.len/6);const seatG=new THREE.BoxGeometry(1.6,.25,.8),hangG=new THREE.BoxGeometry(.08,1.6,.08);hangG.translate(0,.8,0);
-    for(let k=0;k<nc*2;k++){const c=new THREE.Group();c.add(new THREE.Mesh(seatG,matChair),new THREE.Mesh(hangG,matChair));c.rotation.y=ang;L.chairs.push(c);L.g.add(c)}
-  }
+  L.rotY=type==='tbar'?ang+Math.PI/2:ang;let defs,nc;
+  if(type==='gondola'){nc=Math.floor(L.len/14);const cabG=new THREE.BoxGeometry(2.2,2.4,2.6),winG=new THREE.BoxGeometry(2.25,.9,2.65);winG.translate(0,.4,0);const hangG=new THREE.BoxGeometry(.12,1.2,.12);hangG.translate(0,1.8,0);defs=[[cabG,new THREE.MeshLambertMaterial({color:0xffffff})],[winG,mat(0x1e293b)],[hangG,matChair]]}
+  else if(type==='tbar'){nc=Math.floor(L.len/5);const bar=new THREE.BoxGeometry(1.4,.12,.12),pole=new THREE.BoxGeometry(.08,2.6,.08);pole.translate(0,1.3,0);defs=[[bar,matChair],[pole,matChair]]}
+  else{nc=Math.floor(L.len/6);const seatG=new THREE.BoxGeometry(1.6,.25,.8),hangG=new THREE.BoxGeometry(.08,1.6,.08);hangG.translate(0,.8,0);defs=[[seatG,matChair],[hangG,matChair]]}
+  L.nch=Math.max(2,nc*2);L.cparts=defs.map(([g,m])=>{const im=new THREE.InstancedMesh(g,m,L.nch);im.frustumCulled=false;im.castShadow=true;L.g.add(im);return im});
+  if(type==='gondola'){const cc=[0xef4444,0x2563eb,0xf8fafc,0xfacc15];for(let k=0;k<L.nch;k++){_c.setHex(cc[k%4]);L.cparts[0].setColorAt(k,_c)}}
+  L.g.traverse(o=>{if(o.isMesh&&!o.isInstancedMesh)o.castShadow=true});
   L.lbl=label(T.icon+' '+L.name);L.lbl.position.set(b.x,b.y+T.cable+5,b.z);L.g.add(L.lbl);
   scene.add(L.g);clearTrees(sampleLine(a,b),type==='gondola'?4:3.2);lifts.push(L);return L;
 }
@@ -443,15 +457,20 @@ function runCheck(sm){
   return r;
 }
 function gradeColor(g){return g<-.04?0xf43f5e:g<.27?0x22c55e:g<.45?0x2f7cf6:g<.7?0x111827:0x581c87}
-function ribbon(sm,w,color,op,perVertex){
-  const pos=[],idx=[],col=[];const gr=perVertex?localGrades(sm):null;
+const EDGE=['#22c55e','#2f7cf6','#111827','#000000'];
+let pisteTex=null;
+function getPisteTex(d){if(!pisteTex)pisteTex=EDGE.map(e=>{const cv=document.createElement('canvas');cv.width=64;cv.height=64;const g=cv.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,64,64);for(let y=0;y<64;y+=4){g.fillStyle='rgba(120,150,195,.38)';g.fillRect(0,y,64,1.8)}g.fillStyle=e;g.fillRect(0,0,9,64);g.fillRect(55,0,9,64);g.globalAlpha=.16;g.fillRect(9,0,46,64);g.globalAlpha=1;const t=new THREE.CanvasTexture(cv);t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;return t});return pisteTex[d]}
+function ribbon(sm,w,color,op,perVertex,tex){
+  const pos=[],idx=[],col=[],uv=[];let cum=0;const gr=perVertex?localGrades(sm):null;
   for(let i=0;i<sm.length;i++){const a=sm[Math.max(0,i-1)],b=sm[Math.min(sm.length-1,i+1)];let tx=b.x-a.x,tz=b.z-a.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;
     const px=-tz*w,pz=tx*w,p=sm[i];
     pos.push(p.x+px,heightAt(p.x+px,p.z+pz)+.45,p.z+pz,p.x-px,heightAt(p.x-px,p.z-pz)+.45,p.z-pz);
     if(gr){_c.setHex(gradeColor(gr[i]));col.push(_c.r,_c.g,_c.b,_c.r,_c.g,_c.b)}
+    if(i)cum+=Math.hypot(sm[i].x-sm[i-1].x,sm[i].z-sm[i-1].z);uv.push(0,cum/5,1,cum/5);
     if(i<sm.length-1){const k=i*2;idx.push(k,k+2,k+1,k+1,k+2,k+3)}}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);
   if(gr)g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  if(tex){g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({map:tex,color,transparent:true,opacity:op,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}));m.receiveShadow=true;m.renderOrder=2;return m}
   const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:gr?0xffffff:color,vertexColors:!!gr,transparent:true,opacity:op,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}));
   m.renderOrder=2;return m;
 }
@@ -460,7 +479,10 @@ function makeRun(pts,name){
   const R={id:uid++,kind:'run',name:name||`Трасса «${freshWord(allNames())}»`,pts:pts.map(p=>({x:p.x,z:p.z})),sm,...info,g:new THREE.Group(),skiers:0,ridden:0,falls:0};
   R.step=R.len/(sm.length-1);
   const d=DIFF[R.diff];
-  R.g.add(ribbon(sm,3.6,d.c,R.diff>=2?.66:.45));
+  R.g.add(ribbon(sm,3.9,0xffffff,.97,false,getPisteTex(R.diff)));
+  {const np=Math.floor(sm.length/12)*2,pg=new THREE.CylinderGeometry(.13,.13,2.2,5);pg.translate(0,1.1,0);const pm=new THREE.InstancedMesh(pg,mat(R.diff===0?0x16a34a:R.diff===1?0x2563eb:0x111827),Math.max(1,np));let k=0;
+   for(let i=6;i<sm.length-1&&k<np;i+=12){const a=sm[i-1],b=sm[i+1];let tx=b.x-a.x,tz=b.z-a.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;for(const sg of [1,-1]){const x=sm[i].x-tz*4.3*sg,z=sm[i].z+tx*4.3*sg;_m.makeTranslation(x,heightAt(x,z),z);pm.setMatrixAt(k++,_m)}}
+   pm.count=k;pm.castShadow=true;R.g.add(pm)}
   R.lbl=label(d.s+' '+R.name,d.css);R.lbl.position.set(sm[0].x,sm[0].y+6,sm[0].z);R.g.add(R.lbl);
   scene.add(R.g);clearTrees(sm,5.2);runs.push(R);return R;
 }
@@ -473,6 +495,7 @@ const BT={
   cafe:{n:'Горное кафе',icon:'☕',cost:5000,w:6,d:6,upkeep:60,desc:'Маленькое кафе, можно ставить высоко на горе: +$8 и настроение. Радиус 220 м.',food:8,radius:28},
   rental:{n:'Прокат',icon:'🎿',cost:8000,w:9,d:7,upkeep:80,desc:'Новички берут лыжи: +$10 с каждого новичка, им веселее.',rent:10},
   parking:{n:'Парковка',icon:'🅿️',cost:4000,w:16,d:10,upkeep:20,desc:'+40 машин: больше гостей может приехать за день.',cap:40},
+  cannon:{n:'Снежные пушки',icon:'❄️',cost:9000,w:5,d:5,upkeep:120,desc:'Делают снег в радиусе 400 м: в оттепель трассы рядом не раскисают.',radius:50},
   patrol:{n:'Спасатели',icon:'⛑️',cost:7000,w:7,d:6,upkeep:90,desc:'Помогают упавшим: падения почти не портят настроение.',need:1},
 };
 function bModel(type){
@@ -491,6 +514,7 @@ function bModel(type){
   else if(type==='parking'){const p=new THREE.Mesh(new THREE.PlaneGeometry(16,10),mat(0x8b95a5));p.rotation.x=-Math.PI/2;p.position.y=.2;g.add(p);
     for(let k=-3;k<=3;k++){const l=new THREE.Mesh(new THREE.PlaneGeometry(.15,3.2),new THREE.MeshBasicMaterial({color:0xf8fafc}));l.rotation.x=-Math.PI/2;l.position.set(k*2.2,.25,-3);g.add(l);const l2=l.clone();l2.position.z=3;g.add(l2)}
     for(let k=0;k<6;k++)car(g,-5.5+k*2.2,k%2?3:-3)}
+  else if(type==='cannon'){g.add(box(3,.4,3,0x475569,0,.2,0));const tw=new THREE.Mesh(new THREE.CylinderGeometry(.25,.3,4,6),mat(0x64748b));tw.position.y=2;g.add(tw);const br=new THREE.Mesh(new THREE.CylinderGeometry(.9,.6,2.6,10),mat(0xfacc15));br.rotation.x=1.1;br.position.set(0,4.4,-.6);g.add(br)}
   else if(type==='patrol'){g.add(box(7,3.6,6,0xdc2626,0,1.8,0),box(7.4,.4,6.4,0xf8fafc,0,3.8,0),box(2.4,.6,.1,0xf8fafc,0,2.5,-3.05),box(.6,2.4,.1,0xf8fafc,0,2.5,-3.06))}
   return g;
 }
@@ -517,7 +541,7 @@ function makeBuilding(type,x,z,rot,free){
   const c=bCheck(type,x,z,rot);const T=BT[type],f=bFoot(type,rot);
   const B={id:uid++,kind:'bld',type,name:T.n,x,z,rot,fw:f.w,fd:f.d,rad:Math.hypot(f.w,f.d)/2,cost:T.cost,g:new THREE.Group(),visits:0,earned:0};
   const y=c.y!==undefined?c.y:heightAt(x,z);B.y=y;
-  const m=bModel(type);m.rotation.y=rot*Math.PI/2;B.g.add(m);
+  const m=bModel(type);m.rotation.y=rot*Math.PI/2;m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});B.g.add(m);
   if(c.found>.4){const fd=box(f.w+.6,c.found+1.2,f.d+.6,0x8a8f99,0,-(c.found+1.2)/2+.1,0);B.g.add(fd)}
   const lb=label(T.icon+' '+T.n,null,.13);lb.position.y=type==='hotel'?17:type==='parking'?4:9;B.g.add(lb);
   B.g.position.set(x,y,z);scene.add(B.g);clearTreesRect(x,z,f.w/2,f.d/2,0);buildings.push(B);return B;
@@ -541,13 +565,16 @@ const legG=new THREE.BoxGeometry(.6,.75,.4);legG.translate(0,.4,0);
 const headG=new THREE.SphereGeometry(.3,8,6);headG.translate(0,2.05,0);
 const skiG=new THREE.BoxGeometry(.5,.06,1.9);
 const JACKETS=[0xef4444,0xf97316,0xeab308,0x22c55e,0x06b6d4,0x3b82f6,0x8b5cf6,0xec4899,0xf8fafc,0x111827];
-function makeSkierMesh(){
-  const g=new THREE.Group();
-  g.add(new THREE.Mesh(bodyG,mat(pick(JACKETS))),new THREE.Mesh(legG,mat(pick([0x1f2937,0x374151,0x1e3a8a,0x111827]))),new THREE.Mesh(headG,mat(pick([0xef4444,0x2563eb,0xfacc15,0xf8fafc,0x16a34a]))));
-  const sk=new THREE.Mesh(skiG,mat(0x0f172a));sk.position.y=.05;g.add(sk);g.scale.setScalar(1.25);scene.add(g);return g;
-}
+skiG.translate(0,.05,0);
+const SK_CAP=320,_q=new THREE.Quaternion(),_up=new THREE.Vector3(0,1,0),_one=new THREE.Vector3(1,1,1),_p=new THREE.Vector3();
+const skParts=[[bodyG,0],[legG,1],[headG,2],[skiG,-1]].map(([g,ci])=>{const im=new THREE.InstancedMesh(g,ci<0?mat(0x0f172a):new THREE.MeshLambertMaterial({color:0xffffff}),SK_CAP);im.count=0;im.frustumCulled=false;im.castShadow=true;im.userData.ci=ci;scene.add(im);return im});
+// each skier is a light anchor object; its body is drawn by 4 shared instanced meshes (4 draw calls for everyone)
+function makeSkierMesh(){const o=new THREE.Object3D();o.scale.setScalar(1.25);o.userData.c=[pick(JACKETS),pick([0x1f2937,0x374151,0x1e3a8a,0x111827]),pick([0xef4444,0x2563eb,0xfacc15,0xf8fafc,0x16a34a])];scene.add(o);return o}
+function syncSkiers(){let n=0;for(const s of skiers){const o=s.mesh;if(!o.visible||o.scale.x<.01||n>=SK_CAP)continue;o.updateMatrix();
+  for(const im of skParts){im.setMatrixAt(n,o.matrix);if(im.userData.ci>=0){_c.setHex(o.userData.c[im.userData.ci]);im.setColorAt(n,_c)}}n++}
+  for(const im of skParts){im.count=n;im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true}}
 // thought bubbles
-const THOUGHTS={queue:['⏳','Очередь слишком длинная'],steep:['😱','Трасса слишком сложная для меня'],stuck:['🤷','Застрял: отсюда никуда не уехать'],price:['💸','Ски-пасс дорогой'],hungry:['🍔','Хочу есть, а негде'],happy:['😍','Отличная трасса!'],nolift:['🚫','У базы нет подъёмника'],fall:['🤕','Упал на склоне']};
+const THOUGHTS={queue:['⏳','Очередь слишком длинная'],steep:['😱','Трасса слишком сложная для меня'],stuck:['🤷','Застрял: отсюда никуда не уехать'],price:['💸','Ски-пасс дорогой'],hungry:['🍔','Хочу есть, а негде'],happy:['😍','Отличная трасса!'],nolift:['🚫','У базы нет подъёмника'],fall:['🤕','Упал на склоне'],slush:['🫠','Снег раскис, каша'],powder:['🤩','Свежий снег, кайф!']};
 const bubbleTex={};
 function bubble(key){if(!bubbleTex[key]){const cv=document.createElement('canvas');cv.width=cv.height=96;const g=cv.getContext('2d');g.fillStyle='#fff';g.beginPath();g.arc(48,44,38,0,7);g.fill();g.beginPath();g.moveTo(38,76);g.lineTo(48,94);g.lineTo(58,76);g.fill();g.font='44px serif';g.textAlign='center';g.textBaseline='middle';g.fillText(THOUGHTS[key][0],48,46);bubbleTex[key]=new THREE.CanvasTexture(cv)}
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:bubbleTex[key],depthWrite:false}));s.scale.set(2.4,2.4,1);s.position.y=4;s.renderOrder=6;return s}
@@ -563,10 +590,13 @@ function spawnSkier(){
   return s;
 }
 function foodNear(P){let best=null,bd=1e9;buildings.forEach(b=>{const T=BT[b.type];if(!T.food)return;const d=Math.hypot(P.x-b.x,P.z-b.z);if(d<T.radius&&d<bd){bd=d;best=b}});return best}
+function matchW(R,s){const dd=R.diff-s.skill;return dd===0?3:dd<0?1.2/(1-dd):dd===1?.5:.04}
+// look one step ahead: what can this skier ski from the top of the lift?
+function topScore(L,s){let best=0;runs.forEach(R=>{if(d2(L.b,R.sm[0])<LINK){let w=matchW(R,s);if(s.runsDone>=s.goal&&d2(R.sm[R.sm.length-1],BASE)<BASE_LINK)w*=2;best=Math.max(best,w)}});lifts.forEach(L2=>{if(L2!==L&&d2(L.b,L2.a)<LINK)best=Math.max(best,.7)});return best}
 function optionsAt(P,s){
   const atBase=d2(P,BASE)<BASE_LINK,o=[];
-  lifts.forEach(L=>{if(d2(P,L.a)<LINK||(atBase&&d2(BASE,L.a)<BASE_LINK)){let w=1.4/(1+L.queue.length*.12);if(L.type==='tbar'&&s.skill===0)w*=1.8;if(s.runsDone>=s.goal)w*=.25;o.push({w,lift:L})}});
-  runs.forEach(R=>{if(d2(P,R.sm[0])<LINK||(atBase&&d2(BASE,R.sm[0])<BASE_LINK)){const dd=R.diff-s.skill;let w=dd===0?3:dd<0?1.2/(1-dd):dd===1?.5:.04;if(!s.seen.has(R.id))w*=1.6;if(s.runsDone>=s.goal&&d2(R.sm[R.sm.length-1],BASE)<BASE_LINK)w*=4;o.push({w,run:R})}});
+  lifts.forEach(L=>{if(d2(P,L.a)<LINK||(atBase&&d2(BASE,L.a)<BASE_LINK)){let w=1.4/(1+L.queue.length*.12);if(L.type==='tbar'&&s.skill===0)w*=1.8;if(s.runsDone>=s.goal)w*=.25;w*=(.03+topScore(L,s))/3;o.push({w,lift:L})}});
+  runs.forEach(R=>{if(d2(P,R.sm[0])<LINK||(atBase&&d2(BASE,R.sm[0])<BASE_LINK)){let w=matchW(R,s);if(!s.seen.has(R.id))w*=1.6;if(s.runsDone>=s.goal&&d2(R.sm[R.sm.length-1],BASE)<BASE_LINK)w*=4;o.push({w,run:R})}});
   return{atBase,o};
 }
 function decide(s){
@@ -609,7 +639,7 @@ function updateSkier(s,dt){
     s.wait+=dt;if(s.wait>25&&!s.qThought){s.qThought=1;think(s,'queue')}
     m.position.copy(s.pos);m.rotation.set(0,Math.atan2(L.dir.x,L.dir.z),0);
   }else if(s.state==='lift'){
-    const L=s.lift;s.t+=L.speed*dt/L.len;
+    const L=s.lift;s.t+=liftSpeed(L)*dt/L.len;
     if(s.t>=1){L.riders--;L.ridden++;m.visible=true;s.state='walk';s.pos.set(L.b.x+L.dir.x*4,0,L.b.z+L.dir.z*4);s.pos.y=heightAt(s.pos.x,s.pos.z);s.dest={x:s.pos.x+(Math.random()-.5)*4,z:s.pos.z+(Math.random()-.5)*4};s.after=null;return}
     if(L.type==='tbar'){const x=L.a.x+(L.b.x-L.a.x)*s.t+L.perp.x*1.3,z=L.a.z+(L.b.z-L.a.z)*s.t+L.perp.z*1.3;m.position.set(x,heightAt(x,z)+.25,z)}
     else{cablePos(L,s.t,1,_v);m.position.set(_v.x,_v.y-2.3,_v.z)}
@@ -621,7 +651,7 @@ function updateSkier(s,dt){
     const grade=Math.max(0,(a.y-b.y)/(R.step||1));
     const sp=clamp(3.5+grade*15,3,14)*(.78+.12*s.skill);s.d+=sp*dt;
     if(R.diff-s.skill>=1&&Math.random()<dt*.012*(R.diff-s.skill)){s.fallT=2;R.falls++;day.falls++;s.happy-=buildings.some(b=>b.type==='patrol')?2:9;think(s,'fall');return}
-    if(s.d>=R.len-.5){R.skiers--;R.ridden++;s.runsDone++;const dd=R.diff-s.skill;s.happy+=dd===0?9:dd<0?3:dd===1?1:-18;if(dd>=2)think(s,'steep');else if(dd===0&&Math.random()<.15)think(s,'happy');if(!s.seen.has(R.id)){s.happy+=3;s.seen.add(R.id)}s.happy=clamp(s.happy,0,100);
+    if(s.d>=R.len-.5){R.skiers--;R.ridden++;s.runsDone++;const dd=R.diff-s.skill;s.happy+=dd===0?9:dd<0?3:dd===1?1:-18;if(dd>=2)think(s,'steep');else if(dd===0&&Math.random()<.15)think(s,'happy');if(!s.seen.has(R.id)){s.happy+=3;s.seen.add(R.id)}{const W=WEATHER[weather];if(weather==='thaw'){if(cannonCovers(R))s.happy+=2;else{s.happy-=10;if(Math.random()<.3)think(s,'slush')}}else{s.happy+=W.happy||0;if(weather==='powder'&&Math.random()<.12)think(s,'powder')}}s.happy=clamp(s.happy,0,100);
       s.pos.set(sm[sm.length-1].x,sm[sm.length-1].y,sm[sm.length-1].z);decide(s);return}
     let tx=b.x-a.x,tz=b.z-a.z;const l=Math.hypot(tx,tz)||1;tx/=l;tz/=l;
     const wig=Math.sin(s.d*.32+s.phase)*(2.2-s.skill*.4);
@@ -633,16 +663,24 @@ function updateSkier(s,dt){
   }
 }
 function updateLift(L,dt){
-  L.phase=(L.phase+L.speed*dt/(L.len*2))%1;
-  const n=L.chairs.length;
+  L.phase=(L.phase+liftSpeed(L)*dt/(L.len*2))%1;
+  const n=L.nch;_q.setFromAxisAngle(_up,L.rotY);
   for(let k=0;k<n;k++){let u=(k/n+L.phase)%1*2;const up=u<1,t=up?u:2-u;
-    if(L.type==='tbar'){const x=L.a.x+(L.b.x-L.a.x)*t+L.perp.x*1.3*(up?1:-1),z=L.a.z+(L.b.z-L.a.z)*t+L.perp.z*1.3*(up?1:-1);L.chairs[k].position.set(x,L.ca.y+(L.cb.y-L.ca.y)*t-2.6,z)}
-    else{cablePos(L,t,up?1:-1,_v);L.chairs[k].position.set(_v.x,_v.y-(L.type==='gondola'?3:1.7),_v.z)}}
+    if(L.type==='tbar'){const x=L.a.x+(L.b.x-L.a.x)*t+L.perp.x*1.3*(up?1:-1),z=L.a.z+(L.b.z-L.a.z)*t+L.perp.z*1.3*(up?1:-1);_p.set(x,L.ca.y+(L.cb.y-L.ca.y)*t-2.6,z)}
+    else{cablePos(L,t,up?1:-1,_v);_p.set(_v.x,_v.y-(L.type==='gondola'?3:1.7),_v.z)}
+    _m.compose(_p,_q,_one);for(const im of L.cparts)im.setMatrixAt(k,_m)}
+  for(const im of L.cparts)im.instanceMatrix.needsUpdate=true;
   L.load-=dt;
   if(L.queue.length&&L.load<=0){const s=L.queue.shift();s.state='lift';s.t=0;L.riders++;L.load=L.interval;if(L.type==='gondola')s.mesh.visible=false;if(s.wait>25)s.happy-=Math.min(20,(s.wait-25)*.4)}
 }
 
 /* ================= economy, time, quests ================= */
+const WEATHER={sun:{n:'Солнечно',i:'☀️',mult:1,snow:.12,fog:1,sunI:1,cloud:0,happy:1},powder:{n:'Свежий снег',i:'🌨️',mult:1.35,snow:1,fog:.72,sunI:.72,cloud:.45,happy:5},cloud:{n:'Облачно',i:'☁️',mult:.95,snow:.3,fog:.82,sunI:.62,cloud:.6},thaw:{n:'Оттепель',i:'🌡️',mult:.75,snow:0,fog:.95,sunI:1.05,cloud:.15},storm:{n:'Метель',i:'🌬️',mult:.55,snow:1.8,fog:.42,sunI:.38,cloud:1,happy:-4}};
+const WDESC={sun:'обычный день',powder:'гостей больше на треть, все довольны',cloud:'чуть меньше гостей',thaw:'снег раскисает: снежные пушки спасают трассы',storm:'гостей мало, кресельные и бугели едут медленно'};
+function rollWeather(){const r=Math.random();return r<.34?'sun':r<.55?'powder':r<.75?'cloud':r<.88?'thaw':'storm'}
+let weather=save&&save.weather||'sun',forecast=save&&save.forecast||rollWeather();
+const liftSpeed=L=>L.speed*(weather==='storm'&&L.type!=='gondola'?.6:1);
+function cannonCovers(R){return buildings.some(b=>b.type==='cannon'&&R.sm.some((p,i)=>i%4===0&&Math.hypot(p.x-b.x,p.z-b.z)<50))}
 let money=save?save.money:60000,price=save?save.price:45,dayN=save?save.day:1,questI=save&&save.quest||0;
 let minutes=8*60,speed=1,paused=false;
 let day;function newDay(){day={visitors:0,tickets:0,food:0,costs:0,build:0,refund:0,noLift:0,stranded:0,falls:0,thoughts:{},startMoney:money}}newDay();
@@ -654,7 +692,7 @@ function expected(){
   const v=new Set(runs.map(r=>r.diff)).size,pf=clamp(1.6-1.1*price/fairValue(),0,1.6);
   const cap=lifts.reduce((a,L)=>a+3600/L.interval/60*9,0)/4;
   const want=(25+22*Math.pow(runs.length,.85)+12*v+6*lifts.length)*pf*(.35+rating()/5*.9);
-  return Math.round(Math.min(cap,Math.min(parkingCap(),want)+lodging()*clamp(pf,0,1)));
+  return Math.round(Math.min(cap,(Math.min(parkingCap(),want)+lodging()*clamp(pf,0,1))*WEATHER[weather].mult));
 }
 const ARR_START=8.5*60,ARR_END=14*60,CLOSE=17*60;let arrAcc=0;
 function tickEconomy(dt,mins){
@@ -693,6 +731,7 @@ function endDay(){
   if((day.thoughts.queue||0)>5)tips.push('⏳ Длинные очереди: поставь ещё подъёмник или гондолу.');
   if((day.thoughts.hungry||0)>3)tips.push('🍔 Гостям негде поесть: построй ресторан или кафе.');
   if(day.falls>5&&!buildings.some(b=>b.type==='patrol'))tips.push('⛑️ Много падений: построй пункт спасателей.');
+  if(forecast==='thaw'&&!buildings.some(b=>b.type==='cannon'))tips.push('🌡️ Завтра оттепель: снежные пушки рядом с трассами спасут настроение гостей.');
   const th=Object.entries(day.thoughts).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`${THOUGHTS[k][0]} ${THOUGHTS[k][1]} — ${v}`).join('<br>');
   $('dayCard').innerHTML=`<h2>Итоги дня ${dayN}</h2><p>Подъёмники закрыты, ратраки вышли на склон.</p>
     <div class="r"><span>Гостей</span><b>${day.visitors}</b></div>
@@ -704,11 +743,12 @@ function endDay(){
     ${day.build?`<div class="r"><span>Стройка</span><b class="neg">${fmt(-(day.build-day.refund))}</b></div>`:''}
     <div class="r tot"><span>Итого за день</span><b class="${profit>=0?'pos':'neg'}">${fmt(profit)}</b></div>
     <div class="r"><span>Рейтинг</span><b style="color:#fbbf24">${starStr()}</b></div>
+    <div class="r"><span>Прогноз на завтра</span><b>${WEATHER[forecast].i} ${WEATHER[forecast].n}</b></div>
     ${th?`<p><b style="color:#fff">О чём думали гости:</b><br>${th}</p>`:''}
     ${tips.length?'<p><b style="color:#fff">Советы:</b><br>'+tips.join('<br>')+'</p>':'<p>🎉 Отличный день на горе!</p>'}
     <div class="row"><button class="btn pri" id="bNext">Начать день ${dayN+1}</button></div>`;
   $('mDay').classList.add('show');
-  $('bNext').onclick=()=>{$('mDay').classList.remove('show');dayN++;minutes=8*60;newDay();paused=false;persist()};
+  $('bNext').onclick=()=>{$('mDay').classList.remove('show');dayN++;minutes=8*60;weather=forecast;forecast=rollWeather();newDay();paused=false;persist();toast(`${WEATHER[weather].i} ${WEATHER[weather].n}: ${WDESC[weather]}`)};
   persist(dayN+1);
 }
 const starStr=()=>{const r=Math.round(rating()*2)/2;let s='';for(let i=1;i<=5;i++)s+=r>=i?'★':r>=i-.5?'⯪':'☆';return s+' '+rating().toFixed(1)};
@@ -716,7 +756,7 @@ const starStr=()=>{const r=Math.round(rating()*2)/2;let s='';for(let i=1;i<=5;i+
 /* ================= persistence ================= */
 function persist(dayOverride){
   try{const cut=[];for(let i=0;i<BASE_TREES;i++)if(!trees[i].on)cut.push(i);
-    localStorage.setItem(SAVE_KEY,JSON.stringify({v:2,seed,money:Math.round(money),price,day:dayOverride||dayN,ratingHist,quest:questI,
+    localStorage.setItem(SAVE_KEY,JSON.stringify({v:2,seed,money:Math.round(money),price,day:dayOverride||dayN,ratingHist,quest:questI,weather,forecast,
     lifts:lifts.map(L=>({n:L.name,t:L.type,a:[L.a.x,L.a.z],b:[L.b.x,L.b.z]})),runs:runs.map(R=>({n:R.name,p:R.pts.map(p=>[p.x,p.z])})),
     blds:buildings.map(b=>({t:b.type,x:b.x,z:b.z,r:b.rot})),cut,planted:trees.slice(BASE_TREES).filter(t=>t.on).map(t=>[+t.x.toFixed(1),+t.z.toFixed(1)])}))}catch(e){}
 }
@@ -926,7 +966,7 @@ function applyTrees(p){
 }
 // floating "+$" text
 const bursts=[];
-function burst(p,text){const s=label(text,'#86efac',.12);s.position.set(p.x,p.y+8,p.z);scene.add(s);bursts.push({s,t:1.6})
+function burst(p,text){window.haptic&&window.haptic('medium');const s=label(text,'#86efac',.12);s.position.set(p.x,p.y+8,p.z);scene.add(s);bursts.push({s,t:1.6})
   for(let k=0;k<14;k++){const m=new THREE.Mesh(new THREE.SphereGeometry(.5,5,4),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true}));m.position.set(p.x,p.y+1,p.z);m.userData.v=new THREE.Vector3((Math.random()-.5)*12,6+Math.random()*6,(Math.random()-.5)*12);scene.add(m);bursts.push({m,t:1})}}
 function updBursts(dt){for(let i=bursts.length-1;i>=0;i--){const b=bursts[i];b.t-=dt;if(b.s){b.s.position.y+=dt*4;b.s.material.opacity=clamp(b.t,0,1)}else{b.m.userData.v.y-=20*dt;b.m.position.addScaledVector(b.m.userData.v,dt);b.m.material.opacity=clamp(b.t,0,1)}
   if(b.t<=0){scene.remove(b.s||b.m);bursts.splice(i,1)}}}
@@ -984,6 +1024,7 @@ function updatePrice(){$('pv').textContent='$'+price;$('fair').textContent='$'+f
 $('pr').value=price;$('pr').oninput=e=>{price=+e.target.value;updatePrice();persist()};
 $('gear').onclick=()=>{paused=true;$('mMenu').classList.add('show')};
 $('bClose').onclick=()=>{paused=false;$('mMenu').classList.remove('show')};
+$('bQ').onclick=()=>{setQuality(!HIQ,true);fpsWarm=8};
 const openHelp=()=>{paused=true;$('mMenu').classList.remove('show');$('mIntro').classList.add('show')};
 $('bHelp').onclick=openHelp;$('bHelpTop').onclick=openHelp;
 function openQuests(){paused=true;$('mMenu').classList.remove('show');
@@ -997,13 +1038,26 @@ $('bStart').onclick=()=>{$('mIntro').classList.remove('show');paused=false};
 if(!save||(!save.lifts||!save.lifts.length)&&(save.day||1)===1){$('mIntro').classList.add('show');paused=true}
 
 /* ================= snow & sky ================= */
-const SN=1400,snowPos=new Float32Array(SN*3);for(let i=0;i<SN;i++){snowPos[i*3]=(Math.random()-.5)*240;snowPos[i*3+1]=Math.random()*140;snowPos[i*3+2]=(Math.random()-.5)*240}
+const SN=HIQ?1600:700,snowPos=new Float32Array(SN*3);for(let i=0;i<SN;i++){snowPos[i*3]=(Math.random()-.5)*240;snowPos[i*3+1]=Math.random()*140;snowPos[i*3+2]=(Math.random()-.5)*240}
 const snowG=new THREE.BufferGeometry();snowG.setAttribute('position',new THREE.BufferAttribute(snowPos,3));
 const snow=new THREE.Points(snowG,new THREE.PointsMaterial({color:0xffffff,size:.7,transparent:true,opacity:.85,depthWrite:false}));scene.add(snow);
 const skyNoon=new THREE.Color(0xa9cdee),skyEve=new THREE.Color(0xf2b28c),skyMorn=new THREE.Color(0xc9d8ee);
-function sky(){const h=minutes/60;const t=clamp((h-8)/9,0,1);const c=t<.5?skyMorn.clone().lerp(skyNoon,t*2):skyNoon.clone().lerp(skyEve,Math.pow((t-.5)*2,2));
-  scene.background.copy(c);scene.fog.color.copy(c);const a=Math.PI*(.15+.7*t);sun.position.set(Math.cos(a)*-220,Math.sin(a)*240+30,120);sun.intensity=.55+.4*Math.sin(Math.PI*t);sun.color.setHSL(.1,.6+.3*Math.max(0,t-.6),.92-.1*Math.max(0,t-.7))}
+const grey=new THREE.Color(0xb8c2cf),topNoon=new THREE.Color(0x3d7fd0),topEve=new THREE.Color(0x46609a),_sd=new THREE.Vector3();
+function sky(){const h=minutes/60;const t=clamp((h-8)/9,0,1);const W=WEATHER[weather];
+  const c=t<.5?skyMorn.clone().lerp(skyNoon,t*2):skyNoon.clone().lerp(skyEve,Math.pow((t-.5)*2,2));c.lerp(grey,W.cloud*.75);
+  scene.background.copy(c);scene.fog.color.copy(c);scene.fog.near=360*W.fog;scene.fog.far=1100*W.fog;
+  skyU.hor.value.copy(c);skyU.top.value.copy(topNoon).lerp(topEve,Math.pow(t,3)).lerp(grey,W.cloud*.85);
+  const a=Math.PI*(.15+.7*t);_sd.set(Math.cos(a)*-.75,Math.sin(a)*.5+.12,.45).normalize();skyU.sunDir.value.copy(_sd);skyU.sunCol.value.setRGB(1,.92-.25*t,.78-.4*t).multiplyScalar(1-W.cloud*.85);
+  sun.target.position.copy(controls.target);sun.position.copy(controls.target).addScaledVector(_sd,450);
+  sun.intensity=(.7+.5*Math.sin(Math.PI*t))*W.sunI;hemi.intensity=.5+.25*W.cloud;sun.color.setHSL(.1,.6+.3*Math.max(0,t-.6),.92-.1*Math.max(0,t-.7));
+  snow.visible=W.snow>0;snow.material.opacity=Math.min(.95,.35+.5*W.snow);snowSpeed=6+W.snow*10;
+  for(const cl of clouds){cl.position.x+=.02*(1+W.cloud*3);if(cl.position.x>700)cl.position.x=-700;cl.material.opacity=.55+.4*W.cloud;cl.material.color.copy(c).lerp(new THREE.Color(0xffffff),.6)}}
+let snowSpeed=6;
 
+/* ================= performance ================= */
+let fpsT=0,fpsN=0,fpsWarm=6;
+function setQuality(hi,persistIt){HIQ=hi;sun.castShadow=hi;renderer.setPixelRatio(Math.min(hi?2:1.25,devicePixelRatio||1));resize();$('bQ').textContent='Графика: '+(hi?'красивая':'быстрая');if(persistIt)try{localStorage.setItem('powderpeak-q',hi?'high':'low')}catch(e){}}
+function perfWatch(dt){if(document.hidden)return;fpsWarm-=dt;if(fpsWarm>0)return;fpsT+=dt;fpsN++;if(fpsT>=4){const fps=fpsN/fpsT;fpsT=0;fpsN=0;if(fps<26&&HIQ){setQuality(false,false);toast('⚡ Включил быструю графику, чтобы не лагало')}}}
 /* ================= loop ================= */
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.fov=w<h?68:50;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
@@ -1025,7 +1079,7 @@ function frame(now){
   if(hoverReq&&((tool==='lift'&&liftA)||(tool==='run'&&runPts.length)||(tool==='build'&&bType&&!ghostAt)||tool==='trees')){const p=pickGround(hoverReq.x,hoverReq.y);hover=p?(tool==='build'||tool==='trees'?p:snap(p)):null;hoverReq=null;
     if(tool==='lift'||tool==='run')refresh();else drawPreview()}
   const sp=snowG.attributes.position.array,cx=controls.target.x,cz=controls.target.z,cy=controls.target.y;
-  for(let i=0;i<SN;i++){let y=sp[i*3+1]-rdt*(6+(i%5));if(y<cy-40)y+=140;sp[i*3+1]=y;sp[i*3]+=Math.sin(now/1500+i)*rdt*.8;
+  for(let i=0;i<SN;i++){let y=sp[i*3+1]-rdt*(snowSpeed+(i%5));if(y<cy-40)y+=140;sp[i*3+1]=y;sp[i*3]+=Math.sin(now/1500+i)*rdt*.8;
     if(sp[i*3]-cx>120)sp[i*3]-=240;else if(sp[i*3]-cx<-120)sp[i*3]+=240;if(sp[i*3+2]-cz>120)sp[i*3+2]-=240;else if(sp[i*3+2]-cz<-120)sp[i*3+2]+=240}
   snowG.attributes.position.needsUpdate=true;
   const tg2=controls.target;tg2.x=clamp(tg2.x,-H,H);tg2.z=clamp(tg2.z,-H,H);const gy=heightAt(tg2.x,tg2.z);tg2.y+=(gy+8-tg2.y)*.05;
@@ -1033,15 +1087,21 @@ function frame(now){
   controls.update();sky();
   uiT-=rdt;if(uiT<=0){uiT=.25;
     $('cash').textContent=fmt(money);$('cash').style.color=money<0?'#fda4af':'';
-    const hh=Math.floor(minutes/60),mm=Math.floor(minutes%60);$('clock').textContent=hh+':'+String(mm).padStart(2,'0');
+    const hh=Math.floor(minutes/60),mm=Math.floor(minutes%60);$('clock').textContent=hh+':'+String(mm).padStart(2,'0')+' '+WEATHER[weather].i;$('clock').parentNode.title='Погода: '+WEATHER[weather].n+' — '+WDESC[weather];
     $('dayL').textContent='День '+dayN+(minutes<ARR_END?' · открыто':' · последние спуски');$('nSk').textContent=skiers.filter(s=>s.state!=='leave').length;$('stars').textContent=starStr();
     if(infoObj&&tool==='look'&&$('iStats'))showInfo(infoObj,true);if($('price').classList.contains('show'))updatePrice();
     checkQuest();
   }
   miniT-=rdt;if(miniT<=0&&!$('miniWrap').classList.contains('hide')){miniT=.4;drawMini()}
+  syncSkiers();skyDome.position.copy(camera.position);perfWatch(rdt);
   renderer.render(scene,camera);
 }
-renderQuest();setTool('look');
+renderQuest();setTool('look');setQuality(HIQ,false);
 requestAnimationFrame(frame);
+/*PWA*/(function(){const inTg=/tgWebApp/.test(location.hash+location.search);
+  if(inTg){const sc=document.createElement('script');sc.src='https://telegram.org/js/telegram-web-app.js';sc.onload=()=>{const tg=window.Telegram&&Telegram.WebApp;if(!tg)return;tg.ready();tg.expand();
+    try{tg.disableVerticalSwipes&&tg.disableVerticalSwipes()}catch(e){}try{tg.setHeaderColor&&tg.setHeaderColor('#0e1626');tg.setBackgroundColor&&tg.setBackgroundColor('#0e1626')}catch(e){}
+    window.haptic=t=>{try{tg.HapticFeedback.impactOccurred(t||'light')}catch(e){}}};document.head.appendChild(sc)}
+  else if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{})})();/*/PWA*/
 </script>
 </body></html>
