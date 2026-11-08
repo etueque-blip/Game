@@ -377,7 +377,9 @@ const cellOf=(x,z)=>[Math.floor((x-GMIN)/CELL),Math.floor((z-GMIN)/CELL)];
 const ownedCell=(i,j)=>owned.has(i+','+j);
 const inBounds=p=>{const [i,j]=cellOf(p.x,p.z);return i>=0&&j>=0&&i<GRID&&j<GRID&&ownedCell(i,j)&&Math.abs(p.x)<256&&Math.abs(p.z)<256};
 const adjCell=(i,j)=>!ownedCell(i,j)&&i>=0&&j>=0&&i<GRID&&j<GRID&&[[1,0],[-1,0],[0,1],[0,-1]].some(([a,b])=>ownedCell(i+a,j+b));
-const landPrice=()=>Math.round(30000*Math.pow(1.4,owned.size-16)/1000)*1000;
+// land price depends only on how far the plot is from the starting land: ring 1 = $30k, ring 2 = $75k (never on level or plots owned)
+const landRing=(i,j)=>Math.max(Math.max(0,2-i,i-5),Math.max(0,2-j,j-5));
+const LAND_RING=[0,30000,75000,150000];const landPrice=(i,j)=>{if(i===undefined){if(!selLand)return LAND_RING[1];i=selLand[0];j=selLand[1]}return LAND_RING[Math.min(3,landRing(i,j))]};
 const NOT_OWN='Это не твоя земля. Купи участок: кнопка 🏞️ «Земля»';
 const onLake=p=>LAKE.r>0&&Math.hypot(p.x-LAKE.x,p.z-LAKE.z)<LAKE.r+2;
 
@@ -943,7 +945,7 @@ function drapedCell(i,j,color,op){const g=new THREE.PlaneGeometry(CELL-1,CELL-1,
 function drawLand(){while(landG.children.length)landG.remove(landG.children[0]);
   for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){if(ownedCell(i,j))continue;const adj=adjCell(i,j),sel=selLand&&selLand[0]===i&&selLand[1]===j;
     landG.add(drapedCell(i,j,sel?0xfacc15:adj?0x22c55e:0x0b1020,sel?.45:adj?.26:.32));
-    if(adj){const cx=GMIN+(i+.5)*CELL,cz=GMIN+(j+.5)*CELL,l=label('🏞️ '+fmt(landPrice()),sel?'#fde047':'#86efac',.12);l.position.set(cx,heightAt(cx,cz)+14,cz);landG.add(l)}}}
+    if(adj){const cx=GMIN+(i+.5)*CELL,cz=GMIN+(j+.5)*CELL,l=label('🏞️ '+fmt(landPrice(i,j)),sel?'#fde047':'#86efac',.12);l.position.set(cx,heightAt(cx,cz)+14,cz);landG.add(l)}}}
 function drawBorder(){while(borderG.children.length)borderG.remove(borderG.children[0]);
   owned.forEach(k=>{const [i,j]=k.split(',').map(Number);const x0=GMIN+i*CELL,z0=GMIN+j*CELL;
     [[0,-1,x0,z0,x0+CELL,z0],[0,1,x0,z0+CELL,x0+CELL,z0+CELL],[-1,0,x0,z0,x0,z0+CELL],[1,0,x0+CELL,z0,x0+CELL,z0+CELL]].forEach(([di,dj,ax,az,bx,bz])=>{
@@ -1468,8 +1470,8 @@ function refresh(){
     else if(bType)stat='';
     renderCard(stat,btns);
   }else if(tool==='land'){
-    if(selLand){const pr=landPrice();renderCard(`Участок ${M(CELL)}×${M(CELL)} м · <b class="${money>=pr?'okc':'bad'}">${fmt(pr)}</b><br><span style="color:var(--mut)">Каждый следующий участок дороже.</span>`,[{l:'Отмена',f:()=>{selLand=null;drawLand();refresh()}},{l:`🏞️ Купить ${fmt(pr)}`,c:'pri',dis:money<pr,f:buyLand}])}
-    else renderCard(`Твоих участков: <b>${owned.size}</b> · следующий стоит <b>${fmt(landPrice())}</b>`,[]);
+    if(selLand){const pr=landPrice();renderCard(`Участок ${M(CELL)}×${M(CELL)} м · <b class="${money>=pr?'okc':'bad'}">${fmt(pr)}</b><br><span style="color:var(--mut)">Ближние участки — $30 000, дальние — $75 000.</span>`,[{l:'Отмена',f:()=>{selLand=null;drawLand();refresh()}},{l:`🏞️ Купить ${fmt(pr)}`,c:'pri',dis:money<pr,f:buyLand}])}
+    else renderCard(`Твоих участков: <b>${owned.size}</b> · рядом с курортом участок стоит <b>$30 000</b>, дальше — <b>$75 000</b>`,[]);
   }else if(tool==='trees'){renderCard(treeMode==='rock'?'🪨 Режим: убираем камни':treeMode==='cut'?'🪓 Режим: вырубка':'🌱 Режим: посадка',[])}
   else if(tool==='del'){
     if(selDel){const r=Math.round((selDel.cost||0)*.4);renderCard(`Снести <b>${selDel.name}</b>? Вернём <b class="okc">${fmt(r)}</b>`,[{l:'Отмена',f:()=>{selDel=null;refresh()}},{l:'🧨 Снести',c:'red',f:()=>{removeObj(selDel);selDel=null;refresh()}}])}
