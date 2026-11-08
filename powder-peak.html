@@ -1790,7 +1790,7 @@ const grows=[];
 function updGrows(dt){for(let i=grows.length-1;i>=0;i--){const g=grows[i];g.t+=dt/.7;const t=Math.min(1,g.t),c=1.70158,e=1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);g.o.scale.set(1,Math.max(.01,e),1);if(t>=1){g.o.scale.set(1,1,1);grows.splice(i,1)}}}
 /* ================= access roads to buildings ================= */
 const ROAD_TYPES={chalet:1,hotel:1,restaurant:1,rental:1,parking:1,workshop:1};
-const nearRun=(B,d)=>runs.some(R=>R.sm.some((q,i)=>i%3===0&&Math.hypot(q.x-B.x,q.z-B.z)<d+(R.w||3.9)+B.rad));
+function nearRun(B,d){return runs.some(R=>R.sm.some((q,i)=>i%3===0&&Math.hypot(q.x-B.x,q.z-B.z)<d+(R.w||3.9)+B.rad))}
 function skiInPass(){buildings.forEach(B=>{if(!BT[B.type].food)return;const si=nearRun(B,10);if(si&&B.road){scene.remove(B.road);B.road=null;B.roadEnd=null}B.skiIn=si})}
 function accessRoad(B){if(!ROAD.length||!ROAD_TYPES[B.type]||B.road)return;if(BT[B.type].food&&nearRun(B,10)){B.skiIn=true;return}
   let best=null,bd=1e9;ROAD.forEach(p=>{const d=Math.hypot(p.x-B.x,p.z-B.z);if(d<bd){bd=d;best=p}});
