@@ -532,6 +532,15 @@ function clearRocks(pts,w){let n=0;const z0=new THREE.Matrix4().makeScale(0,0,0)
 const BASE=new THREE.Vector3(0,heightAt(0,108),108);
 function roofGeo(w,d,h){const sh=new THREE.Shape();sh.moveTo(-w/2,0);sh.lineTo(w/2,0);sh.lineTo(0,h);sh.lineTo(-w/2,0);const g=new THREE.ExtrudeGeometry(sh,{depth:d,bevelEnabled:false});g.translate(0,0,-d/2);return g}
 const M_={};const mat=c=>M_[c]||(M_[c]=new THREE.MeshLambertMaterial({color:c}));
+// ridge runs along local X; slopes fall to ±Z. snowF = share of each slope covered with snow (from the ridge down)
+function gableRoof(len,span,h,col,ov,snowF,fill){ov=ov===undefined?.7:ov;snowF=snowF===undefined?1:snowF;const g=new THREE.Group(),ang=Math.atan2(h,span/2),half=span/2+ov,sl=half/Math.cos(ang),th=.32;
+  if(fill!==undefined){const sh=new THREE.Shape();sh.moveTo(-span/2,0);sh.lineTo(span/2,0);sh.lineTo(0,h);sh.lineTo(-span/2,0);const fg=new THREE.ExtrudeGeometry(sh,{depth:len,bevelEnabled:false});fg.translate(0,0,-len/2);const fm=new THREE.Mesh(fg,mat(fill));fm.rotation.y=Math.PI/2;g.add(fm)}
+  for(const sd of [-1,1]){const p=new THREE.Group();p.position.set(0,h+.05,0);p.rotation.x=sd*ang;g.add(p);
+    const slab=new THREE.Mesh(new THREE.BoxGeometry(len+ov*2,th,sl),mat(col));slab.position.set(0,th/2,sd*sl/2);p.add(slab);
+    const fas=new THREE.Mesh(new THREE.BoxGeometry(len+ov*2+.1,.42,.16),mat(0x3f2a1a));fas.position.set(0,0,sd*sl);p.add(fas);
+    if(snowF>0){const sn=new THREE.Mesh(new THREE.BoxGeometry(len+ov*2-.15,.26,sl*snowF),mat(0xf8fafc));sn.position.set(0,th+.12,sd*sl*snowF/2);p.add(sn);
+      if(snowF>=.99){const lip=new THREE.Mesh(new THREE.BoxGeometry(len+ov*2-.3,.34,.34),mat(0xf8fafc));lip.position.set(0,th,sd*(sl+.05));p.add(lip)}}}
+  const rc=new THREE.Mesh(new THREE.BoxGeometry(len+ov*2+.1,.3,.5),mat(snowF>0?0xf8fafc:col));rc.position.y=h+.32;g.add(rc);return g}
 const vcMat=new THREE.MeshLambertMaterial({vertexColors:true});
 function bx(w,h,d,x,y,z,rx,ry){const g=new THREE.BoxGeometry(w,h,d);if(rx)g.rotateX(rx);if(ry)g.rotateY(ry);g.translate(x||0,y||0,z||0);return g}
 function mergeGeos(parts){const pos=[],nor=[],col=[];const cc=new THREE.Color();let anyC=false;
@@ -567,14 +576,31 @@ const CARC=[0xef4444,0x3b82f6,0x22c55e,0xeab308,0x111827,0xf8fafc,0xf97316,0x0d9
 function car(g,x,z,r){const c=new THREE.Mesh(carGeo(CARC[(Math.random()*CARC.length)|0]),vcMat);c.castShadow=true;c.position.set(x,0,z);c.rotation.y=r||0;g.add(c)}
 {
   const g=new THREE.Group();
-  g.add(box(16,6,9,0x8a5a3b,0,3,0));
-  const rf=new THREE.Mesh(roofGeo(18,11,5),mat(0xf8fafc));rf.rotation.y=Math.PI/2;rf.position.y=6;rf.scale.set(1,1,1);g.add(rf);
-  g.add(box(1.4,4,1.4,0x6b7280,4,8,1));
-  windows(g,5,3.4,-4.55,3,Math.PI);
+  g.add(box(16.6,1.3,9.6,0x8a8f99,0,.65,0),box(16,3.4,9,0x7c4a26,0,3,0),box(16.1,2.4,9.1,0xf1e7d6,0,5.9,0));       // stone plinth, timber floor, plaster upper floor
+  for(let k=-7;k<=7;k++)g.add(box(.12,3.4,9.05,0x5b3a24,k*1.1,3,0));for(const x of [-8,8])for(const z of [-4.5,4.5])g.add(box(.5,5.8,.5,0x5b3a24,x,4.1,z));
+  g.add(box(16.2,.3,9.2,0x5b3a24,0,4.75,0));
+  {const rf=gableRoof(16.6,9.4,4.4,0x334155,1.2,1,0xf1e7d6);rf.position.y=7.1;g.add(rf)}
+  // front: panoramic glass with mullions + glass doors under an entrance gable
+  {const gl=new THREE.Mesh(new THREE.PlaneGeometry(11,2.6),winMat);gl.position.set(0,2.9,-4.53);gl.rotation.y=Math.PI;g.add(gl);for(let k=-5;k<=5;k++)g.add(box(.14,2.8,.14,0xf8fafc,k*1.1,2.9,-4.6));g.add(box(11.3,.16,.16,0xf8fafc,0,4.25,-4.6),box(11.3,.16,.16,0xf8fafc,0,1.55,-4.6));
+   for(let k=0;k<5;k++)framedWin(g,-5.2+k*2.6,5.9,-4.58,1.4,1.3,Math.PI,0x14532d);
+   const eg=gableRoof(4.6,3.4,1.8,0x334155,.4,1,0xf1e7d6);eg.rotation.y=Math.PI/2;eg.position.set(0,4.75,-5.6);g.add(eg);for(const x of [-2,2])g.add(box(.3,4.6,.3,0x5b3a24,x,2.3,-7.1));}
+  const sg2=label('🏔 БАЗА · КАССЫ','#fde68a',.09);sg2.position.set(0,8.1,-5.2);g.add(sg2);
+  // ticket office annex on the east side: two windows, striped awning, queue posts
+  g.add(box(3.4,3.6,4.6,0x7c4a26,9.7,1.8,-1.4),box(3.9,.25,5.1,0x334155,9.7,3.75,-1.4),box(3.6,.2,4.8,0xf8fafc,9.7,3.95,-1.4));
+  for(const z of [-2.5,-.3]){const tw=new THREE.Mesh(new THREE.PlaneGeometry(1.2,1),winMat);tw.position.set(11.42,2,z);tw.rotation.y=Math.PI/2;g.add(tw);g.add(box(.5,.12,1.4,0xf8fafc,11.6,1.45,z))}
+  for(let k=0;k<6;k++){const st=box(1.3,.1,.8,k%2?0xf8fafc:0xdc2626,11.9,3.1,-3.4+k*.8);st.rotation.z=-.4;g.add(st)}
+  {const ts=label('🎟 КАССЫ','#fecaca',.06);ts.position.set(11.6,4.6,-1.4);g.add(ts)}
+  for(let k=0;k<4;k++)for(const z of [-3.6,.8])g.add(box(.12,1,.12,0x1f2937,12.6+k*1.3,.5,z));for(const z of [-3.6,.8])g.add(box(4,.06,.06,0xdc2626,14.55,.9,z));
+  // terrace with tables & umbrellas, ski racks, flags, lamps
+  g.add(box(16,.3,3.4,0x9a6b45,0,.3,-6.3));
+  for(const x of [-6,-3.5,3.5,6]){g.add(box(1.2,.1,.9,0x7c4a26,x,1.15,-6.4),box(.1,.8,.1,0x5b3a24,x,.75,-6.4),box(.07,2.1,.07,0x334155,x,2.2,-6.4));const um=new THREE.Mesh(new THREE.ConeGeometry(1.25,.6,10),mat(x<0?0xef4444:0x2563eb));um.position.set(x,3.3,-6.4);g.add(um)}
+  for(const x of [-8.6,8.6]){g.add(box(.1,1.3,.1,0x5b3a24,x,.7,-8.4),box(.1,1.3,.1,0x5b3a24,x+(x<0?2.4:-2.4),.7,-8.4),box(2.5,.1,.1,0x5b3a24,x+(x<0?1.2:-1.2),1.35,-8.4));for(let k=0;k<6;k++){const sk=box(.1,1.7,.05,CARC[(k*3+(x>0?1:0))%CARC.length],x+(x<0?.2:-.2)+(x<0?1:-1)*k*.4,.95,-8.45);sk.rotation.z=.15;g.add(sk)}}
+  [[-4.5,0xdc2626],[0,0x2563eb],[4.5,0xfacc15]].forEach(([x,c])=>{g.add(box(.12,7,.12,0xe5e7eb,x,3.5,-9.6));const fl=box(1.6,.9,.04,c,x+.86,6.4,-9.6);g.add(fl)});
+  g.add(box(1.4,3.6,1.4,0x6b7280,4.5,10.3,1.5),box(1.7,.3,1.7,0x4b5563,4.5,12.2,1.5));lantern(g,-2.4,3.1,-4.7);lantern(g,2.4,3.1,-4.7);
   const lot=new THREE.Mesh(new THREE.PlaneGeometry(32,12),mat(0x9aa3b2));lot.rotation.x=-Math.PI/2;lot.position.set(0,.18,13);g.add(lot);
   for(let k=0;k<9;k++)car(g,-12+k*3,13+(k%2?2.5:-2.5));
-  const sg=label('🏔️ База',null,.17);sg.position.set(0,13,0);g.add(sg);
-  g.userData.chimney=[4,10.2,1];g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});g.position.copy(BASE);g.position.y-=.3;scene.add(g);
+  const sg=label('🏔️ База',null,.17);sg.position.set(0,15,0);g.add(sg);
+  g.userData.chimney=[4.5,12.5,1.5];g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});g.position.copy(BASE);g.position.y-=.3;scene.add(g);
 }
 
 /* ================= helpers ================= */
@@ -637,6 +663,8 @@ function makeLift(a,b,type,name,col){
     sg.add(box(W,sh*.45,D,0xe5e7eb,0,sh*.225,0),box(W,sh*.55,D*.92,L.col,0,sh*.45+sh*.275,0),box(W*.98,sh*.3,D*.94,0x1e293b,0,sh*.66,0),box(W+1,.5,D+1.2,0x1f2937,0,sh+.2,0),box(W+.6,.3,D+.8,L.col,0,sh+.55,0));
     const bw=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.6,.3,20),mat(0x9ca3af));bw.position.set(0,sh+.95,0);sg.add(bw);
     if(type!=='tbar'){const hood=new THREE.Mesh(new THREE.SphereGeometry(2.1,18,8,0,Math.PI*2,0,Math.PI/2),mat(0xe5e7eb));hood.scale.set(1,.42,1);hood.position.set(0,sh+1.1,0);sg.add(hood);const hb=new THREE.Mesh(new THREE.CylinderGeometry(2.15,2.15,.22,18),mat(L.col));hb.position.set(0,sh+1.1,0);sg.add(hb);sg.add(box(W+1.2,.25,D+1.4,0xf8fafc,0,sh+.5,0))}
+    if(type!=='tbar'){for(const x of [-W/2,W/2])for(const z of [-D/2-.6,-D/2-5])sg.add(box(.22,3.4,.22,0x334155,x,1.7,z));sg.add(box(W+1,.25,5.4,L.col,0,3.5,-D/2-2.8),box(W+.8,.22,5.2,0xf8fafc,0,3.72,-D/2-2.8));
+      const bwR=new THREE.Mesh(new THREE.TorusGeometry(1.7,.14,6,24),mat(0x475569));bwR.rotation.x=Math.PI/2;bwR.position.set(0,sh+.95,0);sg.add(bwR)}
     const hut=new THREE.Group();hut.position.set(W/2+1.6,0,-D/2+.6);hut.add(box(2,2.4,2,0xe5e7eb,0,1.2,0),box(2.4,.2,2.4,L.col,0,2.5,0),box(2.5,.18,2.5,0xf8fafc,0,2.68,0));
     const hw=new THREE.Mesh(new THREE.PlaneGeometry(1.4,.8),winMat);hw.position.set(0,1.6,-1.01);hw.rotation.y=Math.PI;hut.add(hw);const hw2=hw.clone();hw2.position.set(-1.01,1.6,0);hw2.rotation.y=-Math.PI/2;hut.add(hw2);sg.add(hut);
     for(const sd of [-1,1]){sg.add(box(.15,1.2,.15,0x1f2937,sd*1.4,.6,-D/2-2.4));sg.add(box(.15,1.2,.15,0x1f2937,sd*1.4,.6,-D/2-4.4));sg.add(box(.08,.08,2,0xfacc15,sd*1.4,1.1,-D/2-3.4))}
@@ -797,14 +825,13 @@ function bModel(type){
   if(type==='chalet'){g.add(box(6.5,1.1,6.5,0x8a8f99,0,.55,0),box(6,3.3,6,0x8b5a2b,0,2.75,0));
     for(let k=0;k<6;k++)g.add(box(6.05,.06,6.05,0x6b4226,0,1.35+k*.55,0));                 // log seams
     for(const x of [-1,1])for(const z of [-1,1])g.add(box(.38,3.4,.38,0x5b3a24,x*3,2.75,z*3)); // corner posts
-    const rd=new THREE.Mesh(roofGeo(8,7.6,3.5),mat(0x5b3a24));rd.position.y=4.35;g.add(rd);
-    const r=new THREE.Mesh(roofGeo(7.8,7.8,3.4),mat(0xf8fafc));r.position.y=4.55;g.add(r);
-    g.add(box(.5,.5,7.8,0xf8fafc,-3.85,4.45,0),box(.5,.5,7.8,0xf8fafc,3.85,4.45,0));      // snow lips on eaves
+    {const rf=gableRoof(7.6,6.1,3.3,0x5b3a24,.9,1,0x8b5a2b);rf.rotation.y=Math.PI/2;rf.position.y=4.38;g.add(rf)}
+    for(let k=0;k<4;k++)g.add(box(.18,.18,.6,0x5b3a24,-2.25+k*1.5,4.3,-3.75));                  // rafter tails
     // gable front: carved boards
     g.add(box(.9,2.6,.9,0x6b7280,1.6,6.3,1.2),box(1.1,.25,1.1,0x4b5563,1.6,7.65,1.2),box(1.3,2.1,.12,0x3f2a1a,0,1.95,-3.07));
     framedWin(g,-1.9,2.7,-3.08,1.1,1.2,Math.PI,0x14532d);framedWin(g,1.9,2.7,-3.08,1.1,1.2,Math.PI,0x14532d);
     framedWin(g,3.08,2.7,-1.2,1.1,1.2,Math.PI/2,0x14532d);framedWin(g,3.08,2.7,1.4,1.1,1.2,Math.PI/2,0x14532d);framedWin(g,-3.08,2.7,0,1.1,1.2,-Math.PI/2,0x14532d);
-    framedWin(g,0,5.3,-3.99,1,1,Math.PI);
+    framedWin(g,0,5.35,-3.83,1,1,Math.PI);
     g.add(box(4.6,.18,1.4,0x6b4226,0,3.1,-3.75));for(let k=-2;k<=2;k++)g.add(box(.1,.8,.1,0x6b4226,k*1.1,3.55,-4.4));g.add(box(4.6,.12,.12,0x6b4226,0,3.95,-4.4),box(4.6,.14,1.4,0xf8fafc,0,4.02,-3.75));
     lantern(g,.95,2.6,-3.2);woodpile(g,-2.3,-3.9);
     g.add(box(1.8,.1,.1,0x5b3a24,2.6,1.3,-3.6),box(.1,1.3,.1,0x5b3a24,1.8,.65,-3.6),box(.1,1.3,.1,0x5b3a24,3.4,.65,-3.6));
@@ -828,8 +855,8 @@ function bModel(type){
   else if(type==='restaurant'){g.userData.chimney=[4,9.4,2.2];
     g.add(box(12.4,1.2,9.4,0x8a8f99,0,.6,0),box(12,3.8,9,0x7c4a26,0,3.1,0));
     for(let k=-5;k<=5;k++)g.add(box(.14,3.8,9.05,0x5b3a24,k*1.15,3.1,0));                       // vertical boards (shadow lines)
-    const r=new THREE.Mesh(roofGeo(10.6,13.4,3.6),mat(0x9f1239));r.rotation.y=Math.PI/2;r.position.y=5;g.add(r);
-    const rs=new THREE.Mesh(roofGeo(7.4,13.2,2.55),mat(0xf8fafc));rs.rotation.y=Math.PI/2;rs.position.y=6.18;g.add(rs);
+    {const rf=gableRoof(12.2,9.2,3.6,0x9f1239,.9,.6,0x7c4a26);rf.position.y=5;g.add(rf)}
+
     
     g.add(box(1.3,4.4,1.3,0x6b7280,4,7.2,2.2),box(1.5,.3,1.5,0x4b5563,4,9.3,2.2));
     // panoramic glass with mullions
@@ -844,7 +871,7 @@ function bModel(type){
         lantern(g,-5.4,3.4,-4.7);lantern(g,5.4,3.4,-4.7);woodpile(g,6.8,3)}
   else if(type==='cafe'){g.userData.chimney=[1.4,6.6,1];
     g.add(box(5.4,.8,5.4,0x8a8f99,0,.4,0),box(5,2.9,5,0x7c4a26,0,2.25,0));for(let k=0;k<4;k++)g.add(box(5.05,.06,5.05,0x5b3a24,0,1.3+k*.6,0));
-    const r=new THREE.Mesh(roofGeo(6.4,6.2,2.7),mat(0x1e3a8a));r.position.y=3.7;g.add(r);const rs=new THREE.Mesh(roofGeo(6.2,6.4,2.6),mat(0xf8fafc));rs.position.y=3.85;g.add(rs);
+    {const rf=gableRoof(5.2,5.1,2.6,0x1e3a8a,.75,1,0x7c4a26);rf.rotation.y=Math.PI/2;rf.position.y=3.72;g.add(rf)}
     g.add(box(.7,2.6,.7,0x6b7280,1.4,5.3,1),box(.85,.2,.85,0x4b5563,1.4,6.6,1));
     framedWin(g,-1.2,2.4,-2.53,1.4,1.1,Math.PI,0x1e3a8a);g.add(box(1,1.9,.1,0x3f2a1a,1.2,1.75,-2.53));
     for(let k=0;k<5;k++){const st=box(1.02,.1,1.4,k%2?0xf8fafc:0xdc2626,-2+k,3.25-.0,-3.1);st.rotation.x=-.35;g.add(st)}
@@ -1037,7 +1064,7 @@ function think(s,key){s.dayThoughts=s.dayThoughts||{};day.thoughts[key]=(day.tho
 function spawnSkier(){
   const r=Math.random(),skill=r<.4?0:r<.8?1:r<.95?2:3;
   const s={mesh:makeSkierMesh(),skill,state:'walk',pos:new THREE.Vector3(BASE.x+(Math.random()-.5)*22,0,BASE.z+10+Math.random()*6),happy:70,runsDone:0,goal:2+((Math.random()*5)|0),wait:0,phase:Math.random()*6,seen:new Set(),fade:1,ate:false};
-  s.pos.y=heightAt(s.pos.x,s.pos.z);s.dest={x:BASE.x+(Math.random()-.5)*10,z:BASE.z-6};s.after=null;
+  s.pos.y=heightAt(s.pos.x,s.pos.z);s.dest={x:BASE.x+12.4+Math.random()*1.4,z:BASE.z-1.4+(Math.random()-.5)*3};s.after={ticket:1};
   if(Math.random()<.34)spawnCar(-1);{const pk=buildings.filter(b=>b.type==='parking');if(pk.length&&Math.random()<Math.min(.85,.35+.15*pk.length)){const B=pk[(Math.random()*pk.length)|0],v=Math.round(BT.parking.fee*bMul(B));money+=v;day.parking=(day.parking||0)+v;B.earned+=v;B.visits++}}skiers.push(s);day.visitors++;xp+=1;if(levelOf(xp)>level)addXP(0);day.tickets+=price;money+=price;
   if(price>fairValue()*1.2){s.happy-=10;if(Math.random()<.4)think(s,'price')}
   const rent=buildings.find(b=>b.type==='rental');if(rent&&skill<=1){money+=BT.rental.rent;day.food+=BT.rental.rent;rent.earned+=BT.rental.rent;s.happy+=5}
@@ -1105,18 +1132,20 @@ function updateSkier(s,dt){
   const m=s.mesh;
   if(s.state==='patrol'){if(s.bub){s.bub.position.y=4}updPatrol(s,dt);return}
   if(s.state==='carried')return;
-  if(s.state!=='queue'&&s.state!=='eat'&&s.state!=='enter'&&s.state!=='leave'&&s.state!=='lift'&&s.state!=='patrol'&&s.state!=='carried'&&!(s.fallT>0)){if(!s.anc||Math.hypot(s.pos.x-s.anc.x,s.pos.z-s.anc.z)>8){s.anc={x:s.pos.x,z:s.pos.z};s.ancT=0}else if((s.ancT+=dt)>30){s.anc=null;if(s.run)s.run.skiers--;s.run=null;s.state='walk';s.after=null;s.dest={x:BASE.x+(Math.random()-.5)*10,z:BASE.z-6};s.pos.set(BASE.x+(Math.random()-.5)*16,0,BASE.z-4);decide(s)}}
+  if(s.state!=='queue'&&s.state!=='eat'&&s.state!=='enter'&&s.state!=='ticket'&&s.state!=='leave'&&s.state!=='lift'&&s.state!=='patrol'&&s.state!=='carried'&&!(s.fallT>0)){if(!s.anc||Math.hypot(s.pos.x-s.anc.x,s.pos.z-s.anc.z)>8){s.anc={x:s.pos.x,z:s.pos.z};s.ancT=0}else if((s.ancT+=dt)>30){s.anc=null;if(s.run)s.run.skiers--;s.run=null;s.state='walk';s.after=null;s.dest={x:BASE.x+(Math.random()-.5)*10,z:BASE.z-6};s.pos.set(BASE.x+(Math.random()-.5)*16,0,BASE.z-4);decide(s)}}
   if(s.bub){s.bubT-=dt;if(s.bubT<=0){m.remove(s.bub);s.bub=null}}
   if(s.state==='walk'){
     const dx=s.dest.x-s.pos.x,dz=s.dest.z-s.pos.z,l=Math.hypot(dx,dz),toDoor=s.after&&(s.after.sleep||s.after.eat),sp=(toDoor?clamp(l/5,.45,1):1)*3.1*dt;
     if(l<=sp){s.pos.x=s.dest.x;s.pos.z=s.dest.z;const a=s.after;s.after=null;
       if(!a)decide(s);
       else if(a.sleep){const B=a.sleep,T=BT[B.type];day.sleepers=(day.sleepers||0)+1;if(buildings.includes(B)){const v=Math.round(T.night/T.guests*bMul(B));money+=v;day.lodge=(day.lodge||0)+v;B.earned+=v;B.paid=(B.paid||0)+v;B.slept=(B.slept||0)+1;burst(new THREE.Vector3(B.x,B.y+6,B.z),'🛏 +'+fmt(v));if(!window._sleepTip){window._sleepTip=1;toast('🛏 Гости заселяются в шале и отели — платят за ночь')}}const D=doorOf(B);s.state='enter';s.t=2.2;s.inD=D;s.then='sleep';s.after=null}
+      else if(a.ticket){s.state='ticket';s.t=1.2+Math.random()*1.6}
       else if(a.eat){if(!buildings.includes(a.eat))return decide(s);const D=doorOf(a.eat);s.state='enter';s.t=2.2;s.inD=D;s.then='eat';s.eatAt=a.eat}
       else if(a.lift){if(!lifts.includes(a.lift))return decide(s);s.state='queue';s.lift=a.lift;s.wait=0;a.lift.queue.push(s)}
       else{if(!runs.includes(a.run)||(isNight()&&!a.run.lit))return decide(s);s.state='ski';s.run=a.run;s.lastRun=a.run;s.v=2;s.lane=(Math.random()-.5)*(a.run.w||3.9)*.7;s.turnA=(.6+Math.random()*.5)*(2.3-s.skill*.4);s.turnK=.26+Math.random()*.1+s.skill*.03;s.d=0;a.run.skiers++}
     }else{s.pos.x+=dx/l*sp;s.pos.z+=dz/l*sp;m.rotation.y=Math.atan2(dx,dz)}
     s.pos.y=meshH(s.pos.x,s.pos.z)+(onAnyRun(s.pos)?.5:.25);m.position.copy(s.pos);m.position.y+=Math.abs(Math.sin(performance.now()/150+s.phase))*.12;m.rotation.z=0;m.rotation.x=0;
+  }else if(s.state==='ticket'){s.t-=dt;m.position.copy(s.pos);m.rotation.set(0,-Math.PI/2,0);if(s.t<=0){if(Math.random()<.15)burst(new THREE.Vector3(s.pos.x,s.pos.y+3,s.pos.z),'🎟');s.state='walk';s.dest={x:BASE.x+(Math.random()-.5)*10,z:BASE.z-6};s.after=null}
   }else if(s.state==='enter'){// step through the door slowly, then disappear inside
     const D=s.inD;s.t-=dt;s.pos.x+=D.ix*1.05*dt;s.pos.z+=D.iz*1.05*dt;s.pos.y=meshH(s.pos.x,s.pos.z)+.25;m.position.copy(s.pos);m.position.y+=Math.abs(Math.sin(performance.now()/170+s.phase))*.1;m.rotation.set(0,Math.atan2(D.ix,D.iz),0);
     if(s.t<=0){if(s.then==='eat'){s.state='eat';s.t=6;m.visible=false}else{m.visible=false;s.state='leave';s.fade=0}}
