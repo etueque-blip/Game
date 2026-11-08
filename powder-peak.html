@@ -1906,13 +1906,13 @@ function updStreaks(dt,sp){slMat.opacity=ride?clamp((sp-9)/14,0,.7):0;if(slMat.o
 // snow spray
 const sprayN=420,sprayPos=new Float32Array(sprayN*3),sprayV=[];for(let i=0;i<sprayN;i++)sprayV.push({x:0,y:-999,z:0,vx:0,vy:0,vz:0,t:1});
 const sprayG=new THREE.BufferGeometry();sprayG.setAttribute('position',new THREE.BufferAttribute(sprayPos,3));
-const sprayPts=new THREE.Points(sprayG,new THREE.PointsMaterial({color:0xffffff,map:flakeTex,size:.7,transparent:true,opacity:.9,depthWrite:false}));sprayPts.frustumCulled=false;scene.add(sprayPts);
+const sprayPts=new THREE.Points(sprayG,new THREE.PointsMaterial({color:0xf4f8ff,size:.42,transparent:true,opacity:.85,depthWrite:false}));sprayPts.frustumCulled=false;scene.add(sprayPts);
 const PILE_N=500,pileGeo=new THREE.SphereGeometry(.55,8,5);pileGeo.scale(1.4,.38,.9);
 const piles=new THREE.InstancedMesh(pileGeo,new THREE.MeshLambertMaterial({color:0xf8fbff}),PILE_N);piles.count=0;piles.receiveShadow=true;piles.castShadow=true;piles.frustumCulled=false;scene.add(piles);let pileI=0,pileT=0;
 const _pq=new THREE.Quaternion(),_py=new THREE.Quaternion(),_pn=new THREE.Vector3();
 function addPile(x,z,yaw,sc){const y=meshH(x,z)+.38;const n=normalAt(x,z);_pn.set(n[0],n[1],n[2]);_pq.setFromUnitVectors(_up,_pn);_py.setFromAxisAngle(_up,yaw);_pq.multiply(_py);sc*=.75;_m.compose(_p.set(x,y,z),_pq,new THREE.Vector3(sc,sc,sc));piles.setMatrixAt(pileI%PILE_N,_m);pileI++;piles.count=Math.min(pileI,PILE_N);piles.instanceMatrix.needsUpdate=true}
 function emitSpray(p,vx,vy,vz){const q=sprayV.find(x=>x.t>=1);if(!q)return;const k=1;q.x=p.x+(Math.random()-.5)*.6*k;q.y=p.y+.5+.15*k;q.z=p.z+(Math.random()-.5)*.6*k;q.vx=vx*k;q.vy=vy*k;q.vz=vz*k;q.g=12*k;q.t=0}
-function updSpray(dt){for(let i=0;i<sprayN;i++){const q=sprayV[i];if(q.t<1){q.t+=dt/.7;q.vy-=(q.g||12)*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.z+=q.vz*dt}sprayPos[i*3]=q.x;sprayPos[i*3+1]=q.t<1?q.y:-999;sprayPos[i*3+2]=q.z}sprayG.attributes.position.needsUpdate=true}
+function updSpray(dt){for(let i=0;i<sprayN;i++){const q=sprayV[i];if(q.t<1){q.t+=dt/.7;q.vy-=(q.g||12)*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.z+=q.vz*dt}const cp=camera.position,near=q.t<1&&Math.abs(q.x-cp.x)<4&&Math.abs(q.z-cp.z)<4&&Math.abs(q.y-cp.y)<4;sprayPos[i*3]=q.x;sprayPos[i*3+1]=q.t<1&&!near?q.y:-999;sprayPos[i*3+2]=q.z}sprayG.attributes.position.needsUpdate=true}
 // collisions
 let treeHash=null;
 const WIDE=22;let wideG=null,wideHidden=[];
@@ -2088,12 +2088,19 @@ function updRide(dt0){const r=ride;if(!r||r.done)return;dt0=Math.min(dt0,.033);
   else if(r.crashT>0){camMode===2&&(r.fpCrash=1);r.crashT-=dt0;r.tumble+=dt*11;if(r.crashT<=0){r.tumble=0;unstick(r,'Поехали дальше!')}}
   r.sp=sp;r.skid=skid;
   blob.position.set(p.x,meshH(p.x,p.z)+.5,p.z);{const hgt=rider.position.y-blob.position.y;const k=clamp(1-hgt/8,.25,1);blob.scale.setScalar(.6+.6*k);blob.material.opacity=k}
-  if(r.av&&r.cd<=0){const A=r.av;A.sp=Math.min(24,9+r.t*.28);A.gap=Math.min(48,A.gap+(sp-A.sp)*dt0);
-    if(A.gap<1.5&&r.crashT<=0){crash(r,'🌊 Лавина догнала!');A.gap=30}
-    const vd=sp>1?Math.atan2(r.vx,r.vz):r.f,bx=p.x-Math.sin(vd)*A.gap*RSC,bz=p.z-Math.cos(vd)*A.gap*RSC,lx=Math.cos(vd),lz=-Math.sin(vd);
-    if(isFinite(bx)&&isFinite(bz)){for(let k=0;k<AVN;k++){const o=(k/(AVN-1)-.5)*34,w=Math.sin(r.t*2+k)*1.5;const x=bx+lx*o-Math.sin(vd)*w,z=bz+lz*o-Math.cos(vd)*w;const sc=2.2+((k*37)%5)*.5+Math.sin(r.t*4+k)*.6;const y=meshH(x,z)+sc*.6+Math.abs(Math.sin(r.t*3+k*1.7))*2.5;const dc=Math.hypot(x-camera.position.x,y-camera.position.y,z-camera.position.z);const ss=dc<sc+5?0:sc;_m.makeScale(ss,ss*.8,ss);_m.setPosition(x,y,z);avIM.setMatrixAt(k,_m)}avIM.instanceMatrix.needsUpdate=true}
-    if(Math.random()<.6)emitSpray({x:bx+(Math.random()-.5)*20,y:meshH(bx,bz),z:bz+(Math.random()-.5)*20},(Math.random()-.5)*8,4+Math.random()*6,(Math.random()-.5)*8);
-    $('rGates').textContent=`🌊 ${Math.max(0,Math.round(A.gap))} м`;if(A.gap<12&&Math.random()<dt0*3)window.haptic&&window.haptic('light')}$('ride').classList.toggle('inair',!!(r.air&&r.trick));if(finePatch.visible)fineUpd(p);
+  if(r.av&&r.cd<=0){const A=r.av;if(A.y0===undefined){A.y0=p.y;A.fade=1}
+    // the avalanche only runs on the upper mountain: once you are low enough it stops and settles behind you
+    if(!A.stop&&(p.y<A.y0-(A.y0-BASE.y)*.5||Math.hypot(p.x-BASE.x,p.z-BASE.z)<80)){A.stop=true;rideMsg('🏔 Лавина остановилась позади — ушёл!',2000);r.score+=500;tone(660,.15,.15)}
+    if(A.stop){A.fade=Math.max(0,A.fade-dt0*.5);if(A.fade<=0)avG.visible=false}
+    else{A.sp=Math.min(22,9+r.t*.26);if(r.crashT>0)A.gap=Math.max(A.gap,26);else A.gap=Math.min(48,A.gap+(sp-A.sp)*dt0);
+      if(A.gap<1.5&&r.crashT<=0){crash(r,'🌊 Лавина догнала!');A.gap=45}}
+    if(!A.stop||A.bx===undefined){const vd=sp>1?Math.atan2(r.vx,r.vz):r.f;A.vd=vd;A.bx=p.x-Math.sin(vd)*A.gap*RSC;A.bz=p.z-Math.cos(vd)*A.gap*RSC}
+    const vd=A.vd,bx=A.bx,bz=A.bz,lx=Math.cos(vd),lz=-Math.sin(vd),fd=A.fade;
+    if(isFinite(bx)&&isFinite(bz)&&avG.visible){for(let k=0;k<AVN;k++){const o=(k/(AVN-1)-.5)*38,row=k%3,w=Math.sin(r.t*2.3+k)*1.2+row*2.2;const x=bx+lx*o-Math.sin(vd)*w,z=bz+lz*o-Math.cos(vd)*w;
+      const sc=(1.1+((k*37)%5)*.3+Math.sin(r.t*5+k)*.3)*(1-row*.18)*(A.stop?.4+.6*fd:1);const y=meshH(x,z)+sc*.25+(A.stop?-(1-fd)*1.2:Math.abs(Math.sin(r.t*3.5+k*1.7))*.7);
+      const dc=Math.hypot(x-camera.position.x,y-camera.position.y,z-camera.position.z);const ss=(dc<sc*1.6+7||fd<=0)?0:sc;_m.makeScale(ss*1.5,ss*.55,ss*1.2);_m.setPosition(x,y,z);avIM.setMatrixAt(k,_m)}avIM.instanceMatrix.needsUpdate=true}
+    if(!A.stop)for(let q=0;q<3;q++)if(Math.random()<.7){const o=(Math.random()-.5)*36;emitSpray({x:bx+lx*o,y:meshH(bx+lx*o,bz+lz*o)+.5,z:bz+lz*o},(Math.random()-.5)*5+Math.sin(vd)*4,3+Math.random()*7,(Math.random()-.5)*5+Math.cos(vd)*4)}
+    $('rGates').textContent=A.stop?'🏔 позади':`🌊 ${Math.max(0,Math.round(A.gap))} м`;if(!A.stop&&A.gap<12&&Math.random()<dt0*3)window.haptic&&window.haptic('light')}$('ride').classList.toggle('inair',!!(r.air&&r.trick));if(finePatch.visible)fineUpd(p);
   // rider pose
   r.lean+=((r.st*clamp(sp/14,0,1)*.6)-r.lean)*Math.min(1,dt*8);
   const crouch=tuck?1:(brake?.45:clamp(.22+sp*.012,0,.55));
