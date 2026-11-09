@@ -104,6 +104,23 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .mmArrows{display:flex;align-items:center;gap:.8rem;margin-top:.5rem}.mmArrows button{width:3.2rem;height:3.2rem;border-radius:50%;background:#0c2218cc;border:2px solid var(--green2);color:var(--green);font-size:1.8rem;line-height:1}
 .mmArrows span{font-weight:800;color:var(--dim);min-width:3rem;text-align:center}
 @media (max-width:760px){.mmPanel{width:58vw}.mmShow b{font-size:1.6rem}}
+/* menu v2: jet as a full background, glass panel, cinematic bars */
+#mainMenu{background:radial-gradient(ellipse 70% 80% at 62% 55%,#0000 40%,#020a12aa 100%),linear-gradient(90deg,#020a12e6 0%,#020a1299 28%,#020a1200 50%)!important}
+.mmBars{position:absolute;inset:0;pointer-events:none;background:linear-gradient(#000c,#0000 9%,#0000 91%,#000c)}
+.mmPanel{position:relative;z-index:1;margin:auto 0 auto max(1.6rem,env(safe-area-inset-left));width:min(29rem,44vw);padding:1.6rem 1.6rem;background:linear-gradient(160deg,#0d2a1fcc,#06141ccc);border:1px solid #ffffff22;border-radius:1.6rem;box-shadow:0 2rem 5rem #000a,inset 0 1px 0 #ffffff22;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);max-height:94%}
+.mmPanel .logo b{background:linear-gradient(100deg,#9ff5b4 0%,#fff 18%,#6cff8c 36%,#3fb865 60%,#9ff5b4 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;animation:shine 6s linear infinite}
+@keyframes shine{from{background-position:120% 0}to{background-position:-130% 0}}
+.mmb{position:relative;padding-left:3.6rem!important;background:#ffffff0d!important;border:1px solid #ffffff1f!important;border-radius:1rem}
+.mmb:hover{background:#6cff8c1f!important;border-color:#6cff8c88!important;box-shadow:0 0 1.4rem #6cff8c33}
+.mmb::before{content:attr(data-i);position:absolute;left:.8rem;top:50%;transform:translateY(-50%);width:2.1rem;height:2.1rem;border-radius:50%;display:grid;place-items:center;background:#6cff8c22;font-size:1.05rem}
+.mmb.primary{background:linear-gradient(90deg,#6cff8c,#38c46a)!important;border:0!important;animation:pulse 2.4s ease-in-out infinite}.mmb.primary::before{background:#05201033}
+@keyframes pulse{0%,100%{box-shadow:0 .4rem 1.6rem #3fb86555}50%{box-shadow:0 .4rem 2.8rem #6cff8caa}}
+.mmRow .mmb{padding-left:3.2rem!important}.mmRow .mmb::before{width:1.8rem;height:1.8rem;left:.6rem;font-size:.9rem}
+.mmTop{position:absolute;top:max(1rem,env(safe-area-inset-top));right:max(1.4rem,env(safe-area-inset-right));display:flex;gap:.6rem;z-index:1}
+.mmTop span{background:#06141ccc;border:1px solid #ffffff22;border-radius:2rem;padding:.45rem 1rem;font-weight:800;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.mmShow{background:linear-gradient(160deg,#0d2a1fb3,#06141cb3);border:1px solid #ffffff22;border-radius:1.4rem;padding:1rem 1.2rem;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);min-width:20rem}
+.mmStats{display:grid;grid-template-columns:auto 9rem;gap:.25rem .7rem;align-items:center;margin-top:.5rem;font-size:.8rem;font-weight:700;color:var(--dim);text-shadow:none}
+.mmStats i{display:block;height:.4rem;border-radius:.3rem;background:#ffffff1a;overflow:hidden}.mmStats i b{display:block;height:100%;background:linear-gradient(90deg,#3fb865,#6cff8c);font-size:0}
 /* loading screen */
 #load{position:fixed;inset:0;z-index:200;background:radial-gradient(ellipse at 50% 40%,#123a5c,#06121c 70%);display:grid;place-items:center;transition:opacity .5s;pointer-events:none}
 #load.off{opacity:0}#load .in{display:flex;flex-direction:column;align-items:center;gap:1.4rem}
@@ -204,16 +221,17 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
 <div id="load"><div class="in"><div class="logo"><span>CARRIER</span><b>STRIKE</b></div><div class="spin"></div><p>ЗАГРУЗКА…</p></div></div>
 <div id="ui">
 <section id="mainMenu" class="scr" hidden>
+ <div class="mmBars"></div><div class="mmTop" id="mmTop"></div>
  <div class="mmPanel">
   <div class="logo"><span>CARRIER</span><b>STRIKE</b><small>ВОЗДУШНЫЕ БОИ НАД ОКЕАНОМ</small></div>
   <div class="mmPilot" id="mmPilot"></div>
-  <button class="mmb primary" id="mmPlay">▶ ИГРАТЬ<small>Выбрать сторону и в бой</small></button>
-  <button class="mmb" id="mmHangar">✈ АНГАР<small>Самолёты, оружие, улучшения, спецмодули</small></button>
-  <button class="mmb" id="mmTrain">🎯 ТРЕНИРОВКА<small>Враги не стреляют — учитесь летать</small></button>
-  <div class="mmRow"><button class="mmb" id="mmSet">⚙ НАСТРОЙКИ</button><button class="mmb" id="mmHelp">⌨ УПРАВЛЕНИЕ</button></div>
-  <div class="mmRow"><button class="mmb" id="mmBoard">🏆 РЕЙТИНГ</button><button class="mmb" id="mmMis">📋 ЗАДАНИЯ</button></div>
+  <button class="mmb primary" id="mmPlay" data-i="▶">ИГРАТЬ<small>Выбрать сторону и в бой</small></button>
+  <button class="mmb" id="mmHangar" data-i="✈">АНГАР<small>Самолёты, оружие, улучшения, спецмодули</small></button>
+  <button class="mmb" id="mmTrain" data-i="🎯">ТРЕНИРОВКА<small>Враги не стреляют — учитесь летать</small></button>
+  <div class="mmRow"><button class="mmb" id="mmSet" data-i="⚙">НАСТРОЙКИ</button><button class="mmb" id="mmHelp" data-i="⌨">УПРАВЛЕНИЕ</button></div>
+  <div class="mmRow"><button class="mmb" id="mmBoard" data-i="🏆">РЕЙТИНГ</button><button class="mmb" id="mmMis" data-i="📋">ЗАДАНИЯ</button></div>
  </div>
- <div class="mmShow"><div class="mmTag" id="mmTag"></div><b id="mmName"></b><small id="mmInfo"></small>
+ <div class="mmShow"><div class="mmTag" id="mmTag"></div><b id="mmName"></b><small id="mmInfo"></small><div class="mmStats" id="mmStats"></div>
   <div class="mmArrows"><button id="mmPrev">‹</button><span id="mmIdx"></span><button id="mmNext">›</button></div></div>
 </section>
 <section id="sideScr" class="scr">
@@ -1507,6 +1525,9 @@ function renderMenu(){
   $('#mmName').textContent=d.name;$('#mmInfo').textContent=d.cls+' · '+d.country+(d.mods.length?' · '+d.mods.map(k=>MODS[k].i).join(''):'');
   $('#mmTag').textContent=own?'В ВАШЕМ АНГАРЕ':(level()<d.lvl?'🔒 УРОВЕНЬ '+d.lvl:d.price+' CR');
   $('#mmIdx').textContent=(DEFS.indexOf(d)+1)+' / '+DEFS.length;
+  $('#mmTop').innerHTML='<span>⭐ УР. '+l+'</span><span style="color:var(--yellow)">💰 '+save.cr+' CR</span><span>✈ '+save.owned.length+' / '+DEFS.length+'</span>';
+  const st=[['Скорость',d.maxSpd/430],['Манёвр',d.turn/1.5],['Тяга',d.thrust/1.3],['Прочность',d.hp/175]];
+  $('#mmStats').innerHTML=st.map(([n,v])=>'<span>'+n+'</span><i><b style="width:'+Math.round(Math.min(1,v)*100)+'%"></b></i>').join('');
 }
 function menuPlane(step){const i=(DEFS.indexOf(DEF[save.sel])+step+DEFS.length)%DEFS.length;save.sel=DEFS[i].id;persist();buildPreview();renderMenu();}
 function renderSide(){
@@ -1523,7 +1544,7 @@ function toHangar(){
 function buildPreview(){
   if(preview)scene.remove(preview);
   const d=DEF[save.sel],pn=PAINTS[save.paint[d.id]||0][1];
-  preview=buildJet(d,pn,myTeam);{const u=preview.userData;u.gear.visible=true;[...u.flames,...u.cores].forEach(f=>f.visible=false);u.glows.forEach(g=>g.material.opacity=.05);}const c=T[myTeam].carrier;cWorld(c,-8,DECK_Y+preview.userData.gearH,70,preview.position);preview.rotation.y=c.rot;scene.add(preview);
+  preview=buildJet(d,pn,myTeam);{const u=preview.userData;u.gear.visible=true;u.strobe.visible=false;[...u.flames,...u.cores].forEach(f=>f.visible=false);u.glows.forEach(g=>g.material.opacity=.05);}const c=T[myTeam].carrier;cWorld(c,-8,DECK_Y+preview.userData.gearH,70,preview.position);preview.rotation.y=c.rot;scene.add(preview);
 }
 let fil='ALL';
 function renderHangar(){
@@ -1809,8 +1830,8 @@ function updateCamera(dt){
   let fovT=zoom?30:62;
   if(state==='side'){const c=T[myTeam].carrier;camera.position.set(c.x+Math.cos(orbit)*430,95,c.z+Math.sin(orbit)*430);camera.up.set(0,1,0);camera.lookAt(c.x,20,c.z);fovT=55;}
   else if(state==='menu'&&preview){const b=DEF[save.sel].b,P=preview.position,c=T[myTeam].carrier;
-    const a=c.rot+Math.PI*.62+Math.sin(orbit*.55)*.75,r=b.L*1.45+15+Math.sin(orbit*.31)*3;
-    camera.position.set(P.x+Math.sin(a)*r,P.y+3.2+b.R*1.4+Math.sin(orbit*.42)*1.4,P.z+Math.cos(a)*r);camera.up.set(0,1,0);camera.lookAt(P.x,P.y+b.R*.6,P.z);fovT=38;}
+    const a=c.rot+Math.PI*.68+Math.sin(orbit*.5)*.6,r=b.L*1.15+10+Math.sin(orbit*.31)*2;
+    camera.position.set(P.x+Math.sin(a)*r,P.y+1.6+b.R*1.1+Math.sin(orbit*.42)*.9,P.z+Math.cos(a)*r);camera.up.set(0,1,0);camera.lookAt(P.x,P.y+b.R*.6,P.z);fovT=38;}
   else if(state==='hangar'&&preview){const L=DEF[save.sel].b.L;const r=L*1.5+9;camera.position.set(preview.position.x+Math.cos(orbit*1.5)*r,preview.position.y+L*.28,preview.position.z+Math.sin(orbit*1.5)*r);camera.up.set(0,1,0);camera.lookAt(preview.position.x,preview.position.y+1.5,preview.position.z);fovT=50;}
   else if(player&&player.alive){
     const p=player,v=save.opt.view,b=p.def.b,cp=p.mesh.userData.canopy;
@@ -1840,7 +1861,7 @@ function updateCamera(dt){
   if(camShake>.002&&state==='hud'){const s=camShake*.9;camera.position.x+=rnd(-s,s);camera.position.y+=rnd(-s,s);camera.position.z+=rnd(-s,s);}
   camShake*=Math.exp(-dt*7);
   camFov+=(fovT-camFov)*Math.min(1,dt*6);camera.fov=camFov;
-  if(state==='menu'&&innerWidth>500)camera.setViewOffset(innerWidth,innerHeight,-innerWidth*.2,innerHeight*.03,innerWidth,innerHeight);else if(camera.view&&camera.view.enabled)camera.clearViewOffset();
+  if(state==='menu'&&innerWidth>500)camera.setViewOffset(innerWidth,innerHeight,-innerWidth*.13,-innerHeight*.02,innerWidth,innerHeight);else if(camera.view&&camera.view.enabled)camera.clearViewOffset();
   camera.updateProjectionMatrix();
   {const fx=player&&player.alive?player.pos:(state==='hangar'&&preview?preview.position:camera.position);sunL.target.position.set(fx.x,fx.y,fx.z);sunL.position.set(fx.x+SUN.x*1200,fx.y+SUN.y*1200,fx.z+SUN.z*1200);}
   waterMat.uniforms.cam.value.copy(camera.position);water.position.set(camera.position.x,0,camera.position.z);sky.position.copy(camera.position);
