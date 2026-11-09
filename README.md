@@ -20,7 +20,7 @@
 - Four large city islands (Порт-Арка, Новоморск, Сан-Лазаро, Верхнегорск): skyscraper downtowns, streets, hills, harbours with cranes, lighthouses. Buildings are solid — you can crash into them; bots avoid them.
 - Civilian shipping: container ships, tankers, ferries on sea lanes, fishing boats and yachts around the cities, all with wakes. Shown on the map and radar.
 
-**Islands & capture**: five large tropical islands (smooth terrain coloured by height and slope, palms, forests, rocks) and two main city islands, Порт-Арка and Новоморск, that can be captured by flying inside the ring below 900 m. An owned island drains enemy tickets every 12 s and fires flak; capturing pays +300 CR / +200 XP. Bots fight over them too.
+**Island bases**: five tropical islands, each a base with a runway, hangars, control tower, flak and a flag — two HQs, two defence islands and a neutral centre. Spawn from any island you own (hangar → «ВЫЛЕТ С») and land on its runway to rearm. Bases have health: bomb an enemy base to 0%, then fly inside its ring below 700 m to capture it. Owning all five islands wins the match. Cities at the map edges are scenery.
 
 **Easier attacks**: player bullets hit more easily, rockets and bombs have bigger blasts, gun auto-aim also tracks ships, costs 1000 CR at level 2 and is available on more jets.
 

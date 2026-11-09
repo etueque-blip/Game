@@ -260,6 +260,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
   <button class="btn y sel2" id="bLoad"></button><button class="btn sel2" id="bPaint"></button>
   <div id="upgs" style="display:flex;flex-direction:column;gap:.45rem"></div>
   <div class="wtxt" id="wtxt"></div>
+  <button class="btn sel2" id="bSpawn"></button>
   <button class="btn g" id="launch">ВЫЛЕТ</button>
  </div>
 </section>
@@ -314,10 +315,12 @@ const SAVE_KEY='carrierstrike.v1';
 const IS_TOUCH=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 let save={cr:1500,pts:0,xp:null,mods:{},owned:['a4'],upg:{},loadout:{},paint:{},sel:'a4',m:{k:0,b:0,l:0,done:[]},opt:{}};
 try{const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');if(s){save=Object.assign(save,s);}}catch(e){}
-const OPT0={sound:true,ctrl:'aim',sens:1,invY:false,assist:true,q:IS_TOUCH?2:3,view:0,keys:true,ver:3};
+const OPT0={sound:true,ctrl:'aim',sens:1,invY:false,assist:true,aim:true,q:IS_TOUCH?1:3,view:0,keys:true,ver:4};
 if(save.opt&&save.opt.ver!==2&&save.opt.ver!==3){const o=save.opt;save.opt={sound:o.sound!==false,invY:!!o.invY,assist:o.assist!==false,ctrl:o.mouse?'joy':'aim',q:o.q===0?0:OPT0.q};}
 if(save.opt&&save.opt.ver===2){save.opt.q=Math.max(save.opt.q,OPT0.q);save.opt.ver=3;}
-save.opt=Object.assign({},OPT0,save.opt||{});save.opt.ver=3;
+/* v4: tablets go back to medium graphics (smoother flight); everybody gets the basic aim assist */
+if(save.opt&&save.opt.ver===3){if(IS_TOUCH&&save.opt.q>1)save.opt.q=1;save.opt.aim=true;save.opt.ver=4;}
+save.opt=Object.assign({},OPT0,save.opt||{});save.opt.ver=4;
 save.m=Object.assign({k:0,b:0,l:0,done:[]},save.m||{});
 if(save.xp==null)save.xp=save.pts||0;save.mods=save.mods||{};
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(save));}catch(e){}}
@@ -370,7 +373,7 @@ function addXp(n){const l0=level();save.xp+=n;const l1=level();if(l1>l0)setTimeo
 /* special modules: bought per plane, need a pilot level, can be switched on/off */
 const MODS={
  boost:{n:'Турбо-ускоритель',i:'🚀',d:'Клавиша Y / кнопка ТУРБО: +35% скорости на 5 с, перезарядка 18 с',lvl:2,price:800},
- gunaim:{n:'Автоприцел пушки',i:'🎯',d:'Снаряды сами доворачивают на самолёт или корабль рядом с прицелом (до 1,6 км)',lvl:2,price:1000},
+ gunaim:{n:'Автоприцел ПРО',i:'🎯',d:'В 2 раза сильнее бесплатного: ловит цели дальше от прицела, до 1,6 км',lvl:2,price:1000},
  irauto:{n:'Авто-ИК захват',i:'🔥',d:'ИК-ракеты (AIM-9, Р-73) захватывают в 3 раза быстрее и в широком конусе',lvl:5,price:2500}};
 function modsOf(id){return save.mods[id]||(save.mods[id]={own:[],on:[]});}
 function activeMods(def){const m=save.mods[def.id];const o={};if(m)for(const k of m.on)if((def.mods||[]).includes(k)&&m.own.includes(k))o[k]=true;return o;}
@@ -453,7 +456,13 @@ try{
 }catch(e){hemi.intensity=.95;}
 
 /* water */
-const islands=[[3400,900,900,300],[-3500,-700,820,260],[1500,-2500,560,170],[-2500,3000,800,280],[4300,-2900,620,210]];
+const islands=[[0,8300,950,210],[0,-8300,950,210],[-4300,3100,820,240],[4300,-3100,820,240],[0,0,900,270]];
+/* every island is a base with a runway: [name, short, starting owner, HQ?, runway heading] */
+const BASEDEF=[['ШТАБ СИНИХ','Штаб С','blue',1,0],['ШТАБ КРАСНЫХ','Штаб К','red',1,Math.PI],['ОБОРОНА СИНИХ','Оборона С','blue',0,0],['ОБОРОНА КРАСНЫХ','Оборона К','red',0,Math.PI],['ЦЕНТРАЛЬНЫЙ ОСТРОВ','Центр',null,0,Math.PI/2]];
+const RW={L:760,W:46,H:7,SIDE:150};
+const RWY=islands.map(([ix,iz,r],k)=>{const rot=BASEDEF[k][4],ox=-r*.28,c=Math.cos(rot),sn=Math.sin(rot);return{x:ix+ox*c,z:iz-ox*sn,rot,c,s:sn};});
+function rwyLocal(k,x,z,out){const w=RWY[k],dx=x-w.x,dz=z-w.z;out.x=dx*w.c-dz*w.s;out.z=dx*w.s+dz*w.c;return out;}
+function rwyDist(k,x,z){const l=rwyLocal(k,x,z,{});return Math.hypot(Math.max(Math.abs(l.x)-(RW.W/2+RW.SIDE),0),Math.max(Math.abs(l.z)-(RW.L/2+60),0));}
 const NSHIPS=8;const shipU=[];for(let i=0;i<NSHIPS;i++)shipU.push(new THREE.Vector4(0,0,0,0));
 const ISLALL=islands.map(i=>new THREE.Vector4(i[0],i[1],i[2],0)).concat([[9000,0,1500],[-9000,0,1500]].map(i=>new THREE.Vector4(i[0],i[1],i[2],0)));
 const islU=[];for(let i=0;i<6;i++)islU.push(ISLALL[i].clone());
@@ -517,7 +526,9 @@ function islandH(k,x,z){const [ix,iz,r,ih]=islands[k];const dx=x-ix,dz=z-iz,d=Ma
   const u=1-d/rr;if(u<=0)return u*60+2;
   const n=1+.28*Math.sin(dx*.011+k)*Math.sin(dz*.013-k)+.13*Math.sin(dx*.033+dz*.029+k)+.06*Math.sin(dx*.087-dz*.081);
   const peak=Math.pow(u,1.15)*ih*n,beach=Math.min(1,u/.09);
-  return 2+Math.max(0,peak*beach*beach*(3-2*beach));}
+  const nat=2+Math.max(0,peak*beach*beach*(3-2*beach));
+  /* flatten a strip for the runway, apron and hangars, blending into the hills */
+  const rd=rwyDist(k,x,z);if(rd>=180)return nat;const m=rd/180,sm=m*m*(3-2*m);return RW.H+(nat-RW.H)*sm;}
 (function(){
   /* big tropical islands: smooth terrain coloured by height and slope, palms near the beach, forest higher up, rocks on cliffs */
   const sand=new THREE.Color(0xe2cf98),wet=new THREE.Color(0xb9a578),grass=new THREE.Color(0x5f9a3e),dgrass=new THREE.Color(0x356b2c),rock=new THREE.Color(0x857a6c),lrock=new THREE.Color(0xa59a88),c=new THREE.Color();
@@ -544,12 +555,12 @@ function islandH(k,x,z){const [ix,iz,r,ih]=islands[k];const dx=x-ix,dz=z-iz,d=Ma
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
     const P=g.attributes.position,N=g.attributes.normal,col=[];
     for(let i=0;i<P.count;i++){const hh=P.getY(i),ny=N.getY(i),px=P.getX(i)+x,pz=P.getZ(i)+z,t=(hh-2)/ih,nz=Math.sin(px*.04)*Math.sin(pz*.045)*.5+.5;
-      if(hh<2.6)c.copy(wet);else if(hh<6)c.copy(sand);else if(ny<.72)c.copy(rock).lerp(lrock,nz);else{c.copy(grass).lerp(dgrass,Math.min(1,t*1.4+nz*.35));if(t>.75)c.lerp(lrock,(t-.75)*2.5);}
+      const rdv=rwyDist(k,px,pz);if(rdv<8)c.set(0x8f969c);else if(hh<2.6)c.copy(wet);else if(hh<6)c.copy(sand);else if(ny<.72)c.copy(rock).lerp(lrock,nz);else{c.copy(grass).lerp(dgrass,Math.min(1,t*1.4+nz*.35));if(t>.75)c.lerp(lrock,(t-.75)*2.5);}
       col.push(c.r,c.g,c.b);}
     g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
     const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,envMapIntensity:.4}));m.position.set(x,0,z);m.receiveShadow=true;m.castShadow=true;scene.add(m);
     /* vegetation and rocks sampled on the terrain */
-    for(let i=0;i<900;i++){const a=Math.random()*6.283,d=Math.sqrt(Math.random())*r*.98,px=x+Math.cos(a)*d,pz=z+Math.sin(a)*d,hh=islandH(k,px,pz);if(hh<3)continue;
+    for(let i=0;i<900;i++){const a=Math.random()*6.283,d=Math.sqrt(Math.random())*r*.98,px=x+Math.cos(a)*d,pz=z+Math.sin(a)*d,hh=islandH(k,px,pz);if(hh<3||rwyDist(k,px,pz)<40)continue;
       const e=2,sl=Math.hypot(islandH(k,px+e,pz)-islandH(k,px-e,pz),islandH(k,px,pz+e)-islandH(k,px,pz-e))/(2*e);
       if(sl>.75){if(rn<MAXR&&Math.random()<.5){const s=rnd(2,7);tq.setFromEuler(eu.set(rnd(0,3),rnd(0,3),rnd(0,3)));ts.set(s,s*rnd(.6,1),s);tm.compose(tp.set(px,hh,pz),tq,ts);rocks.setMatrixAt(rn++,tm);}continue;}
       if(hh<26&&pn<MAXP&&Math.random()<.8){const s=rnd(.8,1.3);tq.setFromEuler(eu.set(rnd(-.18,.18),rnd(0,6.28),rnd(-.18,.18)));ts.set(s,s*rnd(.9,1.3),s);tm.compose(tp.set(px,hh-.5,pz),tq,ts);palmT.setMatrixAt(pn,tm);
@@ -558,7 +569,7 @@ function islandH(k,x,z){const [ix,iz,r,ih]=islands[k];const dx=x-ix,dz=z-iz,d=Ma
       else if(hh<8&&rn<MAXR&&Math.random()<.08){const s=rnd(1,3);tq.setFromEuler(eu.set(rnd(0,3),rnd(0,3),rnd(0,3)));ts.set(s,s*.7,s);tm.compose(tp.set(px,hh,pz),tq,ts);rocks.setMatrixAt(rn++,tm);}}
   });
   palmT.count=palmC.count=pn;trees.count=tn;rocks.count=rn;
-  for(const im of[palmT,palmC,trees,rocks]){im.castShadow=true;im.receiveShadow=true;scene.add(im);}
+  for(const im of[palmT,palmC,trees,rocks]){im.castShadow=save.opt.q>=3;im.receiveShadow=true;scene.add(im);}
 })();
 /* ---------- big city islands ---------- */
 const CITIES=[
@@ -640,7 +651,7 @@ function bKey(i,j){return i*100003+j;}
     for(let k=0;k<3;k++){const band=new THREE.Mesh(new THREE.CylinderGeometry(4.1-k*.5,4.5-k*.5,4,12),redM);band.position.y=6+k*10;lh.add(band);}
     const lamp=navLight(0xfff2c0,22);lamp.position.y=37;lh.add(lamp);lh.userData.lamp=lamp;lh.position.set(lx,Math.max(2,cityGround(c,lx,lz)),lz);scene.add(shade(lh));c.lamp=lamp;
   }
-  bld.count=bn;bld.instanceColor.needsUpdate=true;bld.castShadow=true;bld.receiveShadow=true;bld.frustumCulled=false;scene.add(bld);
+  bld.count=bn;bld.instanceColor.needsUpdate=true;bld.castShadow=false;bld.receiveShadow=true;bld.frustumCulled=false;scene.add(bld);
 })();
 function cityH(x,z){
   let h=-99;
@@ -665,24 +676,25 @@ class Particles{
     this.pts=new THREE.Points(g,this.mat);this.pts.frustumCulled=false;scene.add(this.pts);
   }
   emit(x,y,z,vx,vy,vz,life,s0,s1,c0,c1,grav){
-    const i=this.i;this.i=(i+1)%this.max;
+    const i=this.i;this.i=(i+1)%this.max;this.dirty=true;
     this.pos[i*3]=x;this.pos[i*3+1]=y;this.pos[i*3+2]=z;this.vel[i*3]=vx;this.vel[i*3+1]=vy;this.vel[i*3+2]=vz;
     this.age[i]=0;this.life[i]=life;this.s0[i]=s0;this.s1[i]=s1;this.grav[i]=grav||0;
     for(let k=0;k<4;k++){this.c0[i*4+k]=c0[k];this.c1[i*4+k]=c1[k];}
   }
   update(dt){
+    if(!this.dirty&&!this.live)return;this.dirty=false;let live=0;
     for(let i=0;i<this.max;i++){
-      if(this.age[i]>=this.life[i]){this.size[i]=0;continue;}
+      if(this.age[i]>=this.life[i]){this.size[i]=0;continue;}live++;
       const a=this.age[i]+=dt,t=a/this.life[i];
       this.vel[i*3+1]-=this.grav[i]*dt;
       this.pos[i*3]+=this.vel[i*3]*dt;this.pos[i*3+1]+=this.vel[i*3+1]*dt;this.pos[i*3+2]+=this.vel[i*3+2]*dt;
       this.size[i]=this.s0[i]+(this.s1[i]-this.s0[i])*t;
       for(let k=0;k<4;k++)this.col[i*4+k]=this.c0[i*4+k]+(this.c1[i*4+k]-this.c0[i*4+k])*t;
     }
-    const g=this.pts.geometry;g.attributes.position.needsUpdate=true;g.attributes.col.needsUpdate=true;g.attributes.size.needsUpdate=true;
+    this.live=live;const g=this.pts.geometry;g.attributes.position.needsUpdate=true;g.attributes.col.needsUpdate=true;g.attributes.size.needsUpdate=true;
   }
 }
-const smokeP=new Particles(6000,false),fireP=new Particles(3500,true);
+const smokeP=new Particles(save.opt.q>=2?6000:3500,false),fireP=new Particles(save.opt.q>=2?3500:2200,true);
 function smoke(x,y,z,s0,s1,life,v,a,dark){const g=dark?.16:.85;smokeP.emit(x,y,z,rnd(-v,v),rnd(-v,v)+v*.3,rnd(-v,v),life,s0,s1,[g,g,g*1.02,a||.5],[g*1.05,g*1.05,g*1.08,0],0);}
 function fire(x,y,z,s0,s1,life,v){fireP.emit(x,y,z,rnd(-v,v),rnd(-v,v),rnd(-v,v),life,s0,s1,[1.4,1,.45,1],[1,.25,.05,0],0);}
 /* bright flash sprites + a few re-used point lights for explosions */
@@ -1013,58 +1025,96 @@ function updateCivs(dt){
   }
 }
 
-/* ---------- capturable main islands ---------- */
+/* ---------- island bases: runways, health, capture ---------- */
 const ZCOL={blue:0x4f8fd6,red:0xe0584c,none:0xe8e8e8};
-const ZONES=CITIES.map((c,i)=>({id:i,name:c.name,x:c.x,z:c.z,R:2100,ALT:900,prog:0,owner:null,gunCd:0,burst:0,drainT:0,inside:{blue:0,red:0},flag:null,ring:null,top:new V3()}));
+const BASES=islands.map(([ix,iz,r],k)=>{const d=BASEDEF[k],w=RWY[k],hp=d[3]?8000:(d[2]?5000:4000);
+  const b={kind:'base',id:k,name:d[0],short:d[1],start:d[2],hq:!!d[3],x:w.x,z:w.z,rot:w.rot,cx:ix,cz:iz,R:r*1.35,ALT:700,maxhp:hp,hp,owner:d[2],alive:true,prog:d[2]==='blue'?1:d[2]==='red'?-1:0,
+    gunCd:0,burst:0,drainT:0,inside:{blue:0,red:0},pos:new V3(),top:new V3(),flag:null,ring:null};
+  cWorld(b,-(RW.W/2+75),RW.H+10,0,b.pos);cWorld(b,RW.W/2+40,RW.H+42,-120,b.top);return b;});
+const ZONES=BASES;
+function runwayTex(){
+  const W=256,H=4096,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
+  x.fillStyle='#34383d';x.fillRect(0,0,W,H);for(let i=0;i<6000;i++){x.fillStyle='rgba('+(i%2?'255,255,255':'0,0,0')+','+rnd(.02,.06)+')';x.fillRect(rnd(0,W),rnd(0,H),rnd(2,10),rnd(2,10));}
+  x.fillStyle='#e8e8e8';for(let y=260;y<H-260;y+=140)x.fillRect(W/2-3,y,6,70);
+  for(const y0 of[40,H-140])for(let i=0;i<8;i++)x.fillRect(16+i*29,y0,16,100);
+  x.fillRect(6,0,5,H);x.fillRect(W-11,0,5,H);
+  x.fillStyle='#d8d8d8';x.font='bold 90px sans-serif';x.textAlign='center';x.fillText('36',W/2,320);x.save();x.translate(W/2,H-320);x.rotate(Math.PI);x.fillText('18',0,0);x.restore();
+  const t=new THREE.CanvasTexture(c);t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;}
 function buildZones(){
-  for(const z of ZONES){
-    const sg=Math.sign(z.x)||1,fx=z.x-sg*CITIES[z.id].r*.86,fz=z.z,gy=Math.max(3,cityGround(CITIES[z.id],fx,fz));
-    const g=new THREE.Group();g.position.set(fx,gy,fz);
-    const mast=new THREE.Mesh(new THREE.CylinderGeometry(.8,1.4,110,10),mat(0xdedede,{metalness:.6}));mast.position.y=55;g.add(mast);
-    const base=new THREE.Mesh(new THREE.CylinderGeometry(9,11,4,16),mat(0x6a7078));base.position.y=2;g.add(base);
-    const flag=new THREE.Mesh(new THREE.PlaneGeometry(36,22,8,1).translate(18,0,0),new THREE.MeshStandardMaterial({color:ZCOL.none,side:THREE.DoubleSide,roughness:.7}));flag.position.y=96;g.add(flag);
-    const bc=navLight(ZCOL.none,40);bc.position.y=114;g.add(bc);
+  const rtex=runwayTex();
+  for(const b of BASES){
+    const g=new THREE.Group();g.position.set(b.x,RW.H,b.z);g.rotation.y=b.rot;
+    const rw=new THREE.Mesh(new THREE.PlaneGeometry(RW.W,RW.L).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:rtex}));rw.position.y=.15;rw.receiveShadow=true;g.add(rw);
+    const ap=new THREE.Mesh(new THREE.PlaneGeometry(130,300).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({color:0x6c7278}));ap.position.set(-(RW.W/2+75),.12,0);ap.receiveShadow=true;g.add(ap);
+    const tw=new THREE.Mesh(new THREE.PlaneGeometry(20,300).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({color:0x4a4f55}));tw.position.set(-(RW.W/2+10),.13,0);g.add(tw);
+    const hm=mat(0x8c9298,{roughness:.6,metalness:.4}),wall=mat(0xb8bcc0,{roughness:.8}),dark=mat(0x2a2e33);
+    for(let i=0;i<3;i++){const h=new THREE.Mesh(new THREE.CylinderGeometry(18,18,44,16,1,false,0,Math.PI).rotateZ(Math.PI/2).rotateY(Math.PI/2),hm);h.position.set(-(RW.W/2+115),0,-90+i*60);g.add(h);
+      const door=new THREE.Mesh(new THREE.PlaneGeometry(30,14),dark);door.position.set(-(RW.W/2+92.5),7,-90+i*60);door.rotation.y=Math.PI/2;g.add(door);}
+    const tow=new THREE.Mesh(new THREE.BoxGeometry(8,30,8),wall);tow.position.set(-(RW.W/2+60),15,110);g.add(tow);
+    const cab=new THREE.Mesh(new THREE.CylinderGeometry(7,6,6,8),mat(0x18324c,{metalness:.8,roughness:.1}));cab.position.set(-(RW.W/2+60),33,110);g.add(cab);
+    const roof=new THREE.Mesh(new THREE.CylinderGeometry(8,7.5,1.5,8),wall);roof.position.set(-(RW.W/2+60),36.6,110);g.add(roof);
+    for(const sz of[-1,1]){const aa=new THREE.Group();const bs=new THREE.Mesh(new THREE.CylinderGeometry(3.5,4,3,10),mat(0x55606a));bs.position.y=1.5;aa.add(bs);
+      const gun=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,7,6).rotateX(Math.PI/2),dark);gun.position.set(0,4,-3);gun.rotation.x=-.5;aa.add(gun);const gun2=gun.clone();gun2.position.x=1.2;aa.add(gun2);
+      aa.position.set(RW.W/2+40,0,sz*200);g.add(aa);}
+    for(let i=0;i<3;i++){const ft=new THREE.Mesh(new THREE.CylinderGeometry(6,6,8,16),mat(0xd8dadc));ft.position.set(-(RW.W/2+150),4,140+i*16);g.add(ft);}
+    /* flag shows the owner */
+    const mast=new THREE.Mesh(new THREE.CylinderGeometry(.6,1,60,8),mat(0xdedede,{metalness:.6}));mast.position.set(-(RW.W/2+40),30,150);g.add(mast);
+    bake(g,new Set());
+    const flag=new THREE.Mesh(new THREE.PlaneGeometry(22,13,8,1).translate(11,0,0),new THREE.MeshStandardMaterial({color:ZCOL.none,side:THREE.DoubleSide,roughness:.7}));flag.position.set(-(RW.W/2+40),53,150);g.add(flag);
+    const bc=navLight(ZCOL.none,30);bc.position.set(-(RW.W/2+40),62,150);g.add(bc);
+    const ls=[],lc=[];for(let zz=-RW.L/2;zz<=RW.L/2;zz+=40){for(const sx of[-1,1]){ls.push(sx*(RW.W/2+2),.6,zz);lc.push(1.6,1.5,1.2);}}
+    const lg=new THREE.BufferGeometry();lg.setAttribute('position',new THREE.Float32BufferAttribute(ls,3));lg.setAttribute('color',new THREE.Float32BufferAttribute(lc,3));
+    g.add(new THREE.Points(lg,new THREE.PointsMaterial({size:2.2,vertexColors:true,map:GLOWTEX,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false})));
     scene.add(shade(g));
-    const ring=new THREE.Mesh(new THREE.RingGeometry(z.R-60,z.R,128).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:ZCOL.none,transparent:true,opacity:.35,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
-    ring.position.set(z.x,4,z.z);scene.add(ring);
-    z.flag=flag;z.beacon=bc;z.ring=ring;z.top.set(fx,gy+105,fz);z.flagBase=g;
+    const ring=new THREE.Mesh(new THREE.RingGeometry(b.R-50,b.R,128).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:ZCOL.none,transparent:true,opacity:.3,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
+    ring.position.set(b.cx,4,b.cz);scene.add(ring);
+    b.flag=flag;b.beacon=bc;b.ring=ring;b.group=g;
   }
 }
 function zoneColor(z){return z.owner?ZCOL[z.owner]:ZCOL.none;}
+function hitBase(b,pos,m){if(!b.owner||b.hp<=0)return false;cLocal(b,pos,tD);return Math.abs(tD.x+60)<140+m&&Math.abs(tD.z)<RW.L/2+40+m&&pos.y<RW.H+55+m&&pos.y>RW.H-6;}
+function dmgBase(b,a,by,w){
+  if(!b.owner||b.hp<=0||match.over)return;b.hp-=a;if(by&&by.isPlayer)hitMark();
+  if(b.hp<=0){const lost=b.owner;b.hp=0;b.owner=null;b.prog=0;
+    for(let i=0;i<5;i++){tA.copy(b.pos);tA.x+=rnd(-80,80);tA.z+=rnd(-120,120);setTimeout(()=>explosion(tA.clone(),40,false),i*250);}sfx('boom');
+    feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> [БАЗА] <span style="color:'+(lost==='blue'?'var(--blue)':'var(--red)')+'">'+b.name+' УНИЧТОЖЕНА</span>');
+    if(by&&by.team!==lost)award(by,500,400);if(!match.training)T[lost].tickets=Math.max(0,T[lost].tickets-10);
+    if(player&&player.team===lost)toast('Наша база «'+b.short+'» разрушена! Отбейте остров');checkEnd();}
+}
 function updateZones(dt){
   const t=performance.now()/1000;
-  for(const z of ZONES){
+  for(const z of BASES){
     let nb=0,nr=0;
-    for(const p of planes){if(!p.alive||p.state!=='fly'||p.pos.y>z.ALT)continue;if(Math.hypot(p.pos.x-z.x,p.pos.z-z.z)<z.R){if(p.team==='blue')nb++;else nr++;}}
+    for(const p of planes){if(!p.alive||p.state!=='fly'||p.pos.y>z.ALT)continue;if(Math.hypot(p.pos.x-z.cx,p.pos.z-z.cz)<z.R){if(p.team==='blue')nb++;else nr++;}}
     z.inside.blue=nb;z.inside.red=nr;
-    const d=nb-nr;if(d&&!match.over)z.prog=clamp(z.prog+Math.sign(d)*Math.min(3,Math.abs(d))*dt*.045,-1,1);
-    const was=z.owner;
-    if(z.owner==='blue'&&z.prog<=0)z.owner=null;if(z.owner==='red'&&z.prog>=0)z.owner=null;
-    if(!z.owner&&z.prog>=1)z.owner='blue';if(!z.owner&&z.prog<=-1)z.owner='red';
-    if(was!==z.owner){
-      const c=z.owner?(z.owner==='blue'?'var(--blue)':'var(--red)'):'#ccc';
-      feed('<span style="color:'+c+'">◆ '+z.name+': '+(z.owner?(z.owner==='blue'?'ЗАХВАЧЕН СИНИМИ':'ЗАХВАЧЕН КРАСНЫМИ'):'НЕЙТРАЛЬНЫЙ')+'</span>');
-      if(z.owner&&player&&player.alive&&player.team===z.owner&&Math.hypot(player.pos.x-z.x,player.pos.z-z.z)<z.R){save.cr+=300;addXp(200);if(myPilot)myPilot.score+=200;persist();toast('ОСТРОВ '+z.name+' ЗАХВАЧЕН! +300 CR · +200 XP');sfx('beep');}
-      else if(was&&player&&was===player.team)toast('Мы потеряли остров '+z.name+'!');
-    }
-    /* an owned island bleeds the enemy's tickets and defends itself with flak */
-    if(z.owner&&!match.training&&!match.over){z.drainT+=dt;if(z.drainT>=12){z.drainT=0;const en=T[enemyOf(z.owner)];en.tickets=Math.max(0,en.tickets-1);checkEnd();}
-      z.gunCd-=dt;if(z.gunCd<=0){let best=null,bd=2300;for(const p of planes){if(!p.alive||p.team===z.owner||p.state!=='fly')continue;const dd=p.pos.distanceTo(z.top);if(dd<bd){bd=dd;best=p;}}
-        if(best){z.burst++;z.gunCd=z.burst%20===0?2.5:.11;tA.copy(best.pos).addScaledVector(best.vel,bd/850).sub(z.top);const sp=bd*.04;tA.x+=rnd(-sp,sp);tA.y+=rnd(-sp,sp);tA.z+=rnd(-sp,sp);tA.normalize();
-          addBullet(z.top.clone().addScaledVector(tA,6),tA.clone().multiplyScalar(850),z.owner,null,3,2.6);}else z.gunCd=.5;}}
-    /* visuals */
+    /* a destroyed (neutral) island is captured by flying over it */
+    if(!z.owner&&!match.over){const d=nb-nr;if(d)z.prog=clamp(z.prog+Math.sign(d)*Math.min(3,Math.abs(d))*dt*.05,-1,1);else z.prog*=1-dt*.02;
+      if(z.prog>=1||z.prog<=-1){z.owner=z.prog>0?'blue':'red';z.hp=z.maxhp*.35;
+        feed('<span style="color:'+(z.owner==='blue'?'var(--blue)':'var(--red)')+'">◆ '+z.name+': ЗАХВАЧЕН '+(z.owner==='blue'?'СИНИМИ':'КРАСНЫМИ')+'</span>');
+        if(player&&player.alive&&player.team===z.owner&&Math.hypot(player.pos.x-z.cx,player.pos.z-z.cz)<z.R){save.cr+=300;addXp(200);if(myPilot)myPilot.score+=200;persist();toast('ОСТРОВ «'+z.short+'» ЗАХВАЧЕН! +300 CR · +200 XP');sfx('beep');}
+        checkEnd();}}
+    if(z.owner){z.hp=Math.min(z.maxhp,z.hp+z.maxhp*.006*dt);
+      if(!match.training&&!match.over){z.drainT+=dt;if(z.drainT>=20){z.drainT=0;const en=T[enemyOf(z.owner)];en.tickets=Math.max(0,en.tickets-1);checkEnd();}
+        z.gunCd-=dt;if(z.gunCd<=0){let best=null,bd=2300;for(const p of planes){if(!p.alive||p.team===z.owner||p.state!=='fly')continue;const dd=p.pos.distanceTo(z.top);if(dd<bd){bd=dd;best=p;}}
+          if(best){z.burst++;z.gunCd=z.burst%20===0?2.5:.12;tA.copy(best.pos).addScaledVector(best.vel,bd/850).sub(z.top);const sp=bd*.04;tA.x+=rnd(-sp,sp);tA.y+=rnd(-sp,sp);tA.z+=rnd(-sp,sp);tA.normalize();
+            addBullet(z.top.clone().addScaledVector(tA,6),tA.clone().multiplyScalar(850),z.owner,null,3,2.6);}else z.gunCd=.5;}}}
+    if(z.hp<z.maxhp*.4&&z.owner&&Math.random()<dt*3)smoke(z.pos.x+rnd(-60,60),z.pos.y+rnd(0,20),z.pos.z+rnd(-100,100),10,30,4,1.5,.5,true);
     const col=zoneColor(z);
     if(z.flag){z.flag.material.color.setHex(col);z.beacon.material.color.setHex(col);z.ring.material.color.setHex(col);
-      const contested=(nb>0)!==(nr>0)||(nb&&nr);z.ring.material.opacity=contested?.5+.25*Math.sin(t*6):.3;
-      const pos=z.flag.geometry.attributes.position;for(let i=0;i<pos.count;i++){const x=pos.getX(i);pos.setZ(i,Math.sin(x*.2-t*4)*x*.06);}pos.needsUpdate=true;z.flag.rotation.y=Math.sin(t*.3+z.id)*.4;}
+      const contested=!z.owner&&(nb||nr);z.ring.material.opacity=contested?.45+.25*Math.sin(t*6):.28;
+      const pos=z.flag.geometry.attributes.position;for(let i=0;i<pos.count;i++){const x=pos.getX(i);pos.setZ(i,Math.sin(x*.3-t*4)*x*.06);}pos.needsUpdate=true;}
   }
+  /* whoever holds every island wins */
+  if(!match.over&&!match.training){for(const tm of['blue','red'])if(BASES.every(b=>b.owner===tm)){endMatch(tm);break;}}
 }
-function zoneText(z){return z.owner?(z.owner==='blue'?'СИНИЕ':'КРАСНЫЕ'):'НЕЙТР.';}
+function zoneText(z){return z.owner?(z.owner==='blue'?'СИНИЕ':'КРАСНЫЕ')+' '+Math.round(z.hp/z.maxhp*100)+'%':'НЕЙТР.';}
+function spawnPoints(team){const a=[];if(T[team].carrier.alive)a.push({kind:'carrier',ref:T[team].carrier,name:'Авианосец'});for(const b of BASES)if(b.owner===team&&b.hp>0)a.push({kind:'base',ref:b,name:b.short});return a;}
+function homeOf(sp){return sp.kind==='carrier'?{f:sp.ref,x:-8,y:DECK_Y,z0:70,zEnd:-160,acc:1.5,kind:'carrier'}:{f:sp.ref,x:0,y:RW.H,z0:RW.L/2-40,zEnd:-RW.L/2+90,acc:3.5,kind:'base'};}
 function resetMatch(){
   planes.forEach(removePlane);planes=[];missiles.forEach(m=>scene.remove(m.mesh));missiles=[];rockets=[];bombs.forEach(b=>scene.remove(b.mesh));bombs=[];flares=[];bullets=[];sinkers=[];
   player=null;
   match.t=1200;match.salvo=180;match.over=false;match.time=0;
-  for(const z of ZONES){z.prog=0;z.owner=null;z.drainT=0;}
+  for(const b of BASES){b.owner=b.start;b.hp=b.maxhp;b.prog=b.start==='blue'?1:b.start==='red'?-1:0;b.drainT=0;}
   for(const id of ['blue','red']){const t=T[id];t.tickets=100;
     const c=t.carrier;c.hp=c.maxhp;c.alive=true;c.mesh.visible=true;c.mesh.position.y=0;c.mesh.rotation.set(0,c.rot,0);
     t.boats.forEach(b=>{b.hp=b.maxhp;b.alive=true;b.mesh.visible=true;b.mesh.position.copy(b.home);b.mesh.rotation.set(0,b.rot,0);});
@@ -1089,14 +1139,17 @@ function spawnBot(pilot){
   const ids=pilot.role==='f'?['f4e','mig29','j7','mir','fa18','su33','rafale','f35c']:['a4','av8b','f4e','fa18'];
   const def=DEF[ids[Math.floor(Math.random()*ids.length)]];
   const p=newPlane(pilot,def,id,null,pilot.role==='f'?2:0);
-  const c=t.carrier;p.pos.set(c.x+rnd(-300,300),rnd(600,900),c.z+t.dir*rnd(500,900));
-  p.q.setFromAxisAngle(AY,c.rot);p.speed=210;p.thr=.85;p.assist=false;p.shield=4;return p;
+  const sps=spawnPoints(id),sp=sps.length>1&&Math.random()<.6?sps[1+Math.floor(Math.random()*(sps.length-1))]:sps[0];
+  if(sp&&sp.kind==='base'){const b=sp.ref;cWorld(b,rnd(-100,100),rnd(500,800),rnd(-200,200),p.pos);p.q.setFromAxisAngle(AY,b.rot);}
+  else{const c=t.carrier;p.pos.set(c.x+rnd(-300,300),rnd(600,900),c.z+t.dir*rnd(500,900));p.q.setFromAxisAngle(AY,c.rot);}
+  p.speed=210;p.thr=.85;p.assist=false;p.shield=4;return p;
 }
+let spawnSel=0;
 function playerSpawn(def,paint,loadIdx){
-  const t=T[myTeam],c=t.carrier;
-  const p=newPlane(myPilot,def,myTeam,paint,loadIdx);
+  const sps=spawnPoints(myTeam),sp=sps[spawnSel%Math.max(1,sps.length)]||{kind:'carrier',ref:T[myTeam].carrier};
+  const p=newPlane(myPilot,def,myTeam,paint,loadIdx);p.home=homeOf(sp);const h=p.home;
   p.state='cat';p.thr=0;p.assist=save.opt.assist;p.shield=6;
-  cWorld(c,-8,DECK_Y+p.mesh.userData.gearH,70,p.pos);p.q.setFromAxisAngle(AY,c.rot);
+  cWorld(h.f,h.x,h.y+p.mesh.userData.gearH,h.z0,p.pos);p.q.setFromAxisAngle(AY,h.f.rot);
   player=p;aimDir.set(0,0,-1).applyQuaternion(p.q);aimUp.set(0,1,0);return p;
 }
 
@@ -1162,28 +1215,28 @@ function engineFx(p,k,on){
 function updatePlane(p,dt){
   if(p.shield>0&&p.state==='fly')p.shield-=dt;
   for(const k in p.cd)p.cd[k]=Math.max(0,p.cd[k]-dt);
-  const c=T[p.team].carrier;
+  const h=p.home||(p.home=homeOf({kind:'carrier',ref:T[p.team].carrier})),c=h.f,gy=h.y+p.mesh.userData.gearH;
   if(p.state==='cat'){
-    cWorld(c,-8,DECK_Y+p.mesh.userData.gearH,70,p.pos);p.q.setFromAxisAngle(AY,c.rot);p.speed=0;p.vel.set(0,0,0);
+    cWorld(c,h.x,gy,h.z0,p.pos);p.q.setFromAxisAngle(AY,c.rot);p.speed=0;p.vel.set(0,0,0);
     engineFx(p,p.thr>.94?1.4:p.thr,p.thr>.1);p.mesh.userData.gear.visible=true;
-    if(p.thr>.6&&Math.random()<dt*20){tA.set(0,0,1).applyQuaternion(p.q).multiplyScalar(p.def.b.L/2+6).add(p.pos);smoke(tA.x,DECK_Y+1,tA.z,2,9,1.2,4,.25);}
-    if(p.thr>=.94||p.autoGo){p.state='launch';p.launchT=0;p.ab=true;sfx('cat');say('ЗАПУСК');}
+    if(p.thr>.6&&Math.random()<dt*20){tA.set(0,0,1).applyQuaternion(p.q).multiplyScalar(p.def.b.L/2+6).add(p.pos);smoke(tA.x,h.y+1,tA.z,2,9,1.2,4,.25);}
+    if(p.thr>=.94||p.autoGo){p.state='launch';p.launchT=0;p.ab=true;sfx('cat');say(h.kind==='base'?'РАЗБЕГ':'ЗАПУСК');}
     return;
   }
   if(p.state==='launch'){
-    p.launchT+=dt;p.speed=Math.min(p.def.stall*1.7+25,p.speed+(p.def.stall*1.7+25)/1.5*dt);
-    tA.set(0,0,-1).applyQuaternion(p.q);p.vel.copy(tA).multiplyScalar(p.speed);p.pos.addScaledVector(p.vel,dt);p.pos.y=DECK_Y+p.mesh.userData.gearH;
+    p.launchT+=dt;p.speed=Math.min(p.def.stall*1.7+25,p.speed+(p.def.stall*1.7+25)/h.acc*dt);
+    tA.set(0,0,-1).applyQuaternion(p.q);p.vel.copy(tA).multiplyScalar(p.speed);p.pos.addScaledVector(p.vel,dt);p.pos.y=gy;
     engineFx(p,1.6,true);p.mesh.userData.gear.visible=true;
-    if(Math.random()<dt*30){tA.set(0,0,1).applyQuaternion(p.q).multiplyScalar(p.def.b.L/2+4).add(p.pos);smoke(tA.x,DECK_Y+1,tA.z,2,10,1,3,.3);}
+    if(Math.random()<dt*30){tA.set(0,0,1).applyQuaternion(p.q).multiplyScalar(p.def.b.L/2+4).add(p.pos);smoke(tA.x,h.y+1,tA.z,2,10,1,3,.3);}
     camShake=Math.max(camShake,p.isPlayer?.25:0);
     cLocal(c,p.pos,tC);
-    if(tC.z<-160){p.state='fly';p.shield=5;p.grace=3;tQ.setFromAxisAngle(AX,.14);p.q.multiply(tQ);p.thr=1;p.gear=false;say('');if(p.isPlayer){thrTarget=1;aimDir.set(0,0,-1).applyQuaternion(p.q);aimUp.set(0,1,0);rotateAim(0,.16);}}
+    if(tC.z<h.zEnd){p.state='fly';p.shield=5;p.grace=3;tQ.setFromAxisAngle(AX,.14);p.q.multiply(tQ);p.thr=1;p.gear=false;say('');if(p.isPlayer){thrTarget=1;aimDir.set(0,0,-1).applyQuaternion(p.q);aimUp.set(0,1,0);rotateAim(0,.16);}}
     return;
   }
   if(p.state==='deck'){
-    p.speed=Math.max(0,p.speed-45*dt);tA.set(0,0,-1).applyQuaternion(p.q);p.pos.addScaledVector(tA,p.speed*dt);p.pos.y=DECK_Y+p.mesh.userData.gearH;p.vel.set(0,0,0);p.deckT-=dt;
+    p.speed=Math.max(0,p.speed-45*dt);tA.set(0,0,-1).applyQuaternion(p.q);p.pos.addScaledVector(tA,p.speed*dt);p.pos.y=gy;p.vel.set(0,0,0);p.deckT-=dt;
     engineFx(p,.1,false);p.mesh.userData.gear.visible=true;
-    if(p.deckT<=0){rearm(p);cWorld(c,-8,DECK_Y+p.mesh.userData.gearH,70,p.pos);p.q.setFromAxisAngle(AY,c.rot);p.state='cat';p.thr=0;p.speed=0;say('НА КАТАПУЛЬТЕ: НАЖМИТЕ ОГОНЬ ИЛИ ГАЗ НА МАКСИМУМ');p.autoGo=false;if(p.isPlayer)thrTarget=0;}
+    if(p.deckT<=0){rearm(p);cWorld(c,h.x,gy,h.z0,p.pos);p.q.setFromAxisAngle(AY,c.rot);p.state='cat';p.thr=0;p.speed=0;say(h.kind==='base'?'НА ПОЛОСЕ: ГАЗ НА МАКСИМУМ ИЛИ ОГОНЬ':'НА КАТАПУЛЬТЕ: НАЖМИТЕ ОГОНЬ ИЛИ ГАЗ НА МАКСИМУМ');p.autoGo=false;if(p.isPlayer)thrTarget=0;}
     return;
   }
   flyPlane(p,dt);
@@ -1195,6 +1248,8 @@ function rearm(p){applyLoad(p,p.isPlayer?(save.loadout[p.def.id]||0):p.loadIdx);
 function collide(p,dt){
   const y=p.pos.y;if(p.grace>0)p.grace-=dt;
   if(y<1.5){crash(p,'water');return;}
+  for(const b of BASES){if(b.owner!==p.team||b.hp<=0)continue;cLocal(b,p.pos,tC);
+    if(Math.abs(tC.x)<RW.W/2+6&&Math.abs(tC.z)<RW.L/2&&y<RW.H+4){if(p.isPlayer&&p.speed<150&&-p.vel.y<16&&Math.abs(p.bank)<.7&&p.vel.y<4){p.home=homeOf({kind:'base',ref:b});landed(p);return;}}}
   const th=terrainH(p.pos.x,p.pos.z);if(y<th){crash(p,'island');return;}
   for(const id of['blue','red']){
     const c=T[id].carrier;if(!c.alive||(p.grace>0&&id===p.team))continue;
@@ -1202,7 +1257,7 @@ function collide(p,dt){
     if(Math.abs(tC.x)<50&&Math.abs(tC.z)<172&&tC.y<DECK_Y+3.5&&tC.y>-8){
       if(id===p.team&&tC.y>=DECK_Y-.5&&p.isPlayer){
         const vs=-p.vel.y;
-        if(p.speed<150&&vs<16&&Math.abs(p.bank)<.7&&p.vel.y<4){landed(p);return;}
+        if(p.speed<150&&vs<16&&Math.abs(p.bank)<.7&&p.vel.y<4){p.home=homeOf({kind:'carrier',ref:c});landed(p);return;}
       }
       crash(p,'carrier');return;
     }
@@ -1211,9 +1266,9 @@ function collide(p,dt){
   if(y<45)for(const s of civs){if(Math.hypot(s.x-p.pos.x,s.z-p.pos.z)<s.L*.5&&y<(s.L>100?36:10)){crash(p,'ship');return;}}
 }
 function landed(p){
-  p.state='deck';p.deckT=3;p.pos.y=DECK_Y+p.mesh.userData.gearH;p.gear=true;
+  p.state='deck';p.deckT=3;p.pos.y=p.home.y+p.mesh.userData.gearH;p.gear=true;
   tA.set(0,0,-1).applyQuaternion(p.q);tA.y=0;tA.normalize();tQ.setFromUnitVectors(new V3(0,0,-1),tA);p.q.copy(tQ);
-  if(p.isPlayer){say('ПОСАДКА! ПЕРЕЗАРЯДКА...');save.cr+=25;addXp(50);mission('l');persist();toast('Посадка на авианосец +25 CR · +50 XP');sfx('beep');}
+  if(p.isPlayer){say('ПОСАДКА! ПЕРЕЗАРЯДКА...');save.cr+=25;addXp(50);mission('l');persist();toast((p.home.kind==='base'?'Посадка на базу':'Посадка на авианосец')+' +25 CR · +50 XP');sfx('beep');}
 }
 function crash(p,why){
   if(p.shield>0&&why==='water'){p.pos.y=3;tA.set(0,0,-1).applyQuaternion(p.q);tQ.setFromAxisAngle(AX,.3);p.q.multiply(tQ);return;}
@@ -1248,6 +1303,7 @@ function killPlane(p,by,w){
   checkEnd();
 }
 function dmgShip(s,a,by,w){
+  if(s.kind==='base')return dmgBase(s,a*(w==='пушка'?.5:1),by,w);
   if(!s.alive||match.over)return;
   s.hp-=a;if(by&&by.isPlayer)hitMark();
   if(s.kind==='carrier'&&!match.training)T[s.team].tickets=Math.max(0,T[s.team].tickets-a/CARR_HP*50);
@@ -1268,11 +1324,12 @@ function checkEnd(){
 
 /* ---------- ships ---------- */
 function hitShip(s,pos,m){
+  if(s.kind==='base')return hitBase(s,pos,m);
   if(!s.alive)return false;
   if(s.kind==='carrier'){cLocal(s,pos,tD);return Math.abs(tD.x)<50+m&&Math.abs(tD.z)<172+m&&tD.y>-10&&tD.y<DECK_Y+32+m;}
   return Math.hypot(pos.x-s.pos.x,pos.z-s.pos.z)<24+m&&pos.y<32+m&&pos.y>-6;
 }
-function shipTargets(team){const t=T[team];const a=[];t.boats.forEach(b=>{if(b.alive)a.push(b);});if(t.carrier.alive)a.push(t.carrier);return a;}
+function shipTargets(team){const t=T[team];const a=[];t.boats.forEach(b=>{if(b.alive)a.push(b);});if(t.carrier.alive)a.push(t.carrier);for(const b of BASES)if(b.owner===team&&b.hp>0)a.push(b);return a;}
 function updateShips(dt){
   for(const id of['blue','red']){
     const t=T[id],en=T[enemyOf(id)],list=[t.carrier,...t.boats];
@@ -1343,8 +1400,9 @@ function fireGun(p){
   tA.set(0,0,-1).applyQuaternion(p.q);
   const side=(p.ammo%2?1:-1)*1.3;tB.set(side,-.2,-5).applyQuaternion(p.q).add(p.pos);
   tC.copy(tA).multiplyScalar(p.speed+900);
-  if(p.mods&&p.mods.gunaim){const vb=p.speed+900;let best=null,ba=.12;
-    for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;const d=q.pos.distanceTo(p.pos);if(d>1600)continue;
+  const aimLv=p.mods&&p.mods.gunaim?2:(p.isPlayer&&save.opt.aim?1:0);
+  if(aimLv){const vb=p.speed+900;let best=null,ba=aimLv>1?.12:.06;
+    for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;const d=q.pos.distanceTo(p.pos);if(d>(aimLv>1?1600:1100))continue;
       let t=d/vb;tD.copy(q.pos).addScaledVector(q.vel,t);t=tD.distanceTo(p.pos)/vb;tD.copy(q.pos).addScaledVector(q.vel,t);tD.y+=.5*9.8*.6*t*t;tD.sub(p.pos).normalize();
       const a=Math.acos(clamp(tD.dot(tA),-1,1));if(a<ba){ba=a;best=tD.clone();}}
     if(!best)for(const sh of shipTargets(enemyOf(p.team))){const d=sh.pos.distanceTo(p.pos);if(d>1800)continue;tD.copy(sh.pos);tD.y+=sh.kind==='carrier'?14:6;const t=d/vb;tD.y+=.5*9.8*.6*t*t;tD.sub(p.pos).normalize();const a=Math.acos(clamp(tD.dot(tA),-1,1));if(a<ba){ba=a;best=tD.clone();}}
@@ -1487,10 +1545,10 @@ function pickTarget(p){
     for(const q of planes){if(q.team===p.team||!q.alive||q.state!=='fly')continue;const d=q.pos.distanceTo(p.pos);if(d<bd&&d<12000){bd=d;best=q;}}
   }
   /* attackers (and some fighters) go capture islands their team does not hold */
-  const free=ZONES.filter(z=>z.owner!==p.team);
+  const free=BASES.filter(z=>!z.owner);
   if(free.length&&(p.role==='a'?Math.random()<.55:(!best&&Math.random()<.3)||Math.random()<.15)){const z=free.sort((u,v)=>Math.hypot(u.x-p.pos.x,u.z-p.pos.z)-Math.hypot(v.x-p.pos.x,v.z-p.pos.z))[0];
-    a.tgt={kind:'zone',zone:z,pos:new V3(z.x,320,z.z),alive:true};a.rt=rnd(10,18);return;}
-  if(!best){for(const s of grounds){const d=s.pos.distanceTo(p.pos)*(s.kind==='carrier'?1.6:1);if(d<bd){bd=d;best=s;}}}
+    a.tgt={kind:'zone',zone:z,pos:new V3(z.cx,320,z.cz),alive:true};a.rt=rnd(10,18);return;}
+  if(!best){for(const s of grounds){const d=s.pos.distanceTo(p.pos)*(s.kind==='carrier'?1.6:s.kind==='base'?1.2:1);if(d<bd){bd=d;best=s;}}}
   a.tgt=best;
 }
 function botThink(p,dt){
@@ -1500,8 +1558,8 @@ function botThink(p,dt){
   const f=fwdOf(p,tD),tg=a.tgt;let aim=tA,dist=1e9,ang=3,ground=false;
   const passive=match.training&&p.team!==myTeam;
   if(a.egress>0){a.egress-=dt;aim.copy(p.pos).addScaledVector(f,3000);aim.y=Math.max(p.pos.y+900,1300);}
-  else if(tg&&tg.kind==='zone'){const z=tg.zone;if(z.owner===p.team){a.tgt=null;a.rt=0;}
-    const an=Math.atan2(p.pos.z-z.z,p.pos.x-z.x)+.55;aim.set(z.x+Math.cos(an)*z.R*.55,300,z.z+Math.sin(an)*z.R*.55);ground=true;dist=1e9;}
+  else if(tg&&tg.kind==='zone'){const z=tg.zone;if(z.owner){a.tgt=null;a.rt=0;}
+    const an=Math.atan2(p.pos.z-z.cz,p.pos.x-z.cx)+.55;aim.set(z.cx+Math.cos(an)*z.R*.55,Math.max(300,terrainH(z.cx,z.cz)+250),z.cz+Math.sin(an)*z.R*.55);ground=true;dist=1e9;}
   else if(tg){
     ground=tg.kind!=='plane';aim.copy(tg.pos);dist=p.pos.distanceTo(aim);
     if(!ground){aim.addScaledVector(tg.vel,dist/800*a.skill);}
@@ -1626,7 +1684,7 @@ function helpHtml(){
   '<h3>ОРУЖИЕ</h3><div class="leg">'+L('Пробел / ЛКМ','Пушка (целься в оранжевый кружок)')+L('F / ПКМ','Выбранная ракета / бомба')+L('1 – 5','Выбор оружия')+L('R / Tab','Следующее оружие')+L('G','Тепловые ловушки')+'</div>'+
   '<h3>СИСТЕМЫ</h3><div class="leg">'+L('L','Шасси')+L('K','Закрылки')+L('B','Тормоз')+'</div>'+
   '<h3>КАМЕРА И МЕНЮ</h3><div class="leg">'+L('C','Зум прицела')+L('V','Вид: сзади / близко / кабина')+L('M','Карта')+L('H','Подсказки клавиш на экране')+L('Esc / P','Меню и пауза')+'</div>'+
-  '<h3>ОСТРОВА</h3><div style="color:var(--dim)">Два главных острова (Порт-Арка и Новоморск) можно захватить: летайте в кольце ниже 900 м. Свой остров отнимает у врага очки каждые 12 с и стреляет зениткой. За захват: +300 CR и +200 XP.</div>'+
+  '<h3>ОСТРОВА</h3><div style="color:var(--dim)">5 островов-баз с полосами: 2 штаба, 2 острова обороны и центральный. С любого своего острова можно вылететь (ангар → «ВЫЛЕТ С») и сесть на его полосу для перезарядки. Чтобы забрать вражеский остров: разбейте базу до 0% (бомбы, ракеты, пушка), затем летайте в кольце ниже 700 м. Центр нейтральный — кто первый захватит. Кто захватит все 5 островов — победил. За захват +300 CR и +200 XP, за разрушение базы +500 CR.</div>'+
   '<h3>РАКЕТЫ</h3><div class="leg">'+Object.keys(W).filter(k=>W[k].kind==='aa'||W[k].kind==='ag').map(k=>L(W[k].s,W[k].d+' · захват '+W[k].lock+' с · '+(W[k].range/1000)+' км')).join('')+'</div>'+
   '<div style="color:var(--dim)">Меняйте вооружение в ангаре кнопкой «КОНФИГУРАЦИЯ». Ракете нужен захват: держите цель в прицеле, пока не появится «ЗАХВАТ ЦЕЛИ». Геймпад: левый стик — полёт, RT — пушка, RB — ракета, A — смена оружия, LB — ловушки, Start — меню. На телефоне: тяга слева, перетаскивание по экрану — штурвал.</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
 }
@@ -1724,6 +1782,7 @@ function renderHangar(){
     '<div class="mhd">СПЕЦМОДУЛИ</div>'+(d.mods.length?d.mods.map(k=>{const M=MODS[k],m=modsOf(d.id),own=m.own.includes(k),on=m.on.includes(k),lk=level()<M.lvl;
       return '<div class="mod'+(on?' on':'')+'"><div><b>'+M.i+' '+M.n+'</b><small>'+M.d+'</small></div><button class="btn'+(lk?' d':own?(on?' g':''):' y')+'" data-m="'+k+'">'+(lk?'🔒 УР.'+M.lvl:own?(on?'ВКЛ':'ВЫКЛ'):M.price+' CR')+'</button></div>';}).join(''):'<div class="mod"><small>У этого самолёта нет спецмодулей. Автоприцел и авто-ИК есть на дорогих истребителях.</small></div>');
   $('#wtxt').innerHTML='ПУШКА '+d.gun+' x'+d.ammo+loadWeps(d,li).map((w,i)=>'<br>'+(i+1)+'. '+W[w.id].n+' x'+w.n+' <span style="color:var(--dim)">— '+W[w.id].d+'</span>').join('')+'<br>ЛОВУШКИ '+d.flares;
+  {const sps=spawnPoints(myTeam);if(spawnSel>=sps.length)spawnSel=0;$('#bSpawn').textContent='ВЫЛЕТ С: '+(sps[spawnSel]?sps[spawnSel].name.toUpperCase():'—')+'  >';}
   const L=$('#launch');L.textContent=own?'ВЫЛЕТ':level()<d.lvl?'🔒 НУЖЕН УРОВЕНЬ '+d.lvl:'КУПИТЬ  '+d.price+' CR';
   {const l=level(),a=LVL[l-1],b=LVL[l];$('#pname').innerHTML='Вы · '+(myTeam==='blue'?'СИНИЕ':'КРАСНЫЕ')+' · <span style="color:var(--yellow)">УРОВЕНЬ '+l+'</span>'+(b?' <small style="color:var(--dim)">('+save.xp+'/'+b+' XP)</small>':' <small>MAX</small>');}
   const nxt=DEFS.filter(x=>!save.owned.includes(x.id)).sort((a,b)=>a.price-b.price)[0];
@@ -1744,6 +1803,7 @@ $('#upgs').addEventListener('click',e=>{
   const k=e.target.dataset.u;if(!k)return;const u=upgOf(save.sel);
   if(!save.owned.includes(save.sel))return toast('Сначала купите самолёт');
   if(u[k]>=5)return;if(save.cr<400)return toast('Не хватает кредитов');save.cr-=400;u[k]++;persist();renderHangar();});
+$('#bSpawn').onclick=()=>{spawnSel=(spawnSel+1)%Math.max(1,spawnPoints(myTeam).length);renderHangar();};
 $('#launch').onclick=()=>{
   audioInit();const d=DEF[save.sel];
   if(!save.owned.includes(d.id)){if(level()<d.lvl)return toast('Этот самолёт открывается на уровне пилота '+d.lvl);if(save.cr<d.price)return toast('Нужно '+d.price+' CR');save.cr-=d.price;save.owned.push(d.id);persist();toast('Куплено: '+d.name);renderHangar();return;}
@@ -1751,7 +1811,7 @@ $('#launch').onclick=()=>{
   if(preview){scene.remove(preview);preview=null;}
   if(myPilot.plane)removePlane(myPilot.plane);
   playerSpawn(d,PAINTS[save.paint[d.id]||0][1],save.loadout[d.id]||0);
-  camQ.copy(player.q);show('hud');say('НА КАТАПУЛЬТЕ: НАЖМИТЕ ОГОНЬ ИЛИ ГАЗ НА МАКСИМУМ');thrTarget=0;kb.x=kb.y=kb.yaw=0;lockMouse();
+  camQ.copy(player.q);show('hud');say(player.home.kind==='base'?'НА ПОЛОСЕ: ГАЗ НА МАКСИМУМ ИЛИ ОГОНЬ':'НА КАТАПУЛЬТЕ: НАЖМИТЕ ОГОНЬ ИЛИ ГАЗ НА МАКСИМУМ');thrTarget=0;kb.x=kb.y=kb.yaw=0;lockMouse();
 };
 $('#joinB').onclick=()=>{audioInit();setTeam('blue');toHangar();};
 $('#joinR').onclick=()=>{audioInit();setTeam('red');toHangar();};
@@ -1910,7 +1970,7 @@ function openMore(){
   const B=(id,t,v)=>'<button class="btn" id="'+id+'">'+t+'<i>'+v+'</i></button>';
   showModal('<h2>'+(inGame?'⏸ ПАУЗА':'⚙ НАСТРОЙКИ')+'</h2>'+
    (inGame?'<div class="stat"><span>Очки: '+(myPilot?myPilot.score:0)+'</span><span>Кредиты: '+save.cr+'</span><span style="color:var(--blue)">Синие '+Math.round(T.blue.tickets)+'</span><span style="color:var(--red)">Красные '+Math.round(T.red.tickets)+'</span></div><button class="btn g" onclick="closeModal()">▶ ПРОДОЛЖИТЬ</button>':'')+
-   '<h3>УПРАВЛЕНИЕ</h3><div class="opt">'+B('mCtrl','Мышь',C[save.opt.ctrl])+B('mSens','Чувствительность',S[save.opt.sens]||'средняя')+B('mInv','Инверсия',save.opt.invY?'вкл':'выкл')+B('mAs','Автокрен',save.opt.assist?'вкл':'выкл')+'</div>'+
+   '<h3>УПРАВЛЕНИЕ</h3><div class="opt">'+B('mCtrl','Мышь',C[save.opt.ctrl])+B('mSens','Чувствительность',S[save.opt.sens]||'средняя')+B('mInv','Инверсия',save.opt.invY?'вкл':'выкл')+B('mAs','Автокрен',save.opt.assist?'вкл':'выкл')+B('mAim','Автоприцел',save.opt.aim?'вкл':'выкл')+'</div>'+
    '<h3>ЭКРАН И ЗВУК</h3><div class="opt">'+B('mQ','Графика',Q[save.opt.q])+B('mView','Камера',VIEWS[save.opt.view])+B('mKeys','Подсказки клавиш',save.opt.keys?'вкл':'выкл')+B('mSnd','Звук',save.opt.sound?'вкл':'выкл')+'</div>'+
    '<div class="opt" style="margin-top:.4rem"><button class="btn y" id="mHelp">⌨ УПРАВЛЕНИЕ</button>'+(inGame?'<button class="btn" id="mHg">✈ В АНГАР</button>':'<button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>')+'</div>');
   const mh=$('#mHg');if(mh)mh.onclick=()=>{closeModal();if(player){removePlane(player);player=null;}toHangar();};
@@ -1918,6 +1978,7 @@ function openMore(){
   $('#mCtrl').onclick=()=>{save.opt.ctrl={aim:'joy',joy:'kb',kb:'aim'}[save.opt.ctrl]||'aim';persist();openMore();};
   $('#mSens').onclick=()=>{save.opt.sens={.6:1,1:1.6,1.6:.6}[save.opt.sens]||1;persist();openMore();};
   $('#mInv').onclick=()=>{save.opt.invY=!save.opt.invY;persist();openMore();};
+  $('#mAim').onclick=()=>{save.opt.aim=!save.opt.aim;persist();openMore();};
   $('#mAs').onclick=()=>{save.opt.assist=!save.opt.assist;if(player)player.assist=save.opt.assist;persist();openMore();};
   $('#mView').onclick=()=>{cycleView();openMore();};
   $('#mKeys').onclick=()=>{save.opt.keys=!save.opt.keys;persist();renderKeys();openMore();};
@@ -1929,7 +1990,7 @@ function drawMap(){
   const c=$('#mapc'),x=c.getContext('2d'),S=700/22000,W=700;x.fillStyle='#0b2a44';x.fillRect(0,0,W,W);
   x.strokeStyle='#ffffff14';x.lineWidth=1;for(let i=0;i<=W;i+=W/11){x.beginPath();x.moveTo(i,0);x.lineTo(i,W);x.stroke();x.beginPath();x.moveTo(0,i);x.lineTo(W,i);x.stroke();}
   const P=(wx,wz)=>[W/2+wx*S,W/2+wz*S];
-  ZONES.forEach(z=>{const[a,b]=P(z.x,z.z);x.strokeStyle=z.owner?(z.owner==='blue'?'#4f8fd6':'#e0584c'):'#e8e8e8';x.lineWidth=3;x.setLineDash([10,6]);x.beginPath();x.arc(a,b,z.R*S,0,7);x.stroke();x.setLineDash([]);});
+  ZONES.forEach(z=>{const[a,b]=P(z.cx,z.cz);x.strokeStyle=z.owner?(z.owner==='blue'?'#4f8fd6':'#e0584c'):'#e8e8e8';x.lineWidth=3;x.setLineDash([10,6]);x.beginPath();x.arc(a,b,z.R*S,0,7);x.stroke();x.setLineDash([]);});
   CITIES.forEach(c=>{const[a,b]=P(c.x,c.z);x.fillStyle='#6f8a5c';x.beginPath();x.arc(a,b,c.r*S*1.05,0,7);x.fill();x.fillStyle='#b9c0c8';x.beginPath();x.arc(a,b,c.r*S*.7,0,7);x.fill();x.fillStyle='#fff';x.font='bold 13px sans-serif';x.textAlign='center';x.fillText(c.name,a,b+c.r*S+14);});
   x.fillStyle='#e8e8e8';civs.forEach(s=>{const[a,b]=P(s.x,s.z);x.beginPath();x.arc(a,b,s.L>100?4:2.5,0,7);x.fill();});
   x.fillStyle='#5f8a52';islands.forEach(i=>{const[a,b]=P(i[0],i[1]);x.beginPath();x.arc(a,b,i[2]*S*1.4,0,7);x.fill();});
@@ -2052,44 +2113,47 @@ const tgPool=[];function tgEl(i){if(!tgPool[i]){const d=document.createElement('
 const rctx=$('#radar').getContext('2d');let slotKey='';
 function fmtT(s){s=Math.max(0,Math.floor(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
 function project(v,out){out.copy(v).project(camera);return out.z<1&&out.z>-1;}
+const _el={};function E(id){return _el[id]||(_el[id]=document.getElementById(id));}
+function setT(id,v){const e=E(id);v=String(v);if(e._t!==v){e._t=v;e.textContent=v;}}
 function updateHud(dt){
-  $('#tkB').textContent=Math.round(T.blue.tickets);$('#tkR').textContent=Math.round(T.red.tickets);
-  $('#clock').textContent=fmtT(match.t);$('#tbB i').style.left=Math.min(94,T.blue.tickets)+'%';$('#tbR i').style.right=Math.min(94,T.red.tickets)+'%';
+  setT('tkB',Math.round(T.blue.tickets));setT('tkR',Math.round(T.red.tickets));
+  setT('clock',fmtT(match.t));$('#tbB i').style.left=Math.min(94,T.blue.tickets)+'%';$('#tbR i').style.right=Math.min(94,T.red.tickets)+'%';
   const mine=T[myTeam],alive=mine.boats.filter(b=>b.alive).length;
   const p=player;
-  {const h=ZONES.map(z=>'<span style="color:'+(z.owner?(z.owner==='blue'?'var(--blue)':'var(--red)'):'#e8e8e8')+'">◆ '+z.name+' '+zoneText(z)+'</span>').join(' · ');if(h!==updateHud.zh){updateHud.zh=h;$('#obj').innerHTML='ОСТРОВА: '+h+' · КАТЕРОВ '+alive;}}
+  {const h=BASES.map(z=>'<span style="color:'+(z.owner?(z.owner==='blue'?'var(--blue)':'var(--red)'):'#e8e8e8')+'">◆ '+z.short+(z.owner?' '+Math.round(z.hp/z.maxhp*100)+'%':'')+'</span>').join(' ');if(h!==updateHud.zh){updateHud.zh=h;E('obj').innerHTML=h+' · <span style="color:var(--dim)">захватите все 5</span>';}}
   feedItems.forEach(f=>f.t-=dt);if(feedItems.length&&feedItems[0].t<=0){feedItems.shift();renderFeed();}
-  $('#dmg').style.opacity=dmgFlash;dmgFlash=Math.max(0,dmgFlash-dt*1.5);$('#hitm').style.opacity=hitFlash;hitFlash=Math.max(0,hitFlash-dt*3);
-  if(state==='dead'){$('#big').textContent='Вас сбил: '+deadBy;$('#warn').textContent='';return;}
+  E('dmg').style.opacity=dmgFlash;dmgFlash=Math.max(0,dmgFlash-dt*1.5);E('hitm').style.opacity=hitFlash;hitFlash=Math.max(0,hitFlash-dt*3);
+  if(state==='dead'){setT('big','Вас сбил: '+deadBy);setT('warn','');return;}
   if(!p)return;
-  $('#aim').style.display=aimMode()&&p.state==='fly'?'':'none';
-  {const bb=$('#boostb');bb.style.display=p.mods.boost?'grid':'none';bb.classList.toggle('on',p.boostT>0);$('#boostc').textContent=p.boostT>0?'АКТИВЕН':p.boostCd>0?Math.ceil(p.boostCd)+' с':'ГОТОВ';
-   const mk=Object.keys(p.mods).join();if(mk!==updateHud.mk){updateHud.mk=mk;$('#modst').innerHTML=Object.keys(p.mods).map(k=>'<span>'+MODS[k].i+' '+MODS[k].n.toUpperCase()+'</span>').join('');}}
+  E('aim').style.display=aimMode()&&p.state==='fly'?'':'none';
+  {const bb=E('boostb');bb.style.display=p.mods.boost?'grid':'none';bb.classList.toggle('on',p.boostT>0);setT('boostc',p.boostT>0?'АКТИВЕН':p.boostCd>0?Math.ceil(p.boostCd)+' с':'ГОТОВ');
+   const mk=Object.keys(p.mods).join();if(mk!==updateHud.mk){updateHud.mk=mk;E('modst').innerHTML=Object.keys(p.mods).map(k=>'<span>'+MODS[k].i+' '+MODS[k].n.toUpperCase()+'</span>').join('');}}
   let hint='';
   if(p.state==='fly'){const c=T[p.team].carrier;if(c.alive){cLocal(c,p.pos,tD);if(Math.hypot(tD.x,tD.z)<2500&&p.pos.y<500){
       hint=!p.gear?'Посадка: выпустите шасси — L':'ПОСАДКА · скорость '+Math.round(p.speed*KT)+' (нужно < '+Math.round(150*KT)+' уз) · снижение '+Math.max(0,Math.round(-p.vel.y))+' (< 16 м/с)';}}
-    for(const z of ZONES){if(Math.hypot(p.pos.x-z.x,p.pos.z-z.z)<z.R){const mine=p.team==='blue'?z.prog:-z.prog,pc=Math.round(Math.max(0,mine)*100);
-      hint=p.pos.y>z.ALT?'◆ '+z.name+': опуститесь ниже '+z.ALT+' м для захвата':(z.owner===p.team?'◆ '+z.name+' наш · защищайте':'◆ ЗАХВАТ '+z.name+': '+pc+'%'+(z.inside[enemyOf(p.team)]?' · враг мешает!':''));}}
+    for(const z of BASES){if(Math.hypot(p.pos.x-z.cx,p.pos.z-z.cz)<z.R){const mine=p.team==='blue'?z.prog:-z.prog,pc=Math.round(Math.max(0,mine)*100),hp=Math.round(z.hp/z.maxhp*100);
+      hint=z.owner===p.team?'◆ '+z.name+' — НАША БАЗА ('+hp+'%) · можно сесть на полосу':z.owner?'◆ '+z.name+': РАЗРУШЬТЕ БАЗУ — '+hp+'% (бомбы, ракеты, пушка)':
+        p.pos.y>z.ALT?'◆ '+z.name+': опуститесь ниже '+z.ALT+' м для захвата':'◆ ЗАХВАТ '+z.name+': '+pc+'%'+(z.inside[enemyOf(p.team)]?' · враг мешает!':'');}}
     if(!hint&&aimMode()&&!isLocked())hint='Кликните по экрану, чтобы управлять мышью · Esc — меню';}
-  $('#hint').textContent=hint;
-  $('#big').textContent=p.shield>0&&p.state==='fly'?'Защита при вылете '+Math.ceil(p.shield):'';
-  const spdKt=Math.round(p.speed*KT);$('#vspd').textContent=String(spdKt).padStart(3,'0');
-  $('#valt').textContent=String(Math.max(0,Math.round(p.pos.y-(p.state==='fly'?0:DECK_Y)))).padStart(5,'0');
-  $('#vg').textContent=p.g.toFixed(1)+' G';$('#vm').textContent='M '+(p.speed/340).toFixed(2);
-  $('#vaoa').textContent='AOA '+(p.stalled?'18.0':(Math.abs(p.inp.y)*8).toFixed(1));$('#vgear').textContent='Шасси: '+(p.gear?'Вниз':'Вверх')+(p.flaps?' · Закр.':'');
-  $('#thrp').textContent=Math.round(p.thr*100)+'%';$('#thrf').style.height=(p.thr*100)+'%';$('#abb').classList.toggle('on',p.ab);
-  $('#hpf').style.width=(p.hp/p.maxhp*100)+'%';$('#hpf').style.background=p.hp/p.maxhp<.3?'var(--red)':'var(--green)';
-  $('#gunn').textContent=p.ammo;$('#flcnt').textContent=p.flares;
+  setT('hint',hint);
+  setT('big',p.shield>0&&p.state==='fly'?'Защита при вылете '+Math.ceil(p.shield):'');
+  const spdKt=Math.round(p.speed*KT);setT('vspd',String(spdKt).padStart(3,'0'));
+  setT('valt',String(Math.max(0,Math.round(p.pos.y-(p.state==='fly'?0:DECK_Y)))).padStart(5,'0'));
+  setT('vg',p.g.toFixed(1)+' G');setT('vm','M '+(p.speed/340).toFixed(2));
+  setT('vaoa','AOA '+(p.stalled?'18.0':(Math.abs(p.inp.y)*8).toFixed(1)));setT('vgear','Шасси: '+(p.gear?'Вниз':'Вверх')+(p.flaps?' · Закр.':''));
+  setT('thrp',Math.round(p.thr*100)+'%');E('thrf').style.height=(p.thr*100)+'%';E('abb').classList.toggle('on',p.ab);
+  E('hpf').style.width=(p.hp/p.maxhp*100)+'%';E('hpf').style.background=p.hp/p.maxhp<.3?'var(--red)':'var(--green)';
+  setT('gunn',p.ammo);setT('flcnt',p.flares);
   const cw=curW(p),cwd=cw?W[cw.id]:null;
-  $('#wname').textContent=cwd?cwd.s:'—';$('#wcnt').textContent=cw?cw.n:0;
+  setT('wname',cwd?cwd.s:'—');setT('wcnt',cw?cw.n:0);
   const k=(p.weps||[]).map(w=>w.id+w.n).join('|')+'|'+p.sel;if(k!==slotKey){slotKey=k;
-    $('#slots').innerHTML=(p.weps||[]).map((w,i)=>{const d=W[w.id],t=d.kind==='aa'?'AA':d.kind==='ag'?'AG':d.kind==='rocket'?'НАР':'БМБ';
+    E('slots').innerHTML=(p.weps||[]).map((w,i)=>{const d=W[w.id],t=d.kind==='aa'?'AA':d.kind==='ag'?'AG':d.kind==='rocket'?'НАР':'БМБ';
       return '<div class="slot '+(d.kind==='aa'?'':'ag ')+(i===p.sel?'sel ':'')+(w.n<=0?'empty':'')+'" data-i="'+i+'"><span class="k">'+t+'</span><span class="n">'+(i+1)+'</span><b>'+d.s+'</b><small>'+d.d+'</small><em>x'+w.n+'</em></div>';}).join('');}
   // warnings
   let w='';if(p.stalled&&p.state==='fly')w='СРЫВ! ДАЙТЕ ГАЗ';
   if(p.state==='fly'){const th=Math.max(0,terrainH(p.pos.x+p.vel.x*3,p.pos.z+p.vel.z*3));if((p.pos.y<150&&p.vel.y<-5)||p.pos.y+p.vel.y*3<th+40)w='ВЫСОТА! ВВЕРХ';}
   for(const m of missiles){if(m.target===p&&m.pos.distanceTo(p.pos)<4000){w='РАКЕТА!';if(Math.floor(performance.now()/250)%2===0)sfx('warn');break;}}
-  $('#warn').textContent=w;
+  setT('warn',w);
   // targets
   let n=0;
   const showT=(pos,col,text,lock)=>{if(n>=14||!project(pos,tC))return;const el=tgEl(n++);el.style.display='';el.className='tg'+(lock?' lk':'');
@@ -2098,12 +2162,12 @@ function updateHud(dt){
   for(const q of planes){if(!q.alive||q.team===p.team||q===p)continue;const d=q.pos.distanceTo(p.pos);if(d>7000)continue;
     showT(q.pos,p.lockT===q&&p.locked?'#ff9a3c':'#e0584c',q.pilot.call+' ('+q.pilot.name+') '+(d/1000).toFixed(1)+' км',p.lockT===q&&p.locked);}
   const ec=T[enemyOf(p.team)];
-  for(const z of ZONES){const zp=tB.set(z.x,250,z.z),d=zp.distanceTo(p.pos);showT(zp,z.owner?(z.owner==='blue'?'#5aa8ff':'#ff6a5a'):'#ffffff','◆ '+z.name+' · '+zoneText(z)+' · '+(d/1000).toFixed(1)+' км');}
+  for(const z of ZONES){const zp=tB.set(z.cx,250,z.cz),d=zp.distanceTo(p.pos);showT(zp,z.owner?(z.owner==='blue'?'#5aa8ff':'#ff6a5a'):'#ffffff','◆ '+z.name+' · '+zoneText(z)+' · '+(d/1000).toFixed(1)+' км');}
   for(const s of [...ec.boats,ec.carrier]){if(!s.alive)continue;const d=s.pos.distanceTo(p.pos);if(d>11000)continue;const lk=p.lockT===s&&p.locked;showT(s.pos,lk?'#ff9a3c':'#ffb347',(s.kind==='carrier'?'АВИАНОСЕЦ ':'КАТЕР ')+(d/1000).toFixed(1)+' км · '+fmtT(d/Math.max(p.speed,60)),lk);}
   if(cw&&cw.id==='bomb'&&p.state==='fly'){const t=(p.vel.y+Math.sqrt(p.vel.y*p.vel.y+19.6*Math.max(p.pos.y,1)))/9.8;tA.copy(p.pos).addScaledVector(p.vel,t);tA.y=0;showT(tA,'#ffffff','ПАДЕНИЕ');}
   for(let i=n;i<tgPool.length;i++)tgPool[i].style.display='none';
   drawRadar(p);
-  $('#msg').textContent=p.state==='fly'?(p.locked?'ЗАХВАТ ЦЕЛИ · '+(cwd?cwd.s:''):''):msgText;
+  setT('msg',p.state==='fly'?(p.locked?'ЗАХВАТ ЦЕЛИ · '+(cwd?cwd.s:''):''):msgText);
 }
 function drawRadar(p){
   const W=260,R=W/2-4,range=10000,C=W/2;rctx.clearRect(0,0,W,W);
@@ -2117,7 +2181,7 @@ function drawRadar(p){
   const dot=(wx,wz,s,col,tri)=>{const dx=wx-p.pos.x,dz=wz-p.pos.z;let a=(dx*-nz+dz*nx),b=-(dx*nx+dz*nz);const d=Math.hypot(a,b);if(d>range){a*=range/d;b*=range/d;}
     const x=C+a/range*R,y=C+b/range*R;rctx.fillStyle=col;if(tri){rctx.beginPath();rctx.moveTo(x,y-s*.7);rctx.lineTo(x+s*.6,y+s*.5);rctx.lineTo(x-s*.6,y+s*.5);rctx.fill();}else rctx.fillRect(x-s/2,y-s/2,s,s);};
   for(const id of['blue','red']){const t=T[id],col=id==='blue'?'#5aa8ff':'#ff6a5a';[t.carrier,...t.boats].forEach(s=>{if(s.alive)dot(s.pos.x,s.pos.z,s.kind==='carrier'?14:9,col);});}
-  ZONES.forEach(z=>dot(z.x,z.z,18,z.owner?(z.owner==='blue'?'rgba(90,168,255,.6)':'rgba(255,106,90,.6)'):'rgba(230,230,230,.45)'));civs.forEach(s=>dot(s.x,s.z,s.L>100?6:4,'#d8d8d8'));
+  ZONES.forEach(z=>dot(z.cx,z.cz,18,z.owner?(z.owner==='blue'?'rgba(90,168,255,.6)':'rgba(255,106,90,.6)'):'rgba(230,230,230,.45)'));civs.forEach(s=>dot(s.x,s.z,s.L>100?6:4,'#d8d8d8'));
   planes.forEach(q=>{if(q.alive&&q!==p)dot(q.pos.x,q.pos.z,11,q.team==='blue'?'#5aa8ff':'#ff6a5a',true);});
   for(const m of missiles)if(m.target===p)dot(m.pos.x,m.pos.z,6,'#ffffff');
   rctx.fillStyle='#6cff8c';rctx.beginPath();rctx.moveTo(C,C-9);rctx.lineTo(C+6,C+6);rctx.lineTo(C-6,C+6);rctx.fill();
