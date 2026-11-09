@@ -16,6 +16,10 @@
 **HUD**
 - Pitch ladder, heading tape, gun boresight, gun lead pipper with range, missile lock progress, arrows to off-screen enemies and incoming missiles, radar sweep, landing guidance near your carrier.
 
+**World**
+- Four large city islands (Порт-Арка, Новоморск, Сан-Лазаро, Верхнегорск): skyscraper downtowns, streets, hills, harbours with cranes, lighthouses. Buildings are solid — you can crash into them; bots avoid them.
+- Civilian shipping: container ships, tankers, ferries on sea lanes, fishing boats and yachts around the cities, all with wakes. Shown on the map and radar.
+
 **Graphics**
 - Bloom + colour grade post-processing (high quality), environment reflections on metal and glass.
 - New sky with sun disk, sea with ripples, ship foam/wakes, shallow water and surf around islands.
