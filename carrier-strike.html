@@ -178,6 +178,8 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
 #boostb{right:calc(max(12px,env(safe-area-inset-right)) + 23.6rem);top:14rem;width:6.5rem;height:6.5rem;font-size:.9rem;display:none}
 #boostb.on{border-color:var(--orange);color:var(--orange);box-shadow:0 0 1.5rem #ff7a3c88}
 #modst{position:absolute;left:50%;top:6.4rem;transform:translateX(-50%);display:flex;gap:.5rem;font:700 .8rem var(--ui);pointer-events:none}#modst span{background:#0b1c14d0;border:1px solid #ffc94a88;color:var(--yellow);border-radius:.5rem;padding:.15rem .5rem}
+#turnL,#turnR{bottom:1rem;width:7rem;height:7rem;font-size:2.2rem;line-height:1}#turnL{left:calc(50% - 4rem)}#turnR{left:calc(50% + 4.5rem)}
+#turnL small,#turnR small{font-size:.75rem}
 #loopb{right:calc(max(12px,env(safe-area-inset-right)) + 9rem);top:14rem;width:6.5rem;height:6.5rem;font-size:.9rem}
 #rollb{right:calc(max(12px,env(safe-area-inset-right)) + 16.3rem);top:14rem;width:6.5rem;height:6.5rem;font-size:.9rem}
 #flareb{right:max(12px,env(safe-area-inset-right));top:21.2rem;width:7rem;height:7rem;font-size:1.05rem}
@@ -287,6 +289,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
  <button class="hb tap" id="firew"><span id="wname">Ракета</span><small id="wcnt">2</small><kbd class="kk">F</kbd></button>
  <button class="hb tap" id="nextw">СМЕНА<kbd class="kk">R</kbd></button>
  <button class="hb tap" id="boostb">ТУРБО<small id="boostc"></small><kbd class="kk">Y</kbd></button><div id="modst"></div>
+ <button class="hb tap" id="turnL">◀<small>ВЛЕВО</small><kbd class="kk">←</kbd></button><button class="hb tap" id="turnR">▶<small>ВПРАВО</small><kbd class="kk">→</kbd></button>
  <button class="hb tap" id="loopb">ПЕТЛЯ<kbd class="kk">N</kbd></button><button class="hb tap" id="rollb">БОЧКА<kbd class="kk">J</kbd></button>
  <button class="hb tap" id="zoomb">Зум<kbd class="kk">C</kbd></button>
  <button class="hb tap" id="flareb">ЛОВУШКИ <span id="flcnt">30</span><kbd class="kk">G</kbd></button>
@@ -1045,7 +1048,7 @@ function flyPlane(p,dt){
     if(!p.aimCtl){
       const want=Math.abs(sx)<.05?(Math.abs(tA.y)<.9&&Math.abs(sy)<.3?0:bank):sx*1.2;
       let err=want-bank;while(err>Math.PI)err-=6.283;while(err<-Math.PI)err+=6.283;
-      rollIn=Math.abs(sx)>.85?sx:clamp(err*2.5,-1,1);
+      rollIn=p.freeRoll&&Math.abs(sx)>.85?sx:clamp(err*2.5,-1,1);
     }
     /* coordinated turn: banking makes the nose follow */
     const yawW=-(9.8*Math.tan(clamp(bank,-1.2,1.2))/Math.max(p.speed,55))*.85*Math.max(0,tC.y);
@@ -1538,7 +1541,7 @@ function helpHtml(){
   const L=(k,t)=>'<div><i><span class="kbd">'+k+'</span></i><span>'+t+'</span></div>';
   return '<h2>⌨ Управление</h2>'+kbHtml()+
   '<div style="display:flex;gap:1rem;flex-wrap:wrap;font-size:.9rem"><span><span class="dot" style="background:#1f6b3a"></span>Полёт</span><span><span class="dot" style="background:#8a5a12"></span>Двигатель</span><span><span class="dot" style="background:#8a2a22"></span>Оружие</span><span><span class="dot" style="background:#1f4f8a"></span>Системы</span><span><span class="dot" style="background:#5a3a8a"></span>Камера и меню</span></div>'+
-  '<h3>ПОЛЁТ</h3><div class="leg">'+L('Мышь','Прицел: самолёт летит туда, куда вы смотрите')+L('W / S','Нос вниз / вверх')+L('A / D','Крен влево / вправо')+L('Q / E','Рыскание')+L('T','Автокрен вкл/выкл')+L('Y','Турбо-ускоритель (спецмодуль)')+L('N','Мёртвая петля 360°')+L('J / Shift+J','Бочка 360° вправо / влево')+L('Мышь вверх','Держите — самолёт пройдёт петлю')+'</div>'+
+  '<h3>ПОЛЁТ</h3><div class="leg">'+L('Мышь','Прицел: самолёт летит туда, куда вы смотрите')+L('W / S','Нос вниз / вверх')+L('A / D','Крен (можно крутить бочку)')+L('← / →','Ровный поворот без переворота')+L('Q / E','Рыскание')+L('T','Автокрен вкл/выкл')+L('Y','Турбо-ускоритель (спецмодуль)')+L('N','Мёртвая петля 360°')+L('J / Shift+J','Бочка 360° вправо / влево')+L('Мышь вверх','Держите — самолёт пройдёт петлю')+'</div>'+
   '<h3>ДВИГАТЕЛЬ</h3><div class="leg">'+L('Shift / Z','Газ больше / меньше')+L('Колесо','Газ мышью')+L('X','Форсаж')+L('Shift на катапульте','Взлёт')+'</div>'+
   '<h3>ОРУЖИЕ</h3><div class="leg">'+L('Пробел / ЛКМ','Пушка (целься в оранжевый кружок)')+L('F / ПКМ','Выбранная ракета / бомба')+L('1 – 5','Выбор оружия')+L('R / Tab','Следующее оружие')+L('G','Тепловые ловушки')+'</div>'+
   '<h3>СИСТЕМЫ</h3><div class="leg">'+L('L','Шасси')+L('K','Закрылки')+L('B','Тормоз')+'</div>'+
@@ -1686,7 +1689,7 @@ $('#mmSet').onclick=()=>openMore();$('#mmHelp').onclick=()=>showModal(helpHtml()
 $('#mmPrev').onclick=()=>menuPlane(-1);$('#mmNext').onclick=()=>menuPlane(1);
 $('#mapX').onclick=()=>$('#mapOv').hidden=true;
 /* ---------- input ---------- */
-const keys={};const hold={gun:false,wep:false};let thrTarget=0,zoom=false,mouse={x:0,y:0},stick={x:0,y:0,id:null,ox:0,oy:0};
+const keys={};const hold={gun:false,wep:false,tl:false,tr:false};let thrTarget=0,zoom=false,mouse={x:0,y:0},stick={x:0,y:0,id:null,ox:0,oy:0};
 const kb={x:0,y:0,yaw:0};
 let lastDev=IS_TOUCH?'touch':'mouse',weUnlock=false;
 const aimDir=new V3(0,0,-1);
@@ -1721,7 +1724,7 @@ function markKb(){if(!document.body.classList.contains('haskb')){document.body.c
 if(!IS_TOUCH)markKb();
 function renderKeys(){const el=$('#keys');if(!el)return;el.classList.toggle('on',!!save.opt.keys);
   const k=(a,b)=>'<div><b>'+a+'</b><span>'+b+'</span></div>';
-  el.innerHTML=k('W A S D','полёт')+k('Shift / Z','газ')+k('X','форсаж')+k('Пробел','пушка')+k('F','ракета')+k('1-5 / R','оружие')+k('G','ловушки')+k('L','шасси')+k('V / C','камера / зум')+k('N / J','петля / бочка')+k('Y','турбо')+k('M','карта')+k('Esc','меню')+'<span class="h">H — скрыть подсказки</span>';}
+  el.innerHTML=k('W A S D','полёт')+k('← →','ровный поворот')+k('Shift / Z','газ')+k('X','форсаж')+k('Пробел','пушка')+k('F','ракета')+k('1-5 / R','оружие')+k('G','ловушки')+k('L','шасси')+k('V / C','камера / зум')+k('N / J','петля / бочка')+k('Y','турбо')+k('M','карта')+k('Esc','меню')+'<span class="h">H — скрыть подсказки</span>';}
 renderKeys();
 window.addEventListener('keydown',e=>{
   audioInit();markKb();
@@ -1768,7 +1771,7 @@ pad.addEventListener('pointermove',e=>{if(e.pointerId===stick.id){const R=Math.m
 const endPad=e=>{if(e.pointerType==='mouse'){if(e.button===0)hold.gun=false;if(e.button===2)hold.wep=false;return;}if(e.pointerId===stick.id){stick.id=null;stick.x=stick.y=0;stkEl.style.display='none';}};
 pad.addEventListener('pointerup',endPad);pad.addEventListener('pointercancel',endPad);
 function holdBtn(id,k){const b=$(id);b.addEventListener('pointerdown',e=>{audioInit();hold[k]=true;b.setPointerCapture(e.pointerId);e.stopPropagation();});const u=()=>hold[k]=false;b.addEventListener('pointerup',u);b.addEventListener('pointercancel',u);}
-holdBtn('#fireg','gun');holdBtn('#firew','wep');
+holdBtn('#fireg','gun');holdBtn('#firew','wep');holdBtn('#turnL','tl');holdBtn('#turnR','tr');
 $('#slots').addEventListener('click',e=>{const sl=e.target.closest('.slot');if(sl&&player&&sl.dataset.i)player.sel=+sl.dataset.i;});
 $('#nextw').onclick=()=>{if(player)nextWep(player);};
 $('#zoomb').onclick=()=>zoom=!zoom;
@@ -1865,7 +1868,8 @@ function aimSteer(p){
   p.inp.x=roll;p.inp.y=pitch;p.inp.yaw=yaw;
 }
 function controlPlayer(p,dt){
-  let kx=((keys.KeyD||keys.ArrowRight)?1:0)-((keys.KeyA||keys.ArrowLeft)?1:0);
+  let kx=(keys.KeyD?1:0)-(keys.KeyA?1:0);
+  const tc=((hold.tr||keys.ArrowRight)?1:0)-((hold.tl||keys.ArrowLeft)?1:0);
   let ky=((keys.KeyS||keys.ArrowDown)?1:0)-((keys.KeyW||keys.ArrowUp)?1:0);if(save.opt.invY)ky=-ky;
   const kyaw=(keys.KeyE?1:0)-(keys.KeyQ?1:0);
   const ap=(t,v,r)=>v+(t-v)*Math.min(1,dt*r);
@@ -1877,8 +1881,15 @@ function controlPlayer(p,dt){
   else if(lastDev==='pad'){sx=gp.x;sy=gp.y*(save.opt.invY?-1:1);yw=clamp(yw+gp.yaw,-1,1);}
   else if(aimMode()&&p.state==='fly'){aimSteer(p);p.aimCtl=true;sx=p.inp.x;sy=p.inp.y;yw=clamp(p.inp.yaw+kb.yaw,-1,1);}
   else if(save.opt.ctrl==='joy'&&lastDev==='mouse'){const dz=.07;sx=Math.abs(mouse.x)>dz?clamp((mouse.x-Math.sign(mouse.x)*dz)*1.5,-1,1):0;sy=Math.abs(mouse.y)>dz?clamp(-(mouse.y-Math.sign(mouse.y)*dz)*1.5,-1,1):0;if(save.opt.invY)sy=-sy;}
-  if(!p.aimCtl){fwdOf(p,tA);tC.set(0,1,0).applyQuaternion(p.q);if(p.state!=='fly'){aimDir.copy(tA);aimUp.copy(tC);}else{const k=Math.min(1,dt*(kbOn||p.stunt?6:3));aimDir.lerp(tA,k);aimUp.lerp(tC,k);}orthoAim();}
+  if(tc&&p.state==='fly'){fwdOf(p,tA);aimDir.lerp(tA,Math.min(1,dt*6));aimUp.set(0,1,0);orthoAim();}
+  else if(!p.aimCtl){fwdOf(p,tA);tC.set(0,1,0).applyQuaternion(p.q);if(p.state!=='fly'){aimDir.copy(tA);aimUp.copy(tC);}else{const k=Math.min(1,dt*(kbOn||p.stunt?6:3));aimDir.lerp(tA,k);aimUp.lerp(tC,k);}orthoAim();}
   else levelAim(dt);
+  p.freeRoll=!!kx;
+  /* flat turn: buttons or arrow keys bank ~55 degrees, hold altitude, never roll over */
+  if(tc&&p.state==='fly'&&!p.stunt){
+    if(!p.turnHold)p.turnHold=p.pos.y;p.aimCtl=false;p.assist=true;p.freeRoll=false;
+    sx=tc*.85;sy=clamp(.42+(-p.vel.y)*.05+(p.turnHold-p.pos.y)*.006,-.4,1);yw=tc*.25;
+  }else if(p.turnHold){p.turnHold=0;p.assist=save.opt.assist;}
   if(p.stunt){const st=p.stunt;p.aimCtl=false;
     if(st.type==='loop'){sx=clamp(-p.bank*.8,-.3,.3)*(Math.abs(p.bank)<1.4?1:0);sy=1;}else{sx=st.dir;sy=.12;}yw=0;
     if(st.acc>=6.2832||kbOn&&st.t>.4||p.state!=='fly'){p.stunt=null;say('');}else st.t+=dt;}

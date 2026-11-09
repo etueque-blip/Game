@@ -20,6 +20,8 @@
 - Four large city islands (Порт-Арка, Новоморск, Сан-Лазаро, Верхнегорск): skyscraper downtowns, streets, hills, harbours with cranes, lighthouses. Buildings are solid — you can crash into them; bots avoid them.
 - Civilian shipping: container ships, tankers, ferries on sea lanes, fishing boats and yachts around the cities, all with wakes. Shown on the map and radar.
 
+**Flat turns**: ◀ ВЛЕВО / ВПРАВО ▶ buttons and the ←/→ keys bank about 60°, hold altitude and level the wings on release — no roll-overs. The touch stick and gamepad are bank-limited too; free barrel rolls stay on A/D and the БОЧКА button.
+
 **Aerobatics**
 - Full 360° loops and rolls: pull the mouse back (the aim view rolls with you over the top), hold S, or hold A/D (auto-level no longer caps bank).
 - Automatic manoeuvres: N — loop, J / Shift+J — barrel roll; also ПЕТЛЯ / БОЧКА buttons on the HUD.
