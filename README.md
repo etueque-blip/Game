@@ -28,6 +28,11 @@
 
 **Ultra graphics**: new top quality level (2.5× resolution cap, 4096 shadows, stronger bloom), sun lens flare, cloud shadows on the sea, panel lines on the jets, afterburner shock diamonds.
 
+**Pilot levels & special modules**
+- Pilot level 1–10 from XP (kills, ships, carrier landings, missions). Expensive jets need a level to buy.
+- Special modules bought per plane (only on some jets) and switchable on/off in the hangar: Турбо-ускоритель (Y, +35% speed for 5 s, level 2), Автоприцел пушки (bullets steer to a plane near the reticle, level 3), Авто-ИК захват (IR missiles lock 3× faster in a wider cone, level 5).
+- Jets with auto-aim / auto-IR cost more: МиГ-29 3000, F/A-18E 4500, Rafale M 6000, Су-33 6500, F-35C 9000 CR.
+
 **Weapons**
 - Missiles: AIM-9 / Р-73 (heat-seeking, can be decoyed by flares), AIM-120 / Р-77 (radar, long range, ignore flares), AGM-65 Maverick (guided anti-ship), AGM-84 Harpoon (sea-skimming anti-ship), plus rockets and bombs. Russian/Chinese jets get Р-73/Р-77.
 - Five hangar loadouts; select weapons with 1–5, R/Tab or by tapping the weapon cards. Each missile has its own lock time, range and agility.
