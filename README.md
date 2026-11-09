@@ -20,6 +20,12 @@
 - Four large city islands (Порт-Арка, Новоморск, Сан-Лазаро, Верхнегорск): skyscraper downtowns, streets, hills, harbours with cranes, lighthouses. Buildings are solid — you can crash into them; bots avoid them.
 - Civilian shipping: container ships, tankers, ferries on sea lanes, fishing boats and yachts around the cities, all with wakes. Shown on the map and radar.
 
+**Islands & capture**: five large tropical islands (smooth terrain coloured by height and slope, palms, forests, rocks) and two main city islands, Порт-Арка and Новоморск, that can be captured by flying inside the ring below 900 m. An owned island drains enemy tickets every 12 s and fires flak; capturing pays +300 CR / +200 XP. Bots fight over them too.
+
+**Easier attacks**: player bullets hit more easily, rockets and bombs have bigger blasts, gun auto-aim also tracks ships, costs 1000 CR at level 2 and is available on more jets.
+
+**Installable app**: manifest, icons and an offline service worker — add it to the home screen from Safari/Chrome.
+
 **Flat turns**: ◀ ВЛЕВО / ВПРАВО ▶ buttons and the ←/→ keys bank about 60°, hold altitude and level the wings on release — no roll-overs. The touch stick and gamepad are bank-limited too; free barrel rolls stay on A/D and the БОЧКА button.
 
 **Aerobatics**
