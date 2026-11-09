@@ -20,6 +20,14 @@
 - Four large city islands (Порт-Арка, Новоморск, Сан-Лазаро, Верхнегорск): skyscraper downtowns, streets, hills, harbours with cranes, lighthouses. Buildings are solid — you can crash into them; bots avoid them.
 - Civilian shipping: container ships, tankers, ferries on sea lanes, fishing boats and yachts around the cities, all with wakes. Shown on the map and radar.
 
+**Aerobatics**
+- Full 360° loops and rolls: pull the mouse back (the aim view rolls with you over the top), hold S, or hold A/D (auto-level no longer caps bank).
+- Automatic manoeuvres: N — loop, J / Shift+J — barrel roll; also ПЕТЛЯ / БОЧКА buttons on the HUD.
+
+**New aircraft**: F/A-18E Super Hornet, Су-33, Rafale M, F-35C (stealth: enemies need longer to lock on).
+
+**Ultra graphics**: new top quality level (2.5× resolution cap, 4096 shadows, stronger bloom), sun lens flare, cloud shadows on the sea, panel lines on the jets, afterburner shock diamonds.
+
 **Weapons**
 - Missiles: AIM-9 / Р-73 (heat-seeking, can be decoyed by flares), AIM-120 / Р-77 (radar, long range, ignore flares), AGM-65 Maverick (guided anti-ship), AGM-84 Harpoon (sea-skimming anti-ship), plus rockets and bombs. Russian/Chinese jets get Р-73/Р-77.
 - Five hangar loadouts; select weapons with 1–5, R/Tab or by tapping the weapon cards. Each missile has its own lock time, range and agility.
