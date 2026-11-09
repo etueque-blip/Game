@@ -22,6 +22,8 @@
 
 **Island bases**: five tropical islands, each a base with a runway, hangars, control tower, flak and a flag — two HQs, two defence islands and a neutral centre. Spawn from any island you own (hangar → «ВЫЛЕТ С») and land on its runway to rearm. Bases have health: bomb an enemy base to 0%, then fly inside its ring below 700 m to capture it. Owning all five islands wins the match. Cities at the map edges are scenery.
 
+**Missile strikes**: the УДАР button / U key launches three cruise missiles from your nearest base at the enemy base you are facing; they climb out of the silo, cruise high and dive onto it (≈650 damage each, 60 s cooldown). The enemy does the same to you — an on-screen alert shows incoming strikes with count and time to impact, the missiles are marked, and you can shoot them down with the gun (+60 CR). Base flak also fires at them.
+
 **Easier attacks**: player bullets hit more easily, rockets and bombs have bigger blasts, gun auto-aim also tracks ships, costs 1000 CR at level 2 and is available on more jets.
 
 **Installable app**: manifest, icons and an offline service worker — add it to the home screen from Safari/Chrome.
