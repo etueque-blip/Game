@@ -30,6 +30,8 @@
 
 **Main menu**: opens on start — menu panel on the left, your jet on the carrier deck on the right with a slow cinematic camera; arrows (or ←/→) flip through the jets, Enter starts.
 
+**3D aircraft**: lofted airfoil wings, tails and fins (rounded leading edge, thinner tips), leading-edge extensions on modern fighters, pitot tubes, pylons, fin numbers, and moving control surfaces (all-moving tails and rudders follow your inputs).
+
 **Menu showcase**: sunset sky over the sea, a formation of jets flying past with contrails, deck crew around your jet, and three cinematic camera shots with fades.
 
 **Pilot levels & special modules**
