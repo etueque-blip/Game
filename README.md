@@ -28,6 +28,8 @@
 
 **Ultra graphics**: new top quality level (2.5× resolution cap, 4096 shadows, stronger bloom), sun lens flare, cloud shadows on the sea, panel lines on the jets, afterburner shock diamonds.
 
+**Main menu**: opens on start — menu panel on the left, your jet on the carrier deck on the right with a slow cinematic camera; arrows (or ←/→) flip through the jets, Enter starts.
+
 **Pilot levels & special modules**
 - Pilot level 1–10 from XP (kills, ships, carrier landings, missions). Expensive jets need a level to buy.
 - Special modules bought per plane (only on some jets) and switchable on/off in the hangar: Турбо-ускоритель (Y, +35% speed for 5 s, level 2), Автоприцел пушки (bullets steer to a plane near the reticle, level 3), Авто-ИК захват (IR missiles lock 3× faster in a wider cone, level 5).
