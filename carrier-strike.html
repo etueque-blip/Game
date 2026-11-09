@@ -786,7 +786,7 @@ let DECKTEX=null;
 function buildCarrier(team){
   const g=new THREE.Group(),hull=mat(0x6f7b87,{roughness:.75,metalness:.15,envMapIntensity:.5,side:THREE.FrontSide}),grey=mat(0x9aa4ae,{roughness:.7,metalness:.1,envMapIntensity:.45});
   const sh=new THREE.Shape();sh.moveTo(0,165);sh.lineTo(-18,140);sh.lineTo(-34,60);sh.lineTo(-37,-150);sh.lineTo(37,-150);sh.lineTo(34,60);sh.lineTo(18,140);sh.closePath();
-  const hg=new THREE.ExtrudeGeometry(sh,{depth:30,bevelEnabled:false});hg.rotateX(-Math.PI/2);hg.translate(0,-8,0);
+  const hg=new THREE.ExtrudeGeometry(sh,{depth:29.6,bevelEnabled:false});hg.rotateX(-Math.PI/2);hg.translate(0,-8,0);
   g.add(new THREE.Mesh(hg,hull));
   const red=mat(0x7a2a25,{side:THREE.FrontSide});const low=new THREE.Mesh(hg.clone().scale(1.002,.3,1.002),red);low.position.y=-1.5;g.add(low);
   DECKTEX=DECKTEX||deckTexture();
@@ -1984,7 +1984,6 @@ function step(dt){
   updateShips(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateFlares(dt);
   smokeP.update(dt);fireP.update(dt);updateFx(dt);
   if(state==='dead'){deadT-=dt;if(deadT<=0)toHangar();}
-  if(state==='menu'&&preview&&Math.random()<dt*6){const c=T[myTeam].carrier;cWorld(c,-8+rnd(-1,1),DECK_Y+.5,40-rnd(0,60),tA);smoke(tA.x,tA.y,tA.z,1.5,7,2.5,.6,.25);}
   if(state==='side'&&Math.floor(performance.now()/1000)!==renderSide.s){renderSide.s=Math.floor(performance.now()/1000);renderSide();}
 }
 let last=performance.now();
