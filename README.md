@@ -22,6 +22,16 @@
 
 **Island bases**: five tropical islands, each a base with a runway, hangars, control tower, flak and a flag — two HQs, two defence islands and a neutral centre. Spawn from any island you own (hangar → «ВЫЛЕТ С») and land on its runway to rearm. Bases have health: bomb an enemy base to 0%, then fly inside its ring below 700 m to capture it. Owning all five islands wins the match. Cities at the map edges are scenery.
 
+**Latest update**
+- Island bases are full airfields: parallel taxiway, big tiled apron with yellow lead-in lines, open shelters with parked jets, hangars, office blocks, tower and tree clumps.
+- Pressing ВЫЛЕТ opens a map to pick where to spawn (carrier or any island you own).
+- New free F-16C with two-tone grey camouflage, chin intake, bubble canopy, wingtip missiles and drop tanks; hangar shows a description and top speed.
+- First-person cockpit (V): dash, radar and map displays, keypad, head-up glass, canopy bow.
+- Tablet controls: fixed joystick with rudder buttons, throttle ▲/▼ buttons, weapons under the right thumb; speed and altitude tapes on the HUD.
+- Auto-steer (АВТО / I): with the controls released the jet turns onto the nearest enemy and leads it.
+- Takeoff at 150 kt: runway roll follows the throttle, the catapult launches at 150 kt.
+- Sonic boom: vapour cone around Mach 1, a boom, shake and shock ring when you break the barrier.
+
 **Missile strikes**: the УДАР button / U key launches three cruise missiles from your nearest base at the enemy base you are facing; they climb out of the silo, cruise high and dive onto it (≈650 damage each, 60 s cooldown). The enemy does the same to you — an on-screen alert shows incoming strikes with count and time to impact, the missiles are marked, and you can shoot them down with the gun (+60 CR). Base flak also fires at them.
 
 **Easier attacks**: player bullets hit more easily, rockets and bombs have bigger blasts, gun auto-aim also tracks ships, costs 1000 CR at level 2 and is available on more jets.
