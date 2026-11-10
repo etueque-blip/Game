@@ -521,7 +521,12 @@ let ENVTEX=null,CLOUDMAT=null;
 /* ---- optional real 3D models (put files in the site's real/ folder; see README) ---- */
 const REAL={};let REALCFG={},REALCK=null;
 function fitModel(obj,len,cfg,belly){
-  cfg=cfg||{};const hid=cfg.hide||[];if(hid.length){const rm=[];obj.traverse(o=>{if(o.isLight||(o.name&&hid.some(h=>o.name.indexOf(h)>=0)))rm.push(o);});rm.forEach(o=>o.parent&&o.parent.remove(o));}obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
+  cfg=cfg||{};const hid=cfg.hide||[];
+  /* tame downloaded materials: full metal goes black in shadow on tablets, and some bodies are wrongly marked see-through */
+  obj.traverse(o=>{if(!o.isMesh)return;(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(!m||m.userData.fixed)return;m.userData.fixed=1;
+    const glass=/glass|canopy|hud|light|lamp|window/i.test(m.name+' '+o.name+' '+(o.parent&&o.parent.name));
+    if(!glass){if(m.transparent){m.transparent=false;m.depthWrite=true;m.alphaTest=m.map?.4:0;m.opacity=1;}if(m.metalness>.35){m.metalness=.3;m.metalnessMap=null;}if(m.roughness<.35)m.roughness=.45;}
+    if(m.isMeshStandardMaterial){m.envMap=ENVTEX;m.envMapIntensity=glass?1.4:1;}m.needsUpdate=true;});});if(hid.length){const rm=[];obj.traverse(o=>{if(o.isLight||(o.name&&hid.some(h=>o.name.indexOf(h)>=0)))rm.push(o);});rm.forEach(o=>o.parent&&o.parent.remove(o));}obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
   const bb=new THREE.Box3().setFromObject(obj),sz=bb.getSize(new V3()),c=bb.getCenter(new V3());
   if(!cfg.rotY&&sz.x>sz.z*1.15){obj.rotation.y=Math.PI/2;obj.updateMatrixWorld(true);bb.setFromObject(obj);bb.getSize(sz);bb.getCenter(c);}
   const k=(cfg.scale||1)*len/Math.max(sz.z,.001);const w=new THREE.Group();obj.position.sub(c);w.add(obj);w.scale.setScalar(k);
