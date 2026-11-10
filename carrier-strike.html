@@ -381,7 +381,7 @@ if(!save.owned.includes('f16'))save.owned.push('f16');
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(save));}catch(e){}}
 
 /* ---------- vehicle definitions ---------- */
-const PAINTS=[['ЗАВОД',null],['ПУСТЫНЯ',0xb5a077],['КАМУФЛЯЖ',0x5f7a5a],['ЧЁРНЫЙ',0x2b2e33]];
+const PAINTS=[['ЗАВОД',null],['ПУСТЫНЯ',0xb5a077],['КАМУФЛЯЖ',0x5f7a5a],['ЧЁРНЫЙ',0x2b2e33],['СЕРЫЙ ВМФ',0x8d98a3],['СИНИЙ',0x2c4f86],['БЕЛЫЙ',0xe6e9ec],['КРАСНЫЙ',0x9a2a22],['АРКТИКА',0xc9d6df],['ОЛИВА',0x6b6b3a]];
 /* weapons: guided missiles differ in seeker, range, lock time, speed and agility */
 const W={
  aim9:{n:'AIM-9 Сайдвиндер',s:'AIM-9',d:'ИК, ближний бой',kind:'aa',ir:true,range:3500,lock:1,cone:.22,v:640,turn:2.4,dmg:70,cd:1.5,flare:.38,burn:5.5,life:12,len:3,r:.13,col:0xe9edf0},
@@ -512,10 +512,18 @@ function fitModel(obj,len,cfg){
   if(!cfg.rotY&&sz.x>sz.z*1.15){obj.rotation.y=Math.PI/2;obj.updateMatrixWorld(true);bb.setFromObject(obj);bb.getSize(sz);bb.getCenter(c);}
   const k=(cfg.scale||1)*len/Math.max(sz.z,.001);const w=new THREE.Group();obj.position.sub(c);w.add(obj);w.scale.setScalar(k);
   if(cfg.flip)w.rotation.y=Math.PI;if(cfg.y)w.position.y=cfg.y;return w;}
-function applyReal(g,d){
+/* repaint a real model: its texture keeps panel lines and shading, but the colour becomes the chosen paint */
+const PAINTMAT={},NOPAINT=/canopy|glass|cockpit|hud|instr|light|pilot|seat|window|lamp|nozzle|exhaust|engine/i;
+function paintedMat(m,col){
+  const k=m.uuid+'_'+col;if(PAINTMAT[k])return PAINTMAT[k];
+  const n=m.clone();const tint=new THREE.Color(col);n.color=new THREE.Color(1,1,1);
+  const prev=m.onBeforeCompile;n.onBeforeCompile=(sh,r)=>{if(prev&&prev!==THREE.Material.prototype.onBeforeCompile)prev.call(n,sh,r);sh.uniforms.uTint={value:tint};sh.fragmentShader='uniform vec3 uTint;\n'+sh.fragmentShader.replace('#include <map_fragment>',
+    '#include <map_fragment>\n float lum=dot(diffuseColor.rgb,vec3(.299,.587,.114));\n diffuseColor.rgb=uTint*clamp(lum*2.2,.25,1.6);');};
+  n.customProgramCacheKey=()=>'paint';n.needsUpdate=true;return PAINTMAT[k]=n;}
+function applyReal(g,d,paint){
   const keep=g.userData.keepSet;g.children.forEach(o=>{if(o.isMesh&&!keep.has(o)&&!o.userData.fx)o.visible=false;});
   const u=g.userData;if(u.canopy)u.canopy.visible=false;[...(u.ails||[]),...(u.flaps||[])].forEach(a=>a.g.visible=false);(u.stabs||[]).concat(u.rudders||[]).forEach(o=>o.visible=false);
-  const m=REAL[d.id].clone(true);m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material&&!o.material.envMap&&o.material.isMeshStandardMaterial)o.material.envMap=ENVTEX;}});g.add(m);u.real=m;}
+  const m=REAL[d.id].clone(true);m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(paint!=null&&o.material&&!Array.isArray(o.material)&&!o.material.transparent&&!NOPAINT.test(o.name+' '+(o.parent&&o.parent.name)+' '+o.material.name))o.material=paintedMat(o.material,paint);if(o.material&&!o.material.envMap&&o.material.isMeshStandardMaterial)o.material.envMap=ENVTEX;}});g.add(m);u.real=m;}
 function loadRealModels(){
   if(!THREE.GLTFLoader||!/^https?:$/.test(location.protocol))return;
   const ld=new THREE.GLTFLoader();
@@ -986,7 +994,7 @@ function buildJet(d,paint,team,lite){
   [...flames,...cores,...glows].forEach(f=>{f.castShadow=false;f.receiveShadow=false;});
   g.userData.keepSet=new Set([gear,canopy,vcone,...flames,...cores,...glows,...diam]);
   bake(g,new Set([gear,canopy,vcone,...ails.map(a=>a.g),...flaps.map(a=>a.g),...flames,...cores,...glows,...stabs,...rudders]));
-  if(!lite&&REAL[d.id])applyReal(g,d);
+  if(!lite&&REAL[d.id])applyReal(g,d,paint);
   return shade(g);
 }
 function deckTexture(){
