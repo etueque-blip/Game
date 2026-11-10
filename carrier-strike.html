@@ -571,13 +571,16 @@ const water=new THREE.Mesh(new THREE.PlaneGeometry(90000,90000),waterMat);water.
 
 /* islands: noisy terrain with height colours, beaches and trees */
 function islandH(k,x,z){const [ix,iz,r,ih]=islands[k];const dx=x-ix,dz=z-iz,d=Math.hypot(dx,dz);const a=Math.atan2(dz,dx);
-  const rr=r*(1+.12*Math.sin(a*3+k)+.07*Math.sin(a*7+k*2.3)+.035*Math.sin(a*13+k*.7));if(d>=rr*1.1)return -99;
-  const u=1-d/rr;if(u<=0)return u*60+2;
+  const rr=r*(1+.12*Math.sin(a*3+k)+.07*Math.sin(a*7+k*2.3)+.035*Math.sin(a*13+k*.7));
+  /* the airfield sits on a built-up platform: it is solid ground even where it reaches past the natural coastline */
+  const rd0=d<r*1.6?rwyDist(k,x,z):999;
+  if(d>=rr*1.1||1-d/rr<=0){const sea=d>=rr*1.1?-20:(1-d/rr)*60+2;if(rd0>=120)return d>=rr*1.1?-99:sea;const m=rd0/120,sm=m*m*(3-2*m);return RW.H+(sea-RW.H)*sm;}
+  const u=1-d/rr;
   const n=1+.28*Math.sin(dx*.011+k)*Math.sin(dz*.013-k)+.13*Math.sin(dx*.033+dz*.029+k)+.06*Math.sin(dx*.087-dz*.081);
   const peak=Math.pow(u,1.15)*ih*n,beach=Math.min(1,u/.09);
   const nat=2+Math.max(0,peak*beach*beach*(3-2*beach));
   /* flatten a strip for the runway, apron and hangars, blending into the hills */
-  const rd=rwyDist(k,x,z);if(rd>=180)return nat;const m=rd/180,sm=m*m*(3-2*m);return RW.H+(nat-RW.H)*sm;}
+  const rd=rd0;if(rd>=180)return nat;const m=rd/180,sm=m*m*(3-2*m);return RW.H+(nat-RW.H)*sm;}
 (function(){
   /* big tropical islands: smooth terrain coloured by height and slope, palms near the beach, forest higher up, rocks on cliffs */
   const sand=new THREE.Color(0xe2cf98),wet=new THREE.Color(0xb9a578),grass=new THREE.Color(0x5f9a3e),dgrass=new THREE.Color(0x356b2c),rock=new THREE.Color(0x857a6c),lrock=new THREE.Color(0xa59a88),c=new THREE.Color();
@@ -598,9 +601,9 @@ function islandH(k,x,z){const [ix,iz,r,ih]=islands[k];const dx=x-ix,dz=z-iz,d=Ma
   const rocks=new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1,0),new THREE.MeshStandardMaterial({color:0x7d7468,roughness:1,flatShading:true}),MAXR);
   let pn=0,tn=0,rn=0;
   islands.forEach(([x,z,r,ih],k)=>{
-    const RN=34,SN=120,pos=[],idx=[];
-    for(let i=0;i<=RN;i++){const rad=Math.pow(i/RN,.85)*r*1.14;for(let j=0;j<SN;j++){const a=j/SN*6.2832;const px=x+Math.cos(a)*rad,pz=z+Math.sin(a)*rad;let hh=islandH(k,px,pz);if(hh<-60)hh=-14;pos.push(px-x,hh,pz-z);}}
-    for(let i=0;i<RN;i++)for(let j=0;j<SN;j++){const a=i*SN+j,b=i*SN+(j+1)%SN,cc=(i+1)*SN+j,dd=(i+1)*SN+(j+1)%SN;idx.push(a,cc,b,b,cc,dd);}
+    const RN=42,SN=120,pos=[],idx=[];
+    for(let i=0;i<=RN;i++){const rad=Math.pow(i/RN,.85)*r*1.45;for(let j=0;j<SN;j++){const a=j/SN*6.2832;const px=x+Math.cos(a)*rad,pz=z+Math.sin(a)*rad;let hh=islandH(k,px,pz);if(hh<-60)hh=-14;pos.push(px-x,hh,pz-z);}}
+    for(let i=0;i<RN;i++)for(let j=0;j<SN;j++){const a=i*SN+j,b=i*SN+(j+1)%SN,cc=(i+1)*SN+j,dd=(i+1)*SN+(j+1)%SN;idx.push(a,b,cc,b,dd,cc);}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
     const P=g.attributes.position,N=g.attributes.normal,col=[];
     for(let i=0;i<P.count;i++){const hh=P.getY(i),ny=N.getY(i),px=P.getX(i)+x,pz=P.getZ(i)+z,t=(hh-2)/ih,nz=Math.sin(px*.04)*Math.sin(pz*.045)*.5+.5;
@@ -708,7 +711,7 @@ function cityH(x,z){
     const l=bGrid.get(bKey(Math.floor(x/BCELL),Math.floor(z/BCELL)));if(l)for(const b of l){if(x>=b[0]&&x<=b[1]&&z>=b[2]&&z<=b[3])h=Math.max(h,b[4]);}}
   return h;
 }
-function terrainH(x,z){let h=cityH(x,z);for(let k=0;k<islands.length;k++){const [ix,iz,r]=islands[k];if(Math.abs(x-ix)<r*1.2&&Math.abs(z-iz)<r*1.2)h=Math.max(h,islandH(k,x,z));}return h;}
+function terrainH(x,z){let h=cityH(x,z);for(let k=0;k<islands.length;k++){const [ix,iz,r]=islands[k];if(Math.abs(x-ix)<r*1.5&&Math.abs(z-iz)<r*1.5)h=Math.max(h,islandH(k,x,z));}return h;}
 
 /* ---------- particles ---------- */
 class Particles{
@@ -1143,7 +1146,8 @@ function apronTexture(){
 function taxiTexture(){const W=64,H=1024,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#3d4247';x.fillRect(0,0,W,H);
   for(let i=0;i<1500;i++){x.fillStyle='rgba(255,255,255,'+rnd(.02,.05)+')';x.fillRect(rnd(0,W),rnd(0,H),2,2);}x.fillStyle='#e2c23a';x.fillRect(W/2-2,0,4,H);x.fillRect(1,0,2,H);x.fillRect(W-3,0,2,H);
   const t=new THREE.CanvasTexture(c);t.anisotropy=8;return t;}
-let apronTex=null,taxiTex=null;
+let apronTex=null,taxiTex=null,HELITEX=null;
+function helipadTex(){if(HELITEX)return HELITEX;const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.fillStyle='#3d4247';x.fillRect(0,0,256,256);x.strokeStyle='#f0f0f0';x.lineWidth=10;x.beginPath();x.arc(128,128,112,0,7);x.stroke();x.fillStyle='#f0f0f0';x.font='bold 150px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('H',128,136);return HELITEX=new THREE.CanvasTexture(c);}
 function hangarFloorTex(){const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.fillStyle='#b9bec3';x.fillRect(0,0,256,256);
   for(let i=0;i<800;i++){x.fillStyle='rgba(0,0,0,'+rnd(.02,.06)+')';x.fillRect(rnd(0,256),rnd(0,256),rnd(2,12),rnd(2,12));}x.strokeStyle='rgba(0,0,0,.15)';for(let i=0;i<=256;i+=32){x.beginPath();x.moveTo(i,0);x.lineTo(i,256);x.moveTo(0,i);x.lineTo(256,i);x.stroke();}
   x.fillStyle='#e2c23a';x.fillRect(122,0,12,256);return new THREE.CanvasTexture(c);}
@@ -1162,23 +1166,57 @@ function buildZones(){
       const cn2=new THREE.Mesh(new THREE.PlaneGeometry(40,22).rotateX(-Math.PI/2),conc);cn2.position.set(X0-94,.12,zz);g.add(cn2);}
     const ap=new THREE.Mesh(new THREE.PlaneGeometry(230,640).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:apronTex}));ap.position.set(X0-210,.12,0);ap.receiveShadow=true;g.add(ap);
     const steel=mat(0x9aa3ab,{roughness:.5,metalness:.5}),post=mat(0x7d858c,{metalness:.6}),hm=mat(0x8c9298,{roughness:.6,metalness:.4}),wall=mat(0xc9ccd0,{roughness:.8}),dark=mat(0x2a2e33),glassM=mat(0x264a66,{metalness:.8,roughness:.12});
+    /* hardened aircraft shelters: arched concrete bunkers with blast doors, a jet parked inside some of them */
+    const conc2=mat(0x9a9c95,{roughness:.95,metalness:0}),blast=mat(0x6f7568,{roughness:.6,metalness:.5}),inner=mat(0x2a2c2e,{roughness:1});
     const shelterZ=[-270,-160,-50,60];
-    shelterZ.forEach((zz,i)=>{const sx=X0-285;const roof=new THREE.Mesh(new THREE.BoxGeometry(40,1.2,30),steel);roof.position.set(sx,11,zz);roof.rotation.z=.04;g.add(roof);
-      for(const px of[-18,18])for(const pz of[-13,13]){const pp=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,11,6),post);pp.position.set(sx+px,5.5,zz+pz);g.add(pp);}
-      const pad=new THREE.Mesh(new THREE.PlaneGeometry(38,28).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({color:0x4f5458}));pad.position.set(sx,.18,zz);g.add(pad);
-      if(i%2===0&&save.opt.q>0){const id=b.start==='red'?(i?'su33':'mig29'):(i?'f16':'fa18');const j=buildJet(DEF[id],null,b.start||'blue',true),u=j.userData;j.position.set(sx,u.gearH,zz);j.rotation.y=Math.PI/2;
+    shelterZ.forEach((zz,i)=>{const sx=X0-322,D=34,Rr=13;
+      const arch=new THREE.Mesh(new THREE.CylinderGeometry(Rr,Rr,D,22,1,true,0,Math.PI).rotateZ(Math.PI/2),conc2);arch.scale.set(1,.82,1);arch.position.set(sx,0,zz);g.add(arch);
+      const back=new THREE.Mesh(new THREE.CircleGeometry(Rr,22,0,Math.PI).rotateZ(Math.PI/2).rotateY(Math.PI/2),conc2);back.scale.set(1,.82,1);back.position.set(sx-D/2,0,zz);g.add(back);
+      const fl=new THREE.Mesh(new THREE.PlaneGeometry(D,Rr*2).rotateX(-Math.PI/2),inner);fl.position.set(sx,.2,zz);g.add(fl);
+      const fr=new THREE.Mesh(new THREE.BoxGeometry(2.4,1.6,Rr*2+2),conc2);fr.position.set(sx+D/2,Rr*.82,zz);g.add(fr);
+      for(const sz of[-1,1]){const dr=new THREE.Mesh(new THREE.BoxGeometry(1.2,Rr*.8,Rr*.9),blast);dr.position.set(sx+D/2+.6,Rr*.4,zz+sz*Rr*.78);g.add(dr);
+        const jamb=new THREE.Mesh(new THREE.BoxGeometry(3,Rr*.82,2),conc2);jamb.position.set(sx+D/2,Rr*.41,zz+sz*(Rr+.6));g.add(jamb);}
+      const ln=new THREE.Mesh(new THREE.PlaneGeometry(40,.6).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({color:0xe2c23a}));ln.position.set(sx+D/2+20,.17,zz);g.add(ln);
+      if(i%2===0&&save.opt.q>0){const id=b.start==='red'?(i?'su33':'mig29'):(i?'f16':'fa18');const j=buildJet(DEF[id],null,b.start||'blue',true),u=j.userData;j.position.set(sx+2,u.gearH,zz);j.rotation.y=-Math.PI/2;
         u.gear.visible=true;u.strobe.visible=false;[...u.flames,...u.cores,...u.glows].forEach(f=>f.visible=false);g.add(j);}});
     for(let i=0;i<2;i++){const h=new THREE.Mesh(new THREE.CylinderGeometry(22,22,50,18,1,false,0,Math.PI).rotateZ(Math.PI/2).rotateY(Math.PI/2),hm);h.position.set(X0-150-i*55,0,-RW.L/2+40);g.add(h);
       const door=new THREE.Mesh(new THREE.PlaneGeometry(34,17),dark);door.position.set(X0-150-i*55,8.5,-RW.L/2+40+25.1);g.add(door);}
     for(let i=0;i<4;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(34,14,18),wall);bl.position.set(X0-120-i*52,7,RW.L/2-10);g.add(bl);
       for(let f=0;f<3;f++){const wnd=new THREE.Mesh(new THREE.BoxGeometry(34.3,1.6,18.3),glassM);wnd.position.set(X0-120-i*52,3+f*4,RW.L/2-10);g.add(wnd);}}
-    const tow=new THREE.Mesh(new THREE.BoxGeometry(8,30,8),wall);tow.position.set(X0-110,15,-40);g.add(tow);
-    const cab=new THREE.Mesh(new THREE.CylinderGeometry(7,6,6,8),glassM);cab.position.set(X0-110,33,-40);g.add(cab);
-    const roof=new THREE.Mesh(new THREE.CylinderGeometry(8,7.5,1.5,8),wall);roof.position.set(X0-110,36.6,-40);g.add(roof);
-    for(const sz of[-1,1]){const aa=new THREE.Group();const bs=new THREE.Mesh(new THREE.CylinderGeometry(3.5,4,3,10),mat(0x55606a));bs.position.y=1.5;aa.add(bs);
-      const gun=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,7,6).rotateX(Math.PI/2),dark);gun.position.set(0,4,-3);gun.rotation.x=-.5;aa.add(gun);const gun2=gun.clone();gun2.position.x=1.2;aa.add(gun2);
-      aa.position.set(RW.W/2+40,0,sz*200);g.add(aa);}
-    for(let i=0;i<3;i++){const ft=new THREE.Mesh(new THREE.CylinderGeometry(6,6,8,16),mat(0xd8dadc));ft.position.set(X0-330,4,-330+i*16);g.add(ft);}
+    const B=(w,h,d,m,x,y,z,ry)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);if(ry)o.rotation.y=ry;g.add(o);return o;};
+    const C=(rt,rb,h,seg,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),m);o.position.set(x,y,z);g.add(o);return o;};
+    const olive=mat(0x5b6648,{roughness:.8}),sand=mat(0x9c8c62,{roughness:1}),white=mat(0xe6e8ea,{roughness:.5}),red=mat(0xb83a2a),antM=mat(0x444a50,{metalness:.7});
+    /* control tower: two-storey operations block, shaft, flared glass cab with balcony, antennas and beacon */
+    {const tx=X0-130,tz=-400;B(26,9,12,wall,tx,4.5,tz);for(let f=0;f<2;f++)B(26.2,1.4,12.2,glassM,tx,2.6+f*4,tz);B(27,.8,13,dark,tx,9.2,tz);
+      B(7,26,7,wall,tx+6,9+13,tz);for(let f=0;f<5;f++)B(7.2,.8,7.2,glassM,tx+6,12+f*4.5,tz);
+      const cab=new THREE.Mesh(new THREE.CylinderGeometry(7.5,5.5,5,8),glassM);cab.position.set(tx+6,37.5,tz);g.add(cab);
+      C(6,6.2,1.2,8,wall,tx+6,34.4,tz);const bal=new THREE.Mesh(new THREE.TorusGeometry(7.2,.15,4,8),antM);bal.rotation.x=Math.PI/2;bal.position.set(tx+6,35.6,tz);g.add(bal);
+      C(8,8,1,8,wall,tx+6,40.5,tz);C(.25,.25,10,6,antM,tx+4,46,tz+2);C(.18,.18,7,6,antM,tx+8,44.5,tz-2);B(4,.3,.3,antM,tx+4,49,tz+2);
+      const bc=navLight(0xff3020,8);bc.position.set(tx+4,51.5,tz+2);g.add(bc);}
+    /* radar station: white radome plus a rotating search antenna on a lattice mast */
+    {const rx=X0-40,rz=-425;C(4,4,6,12,wall,rx,3,rz);const dome=new THREE.Mesh(new THREE.SphereGeometry(7,20,14,0,Math.PI*2,0,Math.PI*.62),white);dome.position.set(rx,6,rz);g.add(dome);
+      B(10,5,8,wall,rx-24,2.5,rz);for(const[a,c2]of[[-1,-1],[1,-1],[-1,1],[1,1]])C(.25,.25,16,4,antM,rx-24+a*2,13,rz+c2*2);B(5,.4,5,antM,rx-24,21,rz);
+      const rad=new THREE.Group();rad.position.set(rx-24,22,rz);const dish=new THREE.Mesh(new THREE.BoxGeometry(12,3,.4),mat(0xc9ced2,{metalness:.6}));dish.position.set(0,1.8,0);dish.rotation.x=-.25;rad.add(dish);
+      const arm=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,3,6),antM);arm.position.y=.6;rad.add(arm);g.add(rad);b.radar=rad;}
+    /* SAM sites: four-tube launchers behind sandbag rings, plus a radar truck */
+    for(const sz of[-1,1]){const sx2=RW.W/2+62,sz2=sz*120;const ring=new THREE.Mesh(new THREE.TorusGeometry(10,1.3,6,18),sand);ring.rotation.x=Math.PI/2;ring.scale.z=.7;ring.position.set(sx2,.8,sz2);g.add(ring);
+      B(3.2,1.6,8,olive,sx2,1.4,sz2);B(2.8,1.8,2.4,olive,sx2,2.4,sz2-3.2);
+      const rack=new THREE.Group();rack.position.set(sx2,2.6,sz2+1);rack.rotation.x=-.55;for(let k=0;k<4;k++){const tb=new THREE.Mesh(new THREE.CylinderGeometry(.42,.42,6.5,10).rotateX(Math.PI/2),olive);tb.position.set((k%2-.5)*1,Math.floor(k/2)*.95,0);rack.add(tb);}g.add(rack);
+      B(2.4,1.6,5,olive,sx2-6,1.2,sz2+6);const pl=B(2.6,2.2,.2,mat(0x3a4033),sx2-6,3.4,sz2+6);pl.rotation.x=-.3;}
+    for(let i2=0;i2<2;i2++){const ga=new THREE.Group();const bs=new THREE.Mesh(new THREE.CylinderGeometry(3.5,4,3,10),mat(0x55606a));bs.position.y=1.5;ga.add(bs);
+      const gun=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,7,6).rotateX(Math.PI/2),dark);gun.position.set(0,4,-3);gun.rotation.x=-.5;ga.add(gun);const gun2=gun.clone();gun2.position.x=1.2;ga.add(gun2);
+      ga.position.set(RW.W/2+40,0,(i2?1:-1)*240);g.add(ga);const rg=new THREE.Mesh(new THREE.TorusGeometry(6,1,6,14),sand);rg.rotation.x=Math.PI/2;rg.scale.z=.6;rg.position.set(RW.W/2+40,.6,(i2?1:-1)*240);g.add(rg);}
+    /* concrete pillboxes on the perimeter */
+    for(const [px,pz] of[[RW.W/2+70,-330],[RW.W/2+70,330],[X0-350,160],[X0-345,-215]]){C(4,4.6,3.2,6,conc2,px,1.6,pz);B(6,.6,1.2,dark,px,2.2,pz+3.6);C(4.6,4.6,.5,6,conc2,px,3.4,pz);}
+    /* fuel depot behind an earth berm */
+    {const fx=X0-327,fz=-340;for(let k=0;k<4;k++)C(5.5,5.5,9,16,mat(0xd8dadc,{metalness:.3}),fx+(k%2)*13-6,4.5,fz+Math.floor(k/2)*13-6);
+      B(34,2.4,2,sand,fx,1.2,fz-17);B(34,2.4,2,sand,fx,1.2,fz+17);B(2,2.4,34,sand,fx-17,1.2,fz);B(2,2.4,34,sand,fx+17,1.2,fz);}
+    /* fuel trucks on the apron */
+    for(let k=0;k<3;k++){const tx2=X0-150-k*18,tz2=-220+k*7;B(2.6,2.6,3,mat(0xe0e2e4),tx2,1.6,tz2-4.5);const tk=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.4,7,12).rotateX(Math.PI/2),mat(0xb0b6bb,{metalness:.5}));tk.position.set(tx2,2,tz2+.8);g.add(tk);B(2.6,.6,10,dark,tx2,.6,tz2);}
+    /* helipad, windsock and barracks */
+    {const hp=new THREE.Mesh(new THREE.CircleGeometry(14,28).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:helipadTex()}));hp.position.set(X0-50,.2,395);g.add(hp);}
+    {C(.2,.25,8,6,antM,RW.W/2+45,4,330);const sock=new THREE.Mesh(new THREE.ConeGeometry(.9,4,10,1,true).rotateZ(Math.PI/2),mat(0xff7a2a,{side:THREE.DoubleSide}));sock.position.set(RW.W/2+47,7.6,330);g.add(sock);}
+    for(let k=0;k<3;k++){B(30,6,10,mat(0xc2b49a,{roughness:.9}),X0-340,3,300+k*16);B(31,1,11,mat(0x7b4a32),X0-340,6.4,300+k*16);for(let w2=0;w2<6;w2++)B(2,1.4,10.2,glassM,X0-352+w2*5,3.4,300+k*16);}
     /* tree clumps around the airfield */
     for(let c=0;c<8;c++){const cx=X0-330+((c%2)*-140)*(c<4?1:0)+(c>=4?rnd(-300,-60):0),cz=c<4?(c<2?-300:300)+rnd(-40,40):rnd(-300,300)*(c%2?1:-1);
       for(let t=0;t<7;t++){const tr=new THREE.Mesh(new THREE.IcosahedronGeometry(rnd(3.5,5.5),1),mat(0x4f7d3e,{roughness:1,flatShading:true}));tr.scale.y=1.3;tr.position.set(cx+rnd(-14,14),6+rnd(0,2),cz+rnd(-14,14));g.add(tr);
@@ -1196,7 +1234,7 @@ function buildZones(){
       const tl=new THREE.Mesh(new THREE.PlaneGeometry(3,70).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({color:0xe2c23a}));tl.position.set(HX+40,.16,HZ);tl.rotation.y=Math.PI/2;g.add(tl);}
     /* flag shows the owner */
     const mast=new THREE.Mesh(new THREE.CylinderGeometry(.6,1,60,8),mat(0xdedede,{metalness:.6}));mast.position.set(-(RW.W/2+150),30,40);g.add(mast);
-    bake(g,new Set());
+    bake(g,new Set(b.radar?[b.radar]:[]));
     const flag=new THREE.Mesh(new THREE.PlaneGeometry(22,13,8,1).translate(11,0,0),new THREE.MeshStandardMaterial({color:ZCOL.none,side:THREE.DoubleSide,roughness:.7}));flag.position.set(-(RW.W/2+150),53,40);g.add(flag);
     const bc=navLight(ZCOL.none,30);bc.position.set(-(RW.W/2+150),62,40);g.add(bc);
     const ls=[],lc=[];for(let zz=-RW.L/2;zz<=RW.L/2;zz+=40){for(const sx of[-1,1]){ls.push(sx*(RW.W/2+2),.6,zz);lc.push(1.6,1.5,1.2);}}
@@ -1221,6 +1259,7 @@ function dmgBase(b,a,by,w){
 function updateZones(dt){
   const t=performance.now()/1000;
   for(const z of BASES){
+    if(z.radar)z.radar.rotation.y+=dt*(z.owner?1.3:0);
     let nb=0,nr=0;
     for(const p of planes){if(!p.alive||p.state!=='fly'||p.pos.y>z.ALT)continue;if(Math.hypot(p.pos.x-z.cx,p.pos.z-z.cz)<z.R){if(p.team==='blue')nb++;else nr++;}}
     z.inside.blue=nb;z.inside.red=nr;
