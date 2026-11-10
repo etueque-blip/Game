@@ -87,6 +87,7 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 #stk{position:absolute;width:9rem;height:9rem;margin:-4.5rem 0 0 -4.5rem;border-radius:50%;border:2px solid #6cff8c88;background:#10261c44;pointer-events:none;display:none}
 #stk i{position:absolute;left:50%;top:50%;width:3.6rem;height:3.6rem;margin:-1.8rem 0 0 -1.8rem;border-radius:50%;background:#6cff8c66;border:2px solid #6cff8c}
 #hint{position:absolute;left:50%;bottom:17rem;transform:translateX(-50%);font-size:1rem;color:#b8ffc9;text-shadow:0 0 5px #000;white-space:nowrap;pointer-events:none;opacity:.85}
+.spec{display:grid;grid-template-columns:1fr 1fr;gap:.15rem .8rem;margin:.4rem 0;font-size:.78rem}.spec div{display:flex;justify-content:space-between;gap:.4rem;border-bottom:1px solid #ffffff14;padding:.1rem 0}.spec span{color:var(--dim)}.spec b{color:#e9fff0;white-space:nowrap}
 .opt{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
 #joy,#yawL,#yawR,#thrUp,#thrDn{display:none}
 #autob{right:calc(max(12px,env(safe-area-inset-right)) + 16.3rem);top:21.4rem;width:6.5rem;height:6.5rem;font-size:.95rem}#autob.on{border-color:var(--yellow);color:var(--yellow);box-shadow:0 0 1.2rem #ffc94a66}
@@ -220,6 +221,8 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
 #firew{left:calc(max(16px,env(safe-area-inset-left)) + 21rem);bottom:9.5rem;width:9.5rem;height:9.5rem;font-size:1.05rem}
 #nextw{left:calc(max(16px,env(safe-area-inset-left)) + 29rem);bottom:1rem;width:7rem;height:7rem;font-size:.85rem}
 #zoomb{right:max(12px,env(safe-area-inset-right));top:13.5rem;width:7.5rem;height:7.5rem;font-size:.95rem}
+#apsb{right:calc(max(12px,env(safe-area-inset-right)) + 23.6rem);top:21.4rem;width:6.5rem;height:6.5rem;font-size:.95rem;display:none;border-color:#7fc8ff;color:#bfe4ff}
+#apsb.on{box-shadow:0 0 1.4rem #7fc8ff99}
 #boostb{right:calc(max(12px,env(safe-area-inset-right)) + 23.6rem);top:14rem;width:6.5rem;height:6.5rem;font-size:.9rem;display:none}
 #boostb.on{border-color:var(--orange);color:var(--orange);box-shadow:0 0 1.5rem #ff7a3c88}
 #modst{position:absolute;left:50%;top:11.4rem;transform:translateX(-50%);display:flex;gap:.5rem;font:700 .8rem var(--ui);pointer-events:none}#modst span{background:#0b1c14d0;border:1px solid #ffc94a88;color:var(--yellow);border-radius:.5rem;padding:.15rem .5rem}
@@ -340,7 +343,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
  <button class="hb tap" id="fireg">Пушка<small id="gunn">400</small><kbd class="kk">Пробел</kbd></button>
  <button class="hb tap" id="firew"><span id="wname">Ракета</span><small id="wcnt">2</small><kbd class="kk">F</kbd></button>
  <button class="hb tap" id="nextw">СМЕНА<kbd class="kk">R</kbd></button>
- <button class="hb tap" id="boostb">ТУРБО<small id="boostc"></small><kbd class="kk">Y</kbd></button><div id="modst"></div>
+ <button class="hb tap" id="apsb">ПРО<small id="apsc"></small><kbd class="kk">O</kbd></button><button class="hb tap" id="boostb">ТУРБО<small id="boostc"></small><kbd class="kk">Y</kbd></button><div id="modst"></div>
  <button class="hb tap" id="strikeb">УДАР<small id="strikec"></small><kbd class="kk">U</kbd></button><div id="alerts"></div>
  <button class="hb tap" id="turnL">◀<small>ВЛЕВО</small><kbd class="kk">←</kbd></button><button class="hb tap" id="turnR">▶<small>ВПРАВО</small><kbd class="kk">→</kbd></button>
  <button class="hb tap" id="loopb">ПЕТЛЯ<kbd class="kk">N</kbd></button><button class="hb tap" id="rollb">БОЧКА<kbd class="kk">J</kbd></button>
@@ -393,7 +396,7 @@ const W={
  rocket:{n:'Hydra 70 НАР',s:'НАР',d:'Неуправляемые ракеты',kind:'rocket'},
  bomb:{n:'Mk.82 500lb',s:'БОМБА',d:'Свободнопадающая бомба',kind:'bomb'}};
 const LOADS=[['РАКЕТЫ',[['aim9',2],['rocket',38]]],['БОМБЫ',[['aim9',2],['bomb',4]]],['ПВО',[['aim9',4],['aim120',2]]],['ПРОТИВОКОРАБЕЛЬНАЯ',[['aim9',2],['harpoon',2]]],['ТОЧНЫЙ УДАР',[['aim120',2],['agm65',4]]]];
-function loadWeps(def,idx){const ru=def.country==='RUSSIA'||def.country==='CHINA';return (LOADS[idx||0]||LOADS[0])[1].map(([id,n])=>({id:ru&&id==='aim9'?'r73':ru&&id==='aim120'?'r77':id,n}));}
+function loadWeps(def,idx){const ru=def.country==='RUSSIA'||def.country==='CHINA';return (LOADS[idx||0]||LOADS[0])[1].map(([id,n])=>({id:ru&&id==='aim9'?'r73':ru&&id==='aim120'?'r77':id,n:def.bay&&!/^aim/.test(id)?n*def.bay:n}));}
 function applyLoad(p,idx){p.loadIdx=idx||0;p.weps=loadWeps(p.def,p.loadIdx);const aaS=p.weps.find(w=>W[w.id].kind==='aa'),agS=p.weps.find(w=>W[w.id].kind==='rocket'||W[w.id].kind==='bomb');
   p.aa=aaS?aaS.n:0;p.aaId=aaS?aaS.id:'aim9';p.ag=agS?agS.n:0;p.agType=agS?agS.id:(p.weps.some(w=>W[w.id].kind==='ag')?'agm':null);if(p.sel>=p.weps.length)p.sel=0;}
 function curW(p){return p.weps&&(p.weps[p.sel]||p.weps[0]);}
@@ -406,24 +409,34 @@ const DEFS=[
  b:{L:12,R:.9,wing:[6.5,1.8,4.6,3.6,.8,-.2,.03],tail:[2.8,1.2,2.4,1.2,5.2,.35,0],fins:[[0,4.6,2.8,3.2,1.2,2,0]],cz:-1.8,intake:'side',iz:-.6,eng:1}},
 {id:'f4e',name:'F-4E Фантом II',cls:'ИСТРЕБИТЕЛЬ',country:'USA',price:1200,lvl:1,mods:['boost','gunaim'],trait:'МОЩНЫЙ ДВИГАТЕЛЬ',maxSpd:410,thrust:1.2,turn:1,hp:140,stall:68,gun:'M61 20mm',ammo:640,flares:30,color:0x8e979c,camo:0x5e676c,base:[8,7,4,6,5],
  b:{tanks:1,L:19,R:1.15,wing:[8,2.6,6.2,4.2,1.5,-.1,.1],tail:[3.4,1.4,3.4,2,7.6,-.1,-.35],fins:[[0,6.4,3.2,5,2,3,0]],cz:-4,intake:'side',iz:-1.5,eng:2}},
-{id:'av8b',name:'AV-8B Харриер II',cls:'ШТУРМОВИК',country:'USA',price:1800,lvl:1,mods:['gunaim'],trait:'МЕДЛЕННЫЙ СВЕРХ ТОЧНЫЙ',maxSpd:250,thrust:.95,turn:1.25,hp:120,stall:38,gun:'GAU-12 25mm',ammo:300,flares:40,color:0x74808a,camo:0x515c65,base:[3,4,7,4,6],
+{id:'av8b',name:'AV-8B Харриер II',cls:'ШТУРМОВИК',country:'USA',price:1000,lvl:1,mods:['gunaim'],trait:'МЕДЛЕННЫЙ СВЕРХ ТОЧНЫЙ',maxSpd:250,thrust:.95,turn:1.25,hp:120,stall:38,gun:'GAU-12 25mm',ammo:300,flares:40,color:0x74808a,camo:0x515c65,base:[3,4,7,4,6],
  b:{tanks:1,L:14,R:.95,wing:[4.4,2.2,5.2,1.4,1,.5,-.08],tail:[2.4,1.1,2.3,1,5.4,.4,-.15],fins:[[0,5.2,2.6,3,1.2,1.6,0]],cz:-3.3,intake:'side',iz:-1.4,eng:1}},
 {id:'mig29',name:'МиГ-29А «Фулкрум»',cls:'ИСТРЕБИТЕЛЬ',country:'RUSSIA',price:3000,lvl:2,mods:['boost','gunaim'],trait:'МАНЕВРЕННЫЙ',maxSpd:400,thrust:1.25,turn:1.4,hp:120,stall:60,gun:'ГШ-30-1 30mm',ammo:150,flares:30,color:0x9fb0bd,camo:0x6b7f90,base:[8,8,8,6,4],
  b:{tanks:1,lerx:1,L:17,R:1.1,wing:[7.8,2,5.2,3.2,1.2,-.1,.02],tail:[3.2,1.2,2.9,1.8,6.7,.1,-.1],fins:[[1.8,6.2,3.2,3.6,1.5,2,.1],[-1.8,6.2,3.2,3.6,1.5,2,-.1]],cz:-3.5,intake:'under',iz:-1.5,eng:2}},
 {id:'j7',name:'J-7 Лёгкий перехватчик',cls:'ПЕРЕХВАТЧИК',country:'CHINA',price:1500,lvl:1,mods:['boost','gunaim'],trait:'БЫСТРЫЙ ПОДЪЁМ',maxSpd:370,thrust:1.3,turn:1.3,hp:90,stall:64,gun:'Тип 23-2 23mm',ammo:200,flares:24,color:0xbcc5cc,camo:0x8f9aa4,base:[6,8,7,4,3],
  b:{L:13.5,R:.85,wing:[7,1.2,3.6,5.2,1.6,-.1,0],tail:[2.6,1,2.2,1.4,5.4,0,0],fins:[[0,5,2.6,3,1.2,2,0]],cz:-2.4,intake:'nose',iz:0,eng:1}},
-{id:'mir',name:'Мираж 2000',cls:'ПЕРЕХВАТЧИК',country:'OTHER',price:2400,lvl:2,mods:['gunaim'],trait:'ДЕЛЬТА-КРЫЛО',maxSpd:390,thrust:1.15,turn:1.25,hp:95,stall:66,gun:'DEFA 30mm',ammo:250,flares:24,color:0xcbbf9f,camo:0x8f7d5a,base:[7,6,7,5,4],
+{id:'mir',name:'Мираж 2000',cls:'ПЕРЕХВАТЧИК',country:'OTHER',price:2000,lvl:2,mods:['gunaim'],trait:'ДЕЛЬТА-КРЫЛО',maxSpd:390,thrust:1.15,turn:1.25,hp:95,stall:66,gun:'DEFA 30mm',ammo:250,flares:24,color:0xcbbf9f,camo:0x8f7d5a,base:[7,6,7,5,4],
  b:{L:15,R:.9,wing:[9.2,1.2,3.8,7.8,1.4,-.1,0],tail:null,fins:[[0,5.8,3,4.4,1.5,2.4,0]],cz:-2.6,intake:'side',iz:-.9,eng:1}},
-{id:'fa18',name:'F/A-18E Супер Хорнет',cls:'ПАЛУБНЫЙ ИСТРЕБИТЕЛЬ',country:'USA',price:4500,lvl:3,mods:['boost','gunaim'],trait:'УНИВЕРСАЛ: ВЫСОКИЙ УГОЛ АТАКИ',maxSpd:420,thrust:1.25,turn:1.4,hp:150,stall:56,gun:'M61A2 20mm',ammo:578,flares:40,color:0x9aa3ab,camo:0x737c86,base:[7,7,8,7,6],
+{id:'fa18',name:'F/A-18E Супер Хорнет',cls:'ПАЛУБНЫЙ ИСТРЕБИТЕЛЬ',country:'USA',price:4500,lvl:3,mods:['boost','gunaim','aps'],trait:'УНИВЕРСАЛ: ВЫСОКИЙ УГОЛ АТАКИ',maxSpd:420,thrust:1.25,turn:1.4,hp:150,stall:56,gun:'M61A2 20mm',ammo:578,flares:40,color:0x9aa3ab,camo:0x737c86,base:[7,7,8,7,6],
  b:{tanks:1,tipMsl:1,lerx:1,L:18.3,R:1.15,wing:[7.2,2.2,6.8,3.4,.6,-.05,0],tail:[3.2,1.3,3.1,1.8,7,.05,-.05],fins:[[1.5,4.8,3.6,3.6,1.6,2,.35],[-1.5,4.8,3.6,3.6,1.6,2,-.35]],cz:-4.6,intake:'side',iz:-1.4,eng:2}},
-{id:'su33',name:'Су-33 «Фланкер-D»',cls:'ПАЛУБНЫЙ ИСТРЕБИТЕЛЬ',country:'RUSSIA',price:6500,lvl:4,mods:['boost','gunaim','irauto'],trait:'ТЯЖЁЛЫЙ И ЖИВУЧИЙ',maxSpd:430,thrust:1.3,turn:1.4,hp:175,stall:60,gun:'ГШ-30-1 30mm',ammo:150,flares:48,color:0xa9bccb,camo:0x6c8aa3,base:[9,8,8,7,6],
+{id:'su33',name:'Су-33 «Фланкер-D»',cls:'ПАЛУБНЫЙ ИСТРЕБИТЕЛЬ',country:'RUSSIA',price:6500,lvl:4,mods:['boost','gunaim','irauto','aps'],trait:'ТЯЖЁЛЫЙ И ЖИВУЧИЙ',maxSpd:430,thrust:1.3,turn:1.4,hp:175,stall:60,gun:'ГШ-30-1 30mm',ammo:150,flares:48,color:0xa9bccb,camo:0x6c8aa3,base:[9,8,8,7,6],
  b:{tipMsl:1,lerx:1,L:21.2,R:1.25,wing:[9,2.2,7.2,5.2,1.2,-.1,.02],tail:[3.6,1.4,3.4,2.2,8.2,0,0],fins:[[1.9,7.4,3.8,4,1.6,2.4,.08],[-1.9,7.4,3.8,4,1.6,2.4,-.08]],cz:-6.2,intake:'under',iz:-1.8,eng:2}},
-{id:'rafale',name:'Рафаль M',cls:'ПАЛУБНЫЙ ИСТРЕБИТЕЛЬ',country:'OTHER',price:6000,lvl:4,mods:['gunaim','irauto'],trait:'ДЕЛЬТА С ПГО: ОЧЕНЬ МАНЁВРЕННЫЙ',maxSpd:405,thrust:1.28,turn:1.5,hp:130,stall:55,gun:'GIAT 30mm',ammo:250,flares:40,color:0x828b93,camo:0x5b636b,base:[8,8,9,7,6],
+{id:'rafale',name:'Рафаль M',cls:'ПАЛУБНЫЙ ИСТРЕБИТЕЛЬ',country:'OTHER',price:6000,lvl:4,mods:['gunaim','irauto','aps'],trait:'ДЕЛЬТА С ПГО: ОЧЕНЬ МАНЁВРЕННЫЙ',maxSpd:405,thrust:1.28,turn:1.5,hp:140,stall:55,gun:'GIAT 30mm',ammo:250,flares:40,color:0x828b93,camo:0x5b636b,base:[8,8,9,7,6],
  b:{tanks:1,tipMsl:1,L:15.3,R:1,wing:[8.6,1.2,5.4,7,1.4,-.1,0],tail:[2,.8,2.4,1.2,-3.6,.25,.06],fins:[[0,5.4,3,4,1.4,2.2,0]],cz:-4.4,intake:'side',iz:-1.2,eng:2}},
-{id:'f35c',name:'F-35C Лайтнинг II',cls:'СТЕЛС-ИСТРЕБИТЕЛЬ',country:'USA',price:9000,lvl:6,mods:['boost','gunaim','irauto'],trait:'СТЕЛС: ВРАГИ ДОЛЬШЕ ЗАХВАТЫВАЮТ',maxSpd:400,thrust:1.27,turn:1.35,hp:145,stall:55,gun:'GAU-22 25mm',ammo:180,flares:30,color:0x636c76,camo:0x4c545d,stealth:true,base:[7,8,8,9,7],
- b:{lerx:1,L:15.7,R:1.25,wing:[8,2.4,6.5,4.4,1,-.05,0],tail:[3.2,1.2,3.2,1.8,6.3,.05,0],fins:[[1.2,5.4,2.8,3.4,1.4,1.8,.45],[-1.2,5.4,2.8,3.4,1.4,1.8,-.45]],cz:-3.8,intake:'side',iz:-1.1,eng:1}}
+{id:'f35c',name:'F-35C Лайтнинг II',cls:'СТЕЛС-ИСТРЕБИТЕЛЬ',country:'USA',price:9000,lvl:6,mods:['boost','gunaim','irauto','aps'],trait:'СТЕЛС: ВРАГИ ДОЛЬШЕ ЗАХВАТЫВАЮТ',maxSpd:400,thrust:1.27,turn:1.35,hp:145,stall:55,gun:'GAU-22 25mm',ammo:180,flares:30,color:0x636c76,camo:0x4c545d,stealth:true,base:[7,8,8,9,7],
+ b:{lerx:1,L:15.7,R:1.25,wing:[8,2.4,6.5,4.4,1,-.05,0],tail:[3.2,1.2,3.2,1.8,6.3,.05,0],fins:[[1.2,5.4,2.8,3.4,1.4,1.8,.45],[-1.2,5.4,2.8,3.4,1.4,1.8,-.45]],cz:-3.8,intake:'side',iz:-1.1,eng:1}},
+{id:'b2',name:'B-2 Спирит',cls:'СТЕЛС-БОМБАРДИРОВЩИК',country:'USA',price:12000,lvl:7,mods:['boost','aps'],trait:'НЕВИДИМКА: В 3 РАЗА БОЛЬШЕ БОМБ И РАКЕТ',stealth:true,bay:3,
+ desc:'Летающее крыло-невидимка. Пушки нет, зато огромный бомбоотсек: берите конфигурацию «БОМБЫ» или «ТОЧНЫЙ УДАР». Медленный и неповоротливый, но враги почти не могут его захватить.',
+ maxSpd:300,thrust:.95,turn:.75,hp:280,stall:62,gun:'нет',ammo:0,flares:60,color:0x3b4048,camo:0,base:[4,5,2,6,10],
+ b:{L:21,R:1.7,wing:[17,2.4,25,15.5,1.5,0,0],tail:null,fins:[],cz:-6,intake:'side',iz:-1,eng:2}}
 ];
 const DEF={};DEFS.forEach(d=>DEF[d.id]=d);
+/* real-world reference data (approximate): top speed km/h, Mach, ferry range km, combat radius km, ceiling m, crew, first flight */
+const SPEC={f16:[2120,2.0,4200,550,15240,1,1974],a4:[1080,.9,3220,625,12880,1,1954],f4e:[2370,2.2,2600,680,18300,2,1958],av8b:[1085,.9,3300,550,15000,1,1978],
+ mig29:[2450,2.25,2100,700,18000,1,1977],j7:[2200,2.0,2230,600,17500,1,1966],mir:[2530,2.2,3335,700,17060,1,1978],fa18:[1915,1.8,3330,720,15000,1,1995],
+ su33:[2300,2.17,3000,1500,17000,1,1987],rafale:[1912,1.8,3700,1850,15835,1,1986],f35c:[1930,1.6,2200,1100,15240,1,2010],b2:[1010,.95,11100,5500,15200,2,1989]};
+function rating(d){return Math.round(d.maxSpd/430*24+d.thrust/1.3*18+d.turn/1.5*24+d.hp/280*18+(d.mods||[]).length*3+(d.stealth?6:0)+(d.bay||0)*4);}
+const fmtN=n=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
 /* pilot level from experience */
 const LVL=[0,300,800,1500,2500,4000,6000,8500,12000,16000];
 function level(){let l=1;while(l<LVL.length&&save.xp>=LVL[l])l++;return l;}
@@ -432,6 +445,7 @@ function addXp(n){const l0=level();save.xp+=n;const l1=level();if(l1>l0)setTimeo
 const MODS={
  boost:{n:'Турбо-ускоритель',i:'🚀',d:'Клавиша Y / кнопка ТУРБО: +35% скорости на 5 с, перезарядка 18 с',lvl:2,price:800},
  gunaim:{n:'Автоприцел ПРО',i:'🎯',d:'В 2 раза сильнее бесплатного: ловит цели дальше от прицела, до 1,6 км',lvl:2,price:1000},
+ aps:{n:'Задняя противоракета',i:'🛡',d:'Кнопка ПРО / клавиша O: из хвоста вылетает ракета-перехватчик и сбивает ракету, летящую в вас. 3 заряда, перезарядка 12 с',lvl:3,price:2200},
  irauto:{n:'Авто-ИК захват',i:'🔥',d:'ИК-ракеты (AIM-9, Р-73) захватывают в 3 раза быстрее и в широком конусе',lvl:5,price:2500}};
 function modsOf(id){return save.mods[id]||(save.mods[id]={own:[],on:[]});}
 function activeMods(def){const m=save.mods[def.id];const o={};if(m)for(const k of m.on)if((def.mods||[]).includes(k)&&m.own.includes(k))o[k]=true;return o;}
@@ -506,12 +520,12 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(40000,32,16),skyMat);sky.rende
 let ENVTEX=null,CLOUDMAT=null;
 /* ---- optional real 3D models (put files in the site's real/ folder; see README) ---- */
 const REAL={};let REALCFG={},REALCK=null;
-function fitModel(obj,len,cfg){
+function fitModel(obj,len,cfg,belly){
   cfg=cfg||{};const hid=cfg.hide||[];if(hid.length){const rm=[];obj.traverse(o=>{if(o.isLight||(o.name&&hid.some(h=>o.name.indexOf(h)>=0)))rm.push(o);});rm.forEach(o=>o.parent&&o.parent.remove(o));}obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
   const bb=new THREE.Box3().setFromObject(obj),sz=bb.getSize(new V3()),c=bb.getCenter(new V3());
   if(!cfg.rotY&&sz.x>sz.z*1.15){obj.rotation.y=Math.PI/2;obj.updateMatrixWorld(true);bb.setFromObject(obj);bb.getSize(sz);bb.getCenter(c);}
   const k=(cfg.scale||1)*len/Math.max(sz.z,.001);const w=new THREE.Group();obj.position.sub(c);w.add(obj);w.scale.setScalar(k);
-  if(cfg.flip)w.rotation.y=Math.PI;if(cfg.y)w.position.y=cfg.y;return w;}
+  if(cfg.flip)w.rotation.y=Math.PI;/* sit the belly where the game's own fuselage bottom is, so the landing gear meets it */w.position.y=(belly!=null?belly-(bb.min.y-c.y)*k:0)+(cfg.y||0);return w;}
 /* repaint a real model: its texture keeps panel lines and shading, but the colour becomes the chosen paint */
 const PAINTMAT={},NOPAINT=/canopy|glass|cockpit|hud|instr|light|pilot|seat|window|lamp|nozzle|exhaust|engine/i;
 function paintedMat(m,col){
@@ -530,7 +544,7 @@ function loadRealModels(){
   fetch('real/config.json').then(r=>r.ok?r.json():{}).catch(()=>({})).then(cfg=>{REALCFG=cfg||{};
     /* one model at a time, the player's jet first, so the start is not flooded */
     const q=(REALCFG.models||[]).filter(id=>DEF[id]).sort((a,b)=>(b===save.sel)-(a===save.sel));
-    const next=()=>{const id=q.shift();if(!id)return;const d=DEF[id];ld.load('real/'+id+'.glb',gl=>{try{REAL[id]=fitModel(gl.scene,d.b.L,REALCFG[id]);if(preview&&save.sel===id)buildPreview();}catch(e){}next();},undefined,()=>next());};next();
+    const next=()=>{const id=q.shift();if(!id)return;const d=DEF[id];ld.load('real/'+id+'.glb',gl=>{try{REAL[id]=fitModel(gl.scene,d.b.L,REALCFG[id],-d.b.R*.92);if(preview&&save.sel===id)buildPreview();}catch(e){}next();},undefined,()=>next());};next();
     if(REALCFG.cockpit)ld.load('real/cockpit.glb',gl=>{REALCK=gl.scene;},undefined,()=>{});});
 }
 /* environment map (sky above, sea below): gives metal and glass real reflections */
@@ -607,7 +621,7 @@ const water=new THREE.Mesh(new THREE.PlaneGeometry(90000,90000),waterMat);water.
   g.instanceCount=tile.length;
   const m=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{map:{value:tex},fogC:{value:HORIZON},tint:{value:PAL.cloud},t:{value:0},sun:{value:SUN},sunC:{value:PAL.sunC}},
     vertexShader:'uniform float t;uniform vec3 sun;attribute vec3 off;attribute vec2 scl;attribute float tile;varying vec2 vUv;varying float vF;varying float vS;void main(){vec3 o=off;o.x=mod(o.x+t*14.+16000.,32000.)-16000.;o.z=mod(o.z+t*6.+16000.,32000.)-16000.;'+
-      'vec3 cw=(viewMatrix*vec4(o,1.)).xyz;vec4 mv=vec4(cw,1.);float br=1.+.05*sin(t*.15+off.x*.01);mv.xy+=position.xy*scl*br;vec3 wd=normalize(o-cameraPosition);vS=pow(max(dot(wd,sun),0.),6.);'+
+      'vec3 wd=normalize(o-cameraPosition);vec3 rt=normalize(cross(wd,vec3(0.,1.,0.)));vec3 upv=cross(rt,wd);float br=1.+.05*sin(t*.15+off.x*.01);vec3 wp=o+(rt*position.x*scl.x+upv*position.y*scl.y)*br;vec4 mv=viewMatrix*vec4(wp,1.);vS=pow(max(dot(wd,sun),0.),6.);'+
       'float col=mod(tile,2.),row=floor(tile/2.);vUv=vec2((uv.x+col)*.5,(uv.y+1.-row)*.5);vF=smoothstep(7000.,34000.,-mv.z);gl_Position=projectionMatrix*mv;}',
     fragmentShader:'uniform sampler2D map;uniform vec3 fogC,tint,sunC;varying vec2 vUv;varying float vF;varying float vS;void main(){vec4 t=texture2D(map,vUv);vec3 c=t.rgb*mix(tint*.78,tint*.92,t.r);float rim=smoothstep(.55,.05,t.a)*t.a*4.;c+=sunC*vS*(rim*.45+.04);gl_FragColor=vec4(mix(c,fogC,vF*(1.-vS*.3)),t.a*.92);}'});
   const mesh=new THREE.Mesh(g,m);mesh.frustumCulled=false;mesh.renderOrder=2;scene.add(mesh);CLOUDMAT=m;
@@ -1441,7 +1455,7 @@ function newPlane(pilot,def,team,paint,loadIdx){
   const p={kind:'plane',team,pilot,def,mesh,pos:mesh.position,q:mesh.quaternion,vel:new V3(),speed:0,thr:.8,ab:false,hp:def.hp,maxhp:def.hp,alive:true,
     inp:{x:0,y:0,yaw:0},assist:true,ammo:def.ammo,sel:0,flares:def.flares,cd:{gun:0,wep:0,fl:0,rk:0},shield:0,state:'fly',launchT:0,
     isPlayer:!!pilot.isPlayer,up:u,gear:false,flaps:false,brk:false,g:1,bank:0,stalled:false,smokeT:0,ai:{rt:0,tgt:null,egress:0,lock:0,skill:rnd(.6,1)},lastHit:null,role:pilot.role};
-  p.mods=pilot.isPlayer?activeMods(def):{};p.boostT=0;p.boostCd=0;
+  p.mods=pilot.isPlayer?activeMods(def):{};p.boostT=0;p.boostCd=0;p.aps=3;p.apsCd=0;
   applyLoad(p,loadIdx);addStores(p);p.radius=def.b.R*3.2;pilot.plane=p;planes.push(p);return p;
 }
 function spawnBot(pilot){
@@ -1876,10 +1890,32 @@ function launchMissile(by,target,type,team,pos,wid){
   const mesh=mslMesh(wid||(type==='ship'?'ship':type==='strike'?'strike':'aim9'));scene.add(mesh);
   const m={mesh,pos:pos.clone(),dir:new V3(),speed:0,target,team,by,type,wid,age:0,hp:type==='ship'?3:type==='strike'?4:1,chk:0,turn:w?w.turn:2.4,vmax:w?w.v:640,dmg:w?w.dmg:70,lostT:0,
     ir:w?!!w.ir:true,flareP:w?w.flare:.38,skim:!!(w&&w.skim),burn:w?w.burn:5.5,life:w?w.life:12};
-  if(by){tA.set(0,0,-1).applyQuaternion(by.q);m.dir.copy(tA);m.speed=by.speed*(type==='agm'?.9:1)+40;m.turn*=1+.08*by.up.msl;m.vmax*=1+.06*by.up.msl;m.dmg*=1+.07*by.up.wpn;}
+  if(by){tA.set(0,0,-1).applyQuaternion(by.q);m.dir.copy(tA);m.speed=by.speed*(type==='agm'?.9:1)+40;if(by.vel&&(type==='aa'||type==='agm')){m.drop=.34;m.dropV=by.vel.clone().add(new V3(0,-5,0).applyQuaternion(by.q));m.dq=by.q.clone();}m.turn*=1+.08*by.up.msl;m.vmax*=1+.06*by.up.msl;m.dmg*=1+.07*by.up.wpn;}
   else if(type==='strike'){m.dir.set(rnd(-.05,.05),1,rnd(-.05,.05)).normalize();m.speed=60;m.vmax=430;m.dmg=650;m.turn=1.1;m.life=95;m.burn=999;}
   else{tA.copy(target.pos).sub(pos);m.dir.copy(tA).normalize();if(type==='ship'){m.dir.y=.5;m.dir.normalize();m.speed=180;m.vmax=290;m.dmg=450;m.turn=.9;}else{m.speed=200;m.vmax=520;m.turn=1.7;m.dmg=48;m.dir.y+=.6;m.dir.normalize();}}
-  missiles.push(m);sfx('missile');return m;
+  missiles.push(m);if(m.drop)sfx('flare',pos);else sfx('missile');return m;
+}
+/* rear interceptor: fires backwards out of the tail, turns round and kills the missile chasing you */
+const apsShots=[];
+function useAps(p){
+  if(!p||!p.mods.aps||p.state!=='fly')return;if(p.aps<=0||p.apsCd>0){toast(p.aps<=0?'ПРО: заряды кончились':'ПРО: перезарядка '+Math.ceil(p.apsCd)+' с');return;}
+  let best=null,bd=6000;for(const m of missiles){if(m.team===p.team||m.apsT)continue;const d=m.pos.distanceTo(p.pos);if((m.target===p||d<2500)&&d<bd){bd=d;best=m;}}
+  if(!best){toast('ПРО: ракет рядом нет');return;}
+  p.aps--;p.apsCd=12;best.apsT=true;
+  const mesh=mslMesh('aim9');mesh.scale.setScalar(.7);scene.add(mesh);
+  const pos=new V3(0,.4,p.def.b.L/2+1).applyQuaternion(p.q).add(p.pos),dir=new V3(0,.15,1).applyQuaternion(p.q).normalize();
+  apsShots.push({mesh,pos,dir,speed:Math.max(60,p.speed*.25),tgt:best,age:0});
+  flash(pos,14,.25);boomLight(pos,1.5);sfx('missile');if(p.isPlayer){camShake=Math.min(1.2,camShake+.25);toast('🛡 ПРОТИВОРАКЕТА ПОШЛА!');voice('Противоракета пошла');}
+}
+function updateAps(dt){
+  for(const p of planes)if(p.apsCd>0)p.apsCd-=dt;
+  for(let i=apsShots.length-1;i>=0;i--){const a=apsShots[i];a.age+=dt;a.speed=Math.min(1100,a.speed+1400*dt);
+    const t=a.tgt,alive=missiles.includes(t);
+    if(alive&&a.age>.15){tA.copy(t.pos).sub(a.pos);const d=tA.length();tA.normalize();tB.copy(a.dir).lerp(tA,Math.min(1,dt*9)).normalize();a.dir.copy(tB);
+      if(d<35+a.speed*dt){explosion(t.pos,8);const k=missiles.indexOf(t);if(k>=0)removeMissile(k);scene.remove(a.mesh);apsShots.splice(i,1);if(a.age<9)toast('🛡 РАКЕТА СБИТА!');continue;}}
+    a.pos.addScaledVector(a.dir,a.speed*dt);a.mesh.position.copy(a.pos);tQ2.setFromUnitVectors(new V3(0,0,-1),a.dir);a.mesh.quaternion.copy(tQ2);
+    fire(a.pos.x-a.dir.x*1.5,a.pos.y-a.dir.y*1.5,a.pos.z-a.dir.z*1.5,2.2,.5,.12,0);smoke(a.pos.x-a.dir.x*2.5,a.pos.y-a.dir.y*2.5,a.pos.z-a.dir.z*2.5,1.8,6,2.4,.15,.6);
+    if(a.age>6||(!alive&&a.age>1.5)){if(!alive)explosion(a.pos,3);scene.remove(a.mesh);apsShots.splice(i,1);}}
 }
 function removeMissile(i){scene.remove(missiles[i].mesh);missiles.splice(i,1);}
 function dropFlares(p){
@@ -1896,6 +1932,12 @@ function updateFlares(dt){
 function updateMissiles(dt){
   for(let i=missiles.length-1;i>=0;i--){
     const m=missiles[i];m.age+=dt;
+    if(m.drop>0){m.drop-=dt;m.dropV.y-=12*dt;m.pos.addScaledVector(m.dropV,dt);m.mesh.position.copy(m.pos);m.mesh.quaternion.copy(m.dq);
+      if(m.drop<=0){m.speed=m.dropV.length()+70;m.ign=1.3;tA.copy(m.pos).addScaledVector(m.dir,-2.5);flash(tA,9,.22);boomLight(tA,1.4);
+        for(let k=0;k<6;k++){fire(tA.x+rnd(-1,1),tA.y+rnd(-1,1),tA.z+rnd(-1,1),rnd(2.5,4),.9,.22,0);smoke(tA.x+rnd(-2,2),tA.y+rnd(-2,2),tA.z+rnd(-2,2),rnd(3,5),9,4,.2,.5);}
+        sfx('missile',m.pos);if(m.by&&m.by.isPlayer)camShake=Math.min(1.2,camShake+.3);}
+      continue;}
+    if(m.ign>0)m.ign-=dt;
     const homing=m.type==='aa'||m.type==='sam'||m.type==='agm';
     if(m.type==='ship'||m.type==='strike'){m.speed=Math.min(m.vmax,m.speed+(m.type==='strike'?90:120)*dt);}
     else if(m.type==='agm'){m.speed=Math.min(m.vmax,m.speed+200*dt);}
@@ -1926,6 +1968,7 @@ function updateMissiles(dt){
     m.pos.addScaledVector(m.dir,m.speed*dt);
     m.mesh.position.copy(m.pos);tQ2.setFromUnitVectors(new V3(0,0,-1),m.dir);m.mesh.quaternion.copy(tQ2);
     if(m.age<m.burn||m.type==='ship'||m.type==='strike'){if(m.type==='strike')fire(m.pos.x-m.dir.x*6,m.pos.y-m.dir.y*6,m.pos.z-m.dir.z*6,4,1,.18,0);fire(m.pos.x-m.dir.x*2,m.pos.y-m.dir.y*2,m.pos.z-m.dir.z*2,1.6,.4,.1,0);}
+    if(m.ign>0){fire(m.pos.x-m.dir.x*2.6,m.pos.y-m.dir.y*2.6,m.pos.z-m.dir.z*2.6,2.4+m.ign,.7,.12,0);smoke(m.pos.x-m.dir.x*5,m.pos.y-m.dir.y*5,m.pos.z-m.dir.z*5,2.6+m.ign*2,8,3.5,.2,.55);}
     smoke(m.pos.x-m.dir.x*3,m.pos.y-m.dir.y*3,m.pos.z-m.dir.z*3,m.type==='strike'?4:m.type==='ship'?2.4:1.6,m.type==='strike'?14:m.type==='ship'?7:5,m.type==='strike'?5:m.type==='ship'?3:2.2,.15,.6);
     let boom=false,ent=null;
     if(m.pos.y<1)boom=true;
@@ -2032,6 +2075,11 @@ function noiseHit(dur,type,freq,vol,sweepTo){
   s.connect(f);f.connect(g);g.connect(master);s.start(0,Math.random());s.stop(AC.currentTime+dur+.05);
 }
 function tone(freq,dur,vol,type){const o=AC.createOscillator();o.type=type||'sine';o.frequency.value=freq;const g=AC.createGain();g.gain.setValueAtTime(vol,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+dur);o.connect(g);g.connect(master);o.start();o.stop(AC.currentTime+dur+.02);}
+/* where is it, as a pilot says it: 'на 6 часов' */
+function clockDir(p,pos){tA.copy(pos).sub(p.pos).applyQuaternion(tQ.copy(p.q).invert());let h=Math.round(Math.atan2(tA.x,-tA.z)/(Math.PI/6));h=((h%12)+12)%12;const n=h===0?12:h;
+  const ud=tA.y>Math.hypot(tA.x,tA.z)*.5?' СВЕРХУ':tA.y<-Math.hypot(tA.x,tA.z)*.5?' СНИЗУ':'';return ['НА '+n+' ЧАСОВ'+ud,'на '+n+' часов'];}
+let voiceT=0;function voice(t){if(!save.opt.sound||!window.speechSynthesis)return;const n=performance.now();if(n-voiceT<2500)return;voiceT=n;
+  try{const u=new SpeechSynthesisUtterance(t);u.lang='ru-RU';u.rate=1.15;u.pitch=.9;speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}}
 function sfx(n,pos){
   if(!AC||!save.opt.sound)return;
   let v=1;if(pos){const d=pos.distanceTo(camera.position);v=clamp(1-d/9000,0,1);if(v<.02)return;}
@@ -2090,7 +2138,7 @@ function helpHtml(){
   '<div style="display:flex;gap:1rem;flex-wrap:wrap;font-size:.9rem"><span><span class="dot" style="background:#1f6b3a"></span>Полёт</span><span><span class="dot" style="background:#8a5a12"></span>Двигатель</span><span><span class="dot" style="background:#8a2a22"></span>Оружие</span><span><span class="dot" style="background:#1f4f8a"></span>Системы</span><span><span class="dot" style="background:#5a3a8a"></span>Камера и меню</span></div>'+
   '<h3>ПОЛЁТ</h3><div class="leg">'+L('Мышь','Прицел: самолёт летит туда, куда вы смотрите')+L('W / S','Нос вниз / вверх')+L('A / D','Крен (можно крутить бочку)')+L('← / →','Ровный поворот без переворота')+L('Q / E','Рыскание')+L('T','Автокрен вкл/выкл')+L('Y','Турбо-ускоритель (спецмодуль)')+L('I','Автонаведение: самолёт сам доворачивает на противника')+L('U','Ракетный удар со своей базы по вражеской (3 ракеты, раз в 60 с)')+L('N','Мёртвая петля 360°')+L('J / Shift+J','Бочка 360° вправо / влево')+L('Мышь вверх','Держите — самолёт пройдёт петлю')+'</div>'+
   '<h3>ДВИГАТЕЛЬ</h3><div class="leg">'+L('Shift / Z','Газ больше / меньше')+L('Колесо','Газ мышью')+L('X','Форсаж')+L('Shift на катапульте','Взлёт')+'</div>'+
-  '<h3>ОРУЖИЕ</h3><div class="leg">'+L('Пробел / ЛКМ','Пушка (целься в оранжевый кружок)')+L('F / ПКМ','Выбранная ракета / бомба')+L('1 – 5','Выбор оружия')+L('R / Tab','Следующее оружие')+L('G','Тепловые ловушки')+'</div>'+
+  '<h3>ОРУЖИЕ</h3><div class="leg">'+L('Пробел / ЛКМ','Пушка (целься в оранжевый кружок)')+L('F / ПКМ','Выбранная ракета / бомба')+L('1 – 5','Выбор оружия')+L('R / Tab','Следующее оружие')+L('G','Тепловые ловушки')+L('O','Задняя противоракета (модуль ПРО)')+'</div>'+
   '<h3>СИСТЕМЫ</h3><div class="leg">'+L('L','Шасси')+L('K','Закрылки')+L('B','Тормоз')+'</div>'+
   '<h3>КАМЕРА И МЕНЮ</h3><div class="leg">'+L('C','Зум прицела')+L('V','Вид: сзади / близко / кабина')+L('M','Карта')+L('H','Скрыть / показать кнопки на экране')+L('Esc / P','Меню и пауза')+'</div>'+
   '<h3>ОСТРОВА</h3><div style="color:var(--dim)">5 островов-баз с полосами: 2 штаба, 2 острова обороны и центральный. С любого своего острова можно вылететь (ангар → «ВЫЛЕТ С») и сесть на его полосу для перезарядки. Чтобы забрать вражеский остров: разбейте базу до 0% (бомбы, ракеты, пушка), затем летайте в кольце ниже 700 м. Центр нейтральный — кто первый захватит. Кто захватит все 5 островов — победил. За захват +300 CR и +200 XP, за разрушение базы +500 CR.</div>'+
@@ -2183,7 +2231,10 @@ function renderHangar(){
   const d=DEF[save.sel],own=save.owned.includes(d.id);
   $('#chips').innerHTML=['ALL','USA','RUSSIA','CHINA','OTHER'].map(c=>'<button class="btn '+(fil===c?'on':'')+'" data-c="'+c+'">'+c+'</button>').join('');
   $('#vlist').innerHTML=DEFS.filter(x=>fil==='ALL'||x.country===fil).map(x=>'<button class="veh '+(x.id===save.sel?'sel ':'')+(save.owned.includes(x.id)?'own':'')+'" data-id="'+x.id+'"><b>'+x.name+'</b><small>'+(save.owned.includes(x.id)?(x.price?'В АНГАРЕ':'БЕСПЛАТНО'):(level()<x.lvl?'🔒 УР.'+x.lvl+' · ':'')+'© '+x.price+' CR')+(x.mods.length?' · '+x.mods.map(k=>MODS[k].i).join(''):'')+'</small></button>').join('');
-  $('#vdesc').innerHTML=(d.desc?d.desc+'<br>':'')+'<b>Макс. скорость:</b> '+Math.round(d.maxSpd*1.15*KT)+' уз · <b>Прочность:</b> '+d.hp+' · <b>Пушка:</b> '+d.gun;
+  {const sp=SPEC[d.id];const row=(k,v)=>'<div><span>'+k+'</span><b>'+v+'</b></div>';
+  $('#vdesc').innerHTML=(d.desc?d.desc+'<br>':'')+'<div class="spec">'+row('Боевой рейтинг',rating(d)+' / 100')+row('Скорость в игре',Math.round(d.maxSpd*1.15*KT)+' уз')+
+    (sp?row('Реальная макс. скорость',fmtN(sp[0])+' км/ч · М'+sp[1])+row('Дальность (перегон)',fmtN(sp[2])+' км')+row('Боевой радиус',fmtN(sp[3])+' км')+row('Потолок',fmtN(sp[4])+' м')+row('Экипаж · первый полёт',sp[5]+' · '+sp[6]+' г.'):'')+
+    row('Прочность',d.hp)+row('Пушка',d.gun+(d.ammo?' x'+d.ammo:''))+row('Цена',d.price?fmtN(d.price)+' CR':'БЕСПЛАТНО')+'</div>';}
   $('#vname').textContent=d.name;$('#vcls').textContent=d.cls+' // '+d.country;$('#vtrait').textContent=d.trait;
   const li=save.loadout[d.id]||0,pi=save.paint[d.id]||0;
   $('#bLoad').textContent='КОНФИГУРАЦИЯ: '+LOADS[li][0]+'  >';$('#bPaint').textContent='ОКРАС: '+PAINTS[pi][0]+'  >';
@@ -2321,7 +2372,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='KeyT'){p.assist=!p.assist;save.opt.assist=p.assist;persist();toast('Помощь в пилотировании: '+(p.assist?'вкл':'выкл'));}
   if(e.code==='KeyC')zoom=!zoom;if(e.code==='KeyM')openMap();if(e.code==='KeyV')cycleView();
   if(e.code==='KeyH')toggleMinUI();
-  if(e.code==='KeyI')toggleSteer();if(e.code==='KeyY')useBoost();if(e.code==='KeyU')playerStrike();if(e.code==='KeyN')stunt('loop');if(e.code==='KeyJ')stunt('roll',e.shiftKey?-1:1);
+  if(e.code==='KeyO')useAps(player);if(e.code==='KeyI')toggleSteer();if(e.code==='KeyY')useBoost();if(e.code==='KeyU')playerStrike();if(e.code==='KeyN')stunt('loop');if(e.code==='KeyJ')stunt('roll',e.shiftKey?-1:1);
 });
 window.addEventListener('keyup',e=>{keys[e.code]=false;});
 window.addEventListener('blur',()=>{for(const k in keys)keys[k]=false;hold.gun=hold.wep=false;});
@@ -2371,7 +2422,7 @@ holdBtn('#fireg','gun');holdBtn('#firew','wep');holdBtn('#yawL','tl');holdBtn('#
 $('#slots').addEventListener('click',e=>{const sl=e.target.closest('.slot');if(sl&&player&&sl.dataset.i)player.sel=+sl.dataset.i;});
 $('#nextw').onclick=()=>{if(player)nextWep(player);};
 $('#zoomb').onclick=()=>zoom=!zoom;
-$('#loopb').onclick=()=>stunt('loop');$('#autob').onclick=()=>toggleSteer();$('#strikeb').onclick=()=>playerStrike();$('#boostb').onclick=()=>useBoost();$('#rollb').onclick=()=>stunt('roll',1);
+$('#loopb').onclick=()=>stunt('loop');$('#autob').onclick=()=>toggleSteer();$('#strikeb').onclick=()=>playerStrike();$('#boostb').onclick=()=>useBoost();$('#apsb').onclick=()=>useAps(player);$('#rollb').onclick=()=>stunt('roll',1);
 $('#flareb').onclick=()=>{if(player)dropFlares(player);};
 $('#bGear').onclick=()=>{if(player){player.gear=!player.gear;}};
 $('#bFlap').onclick=()=>{if(player){player.flaps=!player.flaps;}};
@@ -2484,7 +2535,7 @@ function controlPlayer(p,dt){
   if(tc&&p.state==='fly'){fwdOf(p,tA);aimDir.lerp(tA,Math.min(1,dt*6));aimUp.set(0,1,0);orthoAim();}
   else if(!p.aimCtl){fwdOf(p,tA);tC.set(0,1,0).applyQuaternion(p.q);if(p.state!=='fly'){aimDir.copy(tA);aimUp.copy(tC);}else{const k=Math.min(1,dt*(kbOn||p.stunt?6:3));aimDir.lerp(tA,k);aimUp.lerp(tC,k);}orthoAim();}
   else levelAim(dt);
-  p.freeRoll=!!kx;
+  p.freeRoll=!!kx||(stick.id!==null&&Math.abs(stick.x)>.8);
   /* flat turn: buttons or arrow keys bank ~55 degrees, hold altitude, never roll over */
   /* auto-steer: when the stick is idle the jet turns itself onto the nearest enemy and leads it for the guns */
   p.autoT=null;
@@ -2713,6 +2764,7 @@ function updateHud(dt){
     setT('strikec',strikeCd[p.team]>0?Math.ceil(strikeCd[p.team])+' с':'ГОТОВ');}
   E('autob').classList.toggle('on',!!save.opt.steer);setT('autoc',save.opt.steer?(p.autoT?'ЦЕЛЬ':'ВКЛ'):'ВЫКЛ');
   E('aim').style.display=aimMode()&&p.state==='fly'?'':'none';
+  {const ab=E('apsb');ab.style.display=p.mods.aps?'grid':'none';ab.classList.toggle('on',p.aps>0&&p.apsCd<=0&&missiles.some(m=>m.target===p));setT('apsc',p.aps<=0?'ПУСТО':p.apsCd>0?Math.ceil(p.apsCd)+' с':'x'+p.aps);}
   {const bb=E('boostb');bb.style.display=p.mods.boost?'grid':'none';bb.classList.toggle('on',p.boostT>0);setT('boostc',p.boostT>0?'АКТИВЕН':p.boostCd>0?Math.ceil(p.boostCd)+' с':'ГОТОВ');
    const mk=Object.keys(p.mods).join();if(mk!==updateHud.mk){updateHud.mk=mk;E('modst').innerHTML=Object.keys(p.mods).map(k=>'<span>'+MODS[k].i+' '+MODS[k].n.toUpperCase()+'</span>').join('');}}
   let hint='';
@@ -2741,7 +2793,7 @@ function updateHud(dt){
   // warnings
   let w='';if(p.stalled&&p.state==='fly')w='СРЫВ! ДАЙТЕ ГАЗ';
   if(p.state==='fly'){const th=Math.max(0,terrainH(p.pos.x+p.vel.x*3,p.pos.z+p.vel.z*3));if((p.pos.y<150&&p.vel.y<-5)||p.pos.y+p.vel.y*3<th+40)w='ВЫСОТА! ВВЕРХ';}
-  for(const m of missiles){if(m.target===p&&m.pos.distanceTo(p.pos)<4000){w='РАКЕТА!';if(Math.floor(performance.now()/250)%2===0)sfx('warn');break;}}
+  for(const m of missiles){if(m.target===p&&m.pos.distanceTo(p.pos)<4000){const dir=clockDir(p,m.pos);w='РАКЕТА! '+dir[0]+' · '+(m.pos.distanceTo(p.pos)/1000).toFixed(1)+' км'+(p.mods.aps&&p.aps>0?' — ПРО!':' — ЛОВУШКИ!');if(Math.floor(performance.now()/250)%2===0)sfx('warn');if(!m.spoken){m.spoken=1;voice('Ракета! '+dir[1]);}break;}}
   setT('warn',w);
   // targets
   let n=0;
@@ -2849,7 +2901,7 @@ function step(dt){
   for(const id of['blue','red'])for(const pl of T[id].pilots){if(pl.isPlayer||pl.plane)continue;pl.rt-=dt;if(pl.rt<=0&&!match.over)spawnBot(pl);}
   for(const p of planes){if(!p.alive)continue;if(p.isPlayer)controlPlayer(p,dt);else botThink(p,dt);updatePlane(p,dt);}
   planes=planes.filter(p=>p.alive);
-  updateShips(dt);updateWrecks(dt);updateZones(dt);updateStrikes(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateFlares(dt);
+  updateShips(dt);updateWrecks(dt);updateZones(dt);updateStrikes(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateAps(dt);updateFlares(dt);
   smokeP.update(dt);fireP.update(dt);updateFx(dt);
   if(state==='dead'){deadT-=dt;if(deadT<=0)toHangar();}
   if(state==='side'&&Math.floor(performance.now()/1000)!==renderSide.s){renderSide.s=Math.floor(performance.now()/1000);renderSide();}
