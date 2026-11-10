@@ -463,7 +463,7 @@ function setupPost(){
     else rt=new THREE.WebGLRenderTarget(w*pr,h*pr,o);
     composer=new THREE.EffectComposer(renderer,rt);composer.setPixelRatio(pr);composer.setSize(w,h);
     composer.addPass(new THREE.RenderPass(scene,camera));
-    bloom=new THREE.UnrealBloomPass(new THREE.Vector2(w,h),save.opt.q>=3?.5:.42,.55,.86);composer.addPass(bloom);
+    bloom=new THREE.UnrealBloomPass(new THREE.Vector2(w,h),save.opt.q>=3?.58:.48,.6,.84);composer.addPass(bloom);
     composer.addPass(new THREE.ShaderPass(GRADE));
   }catch(e){console.warn('post fx off',e);composer=null;}
 }
@@ -503,7 +503,7 @@ const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:
  vertexShader:'varying vec3 vD;void main(){vD=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
  fragmentShader:SKY_GLSL});
 const sky=new THREE.Mesh(new THREE.SphereGeometry(40000,32,16),skyMat);sky.renderOrder=-10;sky.frustumCulled=false;scene.add(sky);
-let ENVTEX=null;
+let ENVTEX=null,CLOUDMAT=null;
 /* environment map (sky above, sea below): gives metal and glass real reflections */
 try{
   const c=document.createElement('canvas');c.width=512;c.height=256;const x=c.getContext('2d');const g=x.createLinearGradient(0,0,0,256);
@@ -576,11 +576,12 @@ const water=new THREE.Mesh(new THREE.PlaneGeometry(90000,90000),waterMat);water.
   g.index=base.index;g.setAttribute('position',base.attributes.position);g.setAttribute('uv',base.attributes.uv);
   g.setAttribute('off',new THREE.InstancedBufferAttribute(new Float32Array(off),3));g.setAttribute('scl',new THREE.InstancedBufferAttribute(new Float32Array(scl),2));g.setAttribute('tile',new THREE.InstancedBufferAttribute(new Float32Array(tile),1));
   g.instanceCount=tile.length;
-  const m=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{map:{value:tex},fogC:{value:HORIZON},tint:{value:PAL.cloud}},
-    vertexShader:'attribute vec3 off;attribute vec2 scl;attribute float tile;varying vec2 vUv;varying float vF;void main(){vec4 mv=viewMatrix*vec4(off,1.);mv.xy+=position.xy*scl;'+
+  const m=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{map:{value:tex},fogC:{value:HORIZON},tint:{value:PAL.cloud},t:{value:0},sun:{value:SUN},sunC:{value:PAL.sunC}},
+    vertexShader:'uniform float t;uniform vec3 sun;attribute vec3 off;attribute vec2 scl;attribute float tile;varying vec2 vUv;varying float vF;varying float vS;void main(){vec3 o=off;o.x=mod(o.x+t*14.+16000.,32000.)-16000.;o.z=mod(o.z+t*6.+16000.,32000.)-16000.;'+
+      'vec3 cw=(viewMatrix*vec4(o,1.)).xyz;vec4 mv=vec4(cw,1.);float br=1.+.05*sin(t*.15+off.x*.01);mv.xy+=position.xy*scl*br;vec3 wd=normalize(o-cameraPosition);vS=pow(max(dot(wd,sun),0.),6.);'+
       'float col=mod(tile,2.),row=floor(tile/2.);vUv=vec2((uv.x+col)*.5,(uv.y+1.-row)*.5);vF=smoothstep(7000.,34000.,-mv.z);gl_Position=projectionMatrix*mv;}',
-    fragmentShader:'uniform sampler2D map;uniform vec3 fogC,tint;varying vec2 vUv;varying float vF;void main(){vec4 t=texture2D(map,vUv);vec3 c=t.rgb*mix(tint*.85,tint,t.r);gl_FragColor=vec4(mix(c,fogC,vF),t.a*.92);}'});
-  const mesh=new THREE.Mesh(g,m);mesh.frustumCulled=false;mesh.renderOrder=2;scene.add(mesh);
+    fragmentShader:'uniform sampler2D map;uniform vec3 fogC,tint,sunC;varying vec2 vUv;varying float vF;varying float vS;void main(){vec4 t=texture2D(map,vUv);vec3 c=t.rgb*mix(tint*.78,tint*.92,t.r);float rim=smoothstep(.55,.05,t.a)*t.a*4.;c+=sunC*vS*(rim*.45+.04);gl_FragColor=vec4(mix(c,fogC,vF*(1.-vS*.3)),t.a*.92);}'});
+  const mesh=new THREE.Mesh(g,m);mesh.frustumCulled=false;mesh.renderOrder=2;scene.add(mesh);CLOUDMAT=m;
 })();
 
 /* islands: noisy terrain with height colours, beaches and trees */
@@ -1391,6 +1392,7 @@ function resetMatch(){
   player=null;
   match.t=1200;match.salvo=180;match.over=false;match.time=0;
   strikeCd.blue=strikeCd.red=0;aiStrikeT.blue=rnd(70,100);aiStrikeT.red=rnd(70,100);
+  for(const w of wrecks)removePlane(w.p);wrecks.length=0;for(const c of chutes)scene.remove(c.g);chutes.length=0;
   for(const b of BASES){b.owner=b.start;b.hp=b.maxhp;b.prog=b.start==='blue'?1:b.start==='red'?-1:0;b.drainT=0;}
   for(const id of ['blue','red']){const t=T[id];t.tickets=100;
     const c=t.carrier;c.hp=c.maxhp;c.alive=true;c.mesh.visible=true;c.mesh.position.y=0;c.mesh.rotation.set(0,c.rot,0);
@@ -1622,9 +1624,36 @@ function killPlane(p,by,w){
   if(by&&by.team!==p.team){award(by,100,100);if(by.isPlayer){mission('k');}}
   if(!match.training)T[p.team].tickets=Math.max(0,T[p.team].tickets-4);
   const wasPlayer=p.isPlayer;
-  removePlane(p);p.pilot.rt=5;
+  if(w==='вода'||w==='столкновение'||p.state!=='fly')removePlane(p);else makeWreck(p);
+  p.pilot.rt=5;
   if(wasPlayer){player=null;deadBy=by?pname(by):(w||'');deadT=2.6;state='dead';}
   checkEnd();
+}
+/* shot-down jets spiral down burning; the pilot ejects */
+const wrecks=[],chutes=[];
+function makeWreck(p){
+  if(p.pilot&&p.pilot.plane===p)p.pilot.plane=null;engineFx(p,0,false);
+  const u=p.mesh.userData;if(u.vcone)u.vcone.visible=false;
+  wrecks.push({p,pos:p.pos,vel:p.vel.clone().multiplyScalar(.8),spin:new V3(rnd(-1.5,1.5),rnd(-.6,.6),rnd(-3,3)),t:0});
+  if(p.isPlayer||Math.random()<.6)makeChute(p.pos,p.vel,p.team);
+}
+function makeChute(pos,vel,team){
+  const g=new THREE.Group();const can=new THREE.Mesh(new THREE.SphereGeometry(3.2,16,8,0,Math.PI*2,0,Math.PI*.42),new THREE.MeshStandardMaterial({map:chuteTex(team),side:THREE.DoubleSide,roughness:.8}));can.position.y=6;g.add(can);
+  const lm=new THREE.LineBasicMaterial({color:0xdddddd});for(let k=0;k<8;k++){const a=k/8*6.283;const gl=new THREE.BufferGeometry().setFromPoints([new V3(0,0,0),new V3(Math.cos(a)*2.9,5,Math.sin(a)*2.9)]);g.add(new THREE.Line(gl,lm));}
+  const pil=new THREE.Mesh(new THREE.CylinderGeometry(.25,.25,1.3,8),mat(0x5a6146));pil.position.y=-.4;g.add(pil);const hd=new THREE.Mesh(new THREE.SphereGeometry(.22,8,6),mat(0xe9ecef));hd.position.y=.4;g.add(hd);
+  g.position.copy(pos);g.scale.setScalar(.2);scene.add(g);chutes.push({g,vel:vel.clone().multiplyScalar(.15).setY(25),t:0});
+}
+let CHT={};function chuteTex(team){if(CHT[team])return CHT[team];const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');for(let i=0;i<8;i++){x.fillStyle=i%2?'#f2f2f2':(team==='red'?'#e0584c':'#e88a2a');x.fillRect(i*32,0,32,64);}return CHT[team]=new THREE.CanvasTexture(c);}
+function updateWrecks(dt){
+  for(let i=wrecks.length-1;i>=0;i--){const w=wrecks[i];w.t+=dt;w.vel.y-=9.8*dt;w.vel.multiplyScalar(1-.15*dt);w.pos.addScaledVector(w.vel,dt);
+    tQ.setFromEuler(new THREE.Euler(w.spin.x*dt,w.spin.y*dt,w.spin.z*dt));w.p.q.multiply(tQ);
+    if(Math.random()<dt*40){fire(w.pos.x,w.pos.y,w.pos.z,4,1.5,.4,2);smoke(w.pos.x,w.pos.y,w.pos.z,4,14,4,1.5,.7,true);}
+    if(w.p.isPlayer)deathPos.copy(w.pos);
+    if(w.pos.y<Math.max(1,terrainH(w.pos.x,w.pos.z))||w.t>25){explosion(w.pos.clone(),w.pos.y<3?16:22,w.pos.y<3);sfx('boom',w.pos);removePlane(w.p);wrecks.splice(i,1);}}
+  for(let i=chutes.length-1;i>=0;i--){const c=chutes[i];c.t+=dt;
+    if(c.t<1.2){c.vel.y-=20*dt;}else{c.vel.y+=(-6-c.vel.y)*Math.min(1,dt*2);c.vel.x*=1-dt;c.vel.z*=1-dt;c.g.scale.setScalar(Math.min(1,c.g.scale.x+dt*1.5));}
+    c.g.position.addScaledVector(c.vel,dt);c.g.rotation.z=Math.sin(c.t*1.3)*.12;
+    if(c.g.position.y<Math.max(.5,terrainH(c.g.position.x,c.g.position.z))||c.t>60){scene.remove(c.g);chutes.splice(i,1);}}
 }
 function dmgShip(s,a,by,w){
   if(s.kind==='base')return dmgBase(s,a*(w==='пушка'?.5:1),by,w);
@@ -2754,7 +2783,7 @@ function step(dt){
   for(const id of['blue','red'])for(const pl of T[id].pilots){if(pl.isPlayer||pl.plane)continue;pl.rt-=dt;if(pl.rt<=0&&!match.over)spawnBot(pl);}
   for(const p of planes){if(!p.alive)continue;if(p.isPlayer)controlPlayer(p,dt);else botThink(p,dt);updatePlane(p,dt);}
   planes=planes.filter(p=>p.alive);
-  updateShips(dt);updateZones(dt);updateStrikes(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateFlares(dt);
+  updateShips(dt);updateWrecks(dt);updateZones(dt);updateStrikes(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateFlares(dt);
   smokeP.update(dt);fireP.update(dt);updateFx(dt);
   if(state==='dead'){deadT-=dt;if(deadT<=0)toHangar();}
   if(state==='side'&&Math.floor(performance.now()/1000)!==renderSide.s){renderSide.s=Math.floor(performance.now()/1000);renderSide();}
@@ -2796,7 +2825,7 @@ function frame(now){
     updateShowcase(dt);
     if(!paused){step(dt);updateCamera(dt);}
     updateShipUniforms();
-    waterMat.uniforms.t.value=now/1000;const px=innerHeight*renderer.getPixelRatio()*.5/Math.tan(camera.fov*Math.PI/360);smokeP.mat.uniforms.px.value=px;fireP.mat.uniforms.px.value=px;
+    waterMat.uniforms.t.value=now/1000;if(CLOUDMAT)CLOUDMAT.uniforms.t.value=now/1000;const px=innerHeight*renderer.getPixelRatio()*.5/Math.tan(camera.fov*Math.PI/360);smokeP.mat.uniforms.px.value=px;fireP.mat.uniforms.px.value=px;
     if(state==='hud'||state==='dead'){updateHud(dt);drawHud(state==='hud'?player:null);}
     engineSound();
     if(composer)composer.render(dt);else renderer.render(scene,camera);
