@@ -1509,6 +1509,27 @@ function updatePlane(p,dt){
   if(p.shield>0&&p.state==='fly')p.shield-=dt;
   for(const k in p.cd)p.cd[k]=Math.max(0,p.cd[k]-dt);
   const h=p.home||(p.home=homeOf({kind:'carrier',ref:T[p.team].carrier})),c=h.f,gy=h.y+p.mesh.userData.gearH;
+  if(p.state==='parked'&&p.isPlayer){engineFx(p,.12,true);p.mesh.userData.gear.visible=true;cWorld(c,p.tx,gy,p.tz,p.pos);p.q.setFromAxisAngle(AY,c.rot+p.ta);p.vel.set(0,0,0);
+    if(p.thr>.04||p.taxiGo){p.state='ground';p.speed=0;say('');}return;}
+  if(p.state==='ground'){
+    /* ground roll: throttle pushes, nosewheel steers (sharp when slow, gentle when fast), brakes and grass slow you down */
+    const VR=Math.max(150/KT,p.def.stall*1.08),X0=-(RW.W/2);
+    const onSlab=p.tx>X0-RW.AP-18&&p.tx<RW.W/2+92&&Math.abs(p.tz)<RW.L/2+85;
+    let steer=clamp(p.inp.x+p.inp.yaw+((hold.tr||keys.ArrowRight)?1:0)-((hold.tl||keys.ArrowLeft)?1:0),-1,1);
+    const push=p.thr*24*p.def.thrust*(p.ab?1.35:1),drag=.012*p.speed*p.speed*.05+.6+(p.brk||keys.KeyB?22:0)+(onSlab?0:9);
+    p.speed=Math.max(0,p.speed+(push-drag)*dt);if(p.thr<.05&&p.speed<.5)p.speed=0;
+    const rate=steer*clamp(p.speed/16,0,.7)*clamp(55/Math.max(p.speed,1),.12,1);p.ta-=rate*dt;
+    p.tx+=-Math.sin(p.ta)*p.speed*dt;p.tz+=-Math.cos(p.ta)*p.speed*dt;
+    const wpos=new V3();cWorld(c,p.tx,0,p.tz,wpos);const gh=onSlab?h.y:Math.max(terrainH(wpos.x,wpos.z),h.y-2);
+    if(!onSlab&&terrainH(wpos.x,wpos.z)<1){crash(p,'water');return;}
+    p.pos.set(wpos.x,gh+p.mesh.userData.gearH,wpos.z);p.q.setFromAxisAngle(AY,c.rot+p.ta);
+    tA.set(0,0,-1).applyQuaternion(p.q);p.vel.copy(tA).multiplyScalar(p.speed);
+    engineFx(p,p.ab?1.5:Math.max(.15,p.thr),true);p.mesh.userData.gear.visible=true;
+    if(p.speed>30&&Math.random()<dt*15){tB.set(0,0,1).applyQuaternion(p.q).multiplyScalar(p.def.b.L/2+3).add(p.pos);smoke(tB.x,gh+.5,tB.z,1.5,6,1,2,.2);}
+    if(p.speed>VR*.6&&p.isPlayer)camShake=Math.max(camShake,.05);
+    if(p.speed>=VR&&(p.inp.y>.15||p.speed>VR*1.12||keys.KeyS||(lastDev==='pad'&&gp.y>.2))){p.state='fly';p.shield=5;p.grace=3;tQ.setFromAxisAngle(AX,.16);p.q.multiply(tQ);p.gear=false;say('');
+      if(p.isPlayer){aimDir.set(0,0,-1).applyQuaternion(p.q);aimUp.set(0,1,0);rotateAim(0,.14);toast('Взлёт!');}}
+    return;}
   if(p.state==='parked'||p.state==='taxi'){
     if(p.state==='parked'){p.parkT+=dt;engineFx(p,.12,p.parkT>.8);if(p.parkT>3||p.taxiGo){p.state='taxi';p.wi=0;p.ts=0;if(p.isPlayer)say('ВЫРУЛИВАНИЕ НА ПОЛОСУ…');}}
     else{/* follow the taxi line exactly: distance along the polyline, heading eased toward the segment */
@@ -1576,7 +1597,7 @@ function collide(p,dt){
   if(y<1.5){crash(p,'water');return;}
   for(const b of BASES){if(b.owner!==p.team||b.hp<=0)continue;cLocal(b,p.pos,tC);
     if(Math.abs(tC.x)<RW.W/2+6&&Math.abs(tC.z)<RW.L/2&&y<RW.H+4){if(p.isPlayer&&p.speed<150&&-p.vel.y<16&&Math.abs(p.bank)<.7&&p.vel.y<4){p.home=homeOf({kind:'base',ref:b});landed(p);return;}}}
-  const th=terrainH(p.pos.x,p.pos.z);if(y<th){crash(p,'island');return;}
+  const th0=terrainH(p.pos.x,p.pos.z),th=th0>RW.H+4?th0+4:th0;if(y<th){crash(p,'island');return;}
   for(const id of['blue','red']){
     const c=T[id].carrier;if(!c.alive||(p.grace>0&&id===p.team))continue;
     cLocal(c,p.pos,tC);
@@ -2195,7 +2216,7 @@ function doLaunch(){
   if(preview){scene.remove(preview);preview=null;}
   if(myPilot.plane)removePlane(myPilot.plane);
   playerSpawn(d,PAINTS[save.paint[d.id]||0][1],save.loadout[d.id]||0);
-  camQ.copy(player.q);show('hud');say(player.state==='parked'?'В АНГАРЕ · ВЫРУЛИВАНИЕ ЧЕРЕЗ 3 С (ГАЗ — СРАЗУ)':'НА КАТАПУЛЬТЕ: НАЖМИТЕ ОГОНЬ ИЛИ ГАЗ НА МАКСИМУМ');thrTarget=0;kb.x=kb.y=kb.yaw=0;lockMouse();
+  camQ.copy(player.q);show('hud');say(player.state==='parked'?'В АНГАРЕ · ДАЙ ГАЗ И ВЫРУЛИВАЙ К ПОЛОСЕ':'НА КАТАПУЛЬТЕ: НАЖМИТЕ ОГОНЬ ИЛИ ГАЗ НА МАКСИМУМ');thrTarget=0;kb.x=kb.y=kb.yaw=0;lockMouse();
 };
 $('#joinB').onclick=()=>{audioInit();setTeam('blue');toHangar();};
 $('#joinR').onclick=()=>{audioInit();setTeam('red');toHangar();};
@@ -2294,7 +2315,7 @@ if(IS_TOUCH)setTouchUI(true);
 const joyEl=$('#joy'),joyKnob=$('#joy i');
 joyEl.addEventListener('pointerdown',e=>{audioInit();lastDev='touch';setTouchUI(true);stick.id=e.pointerId;joyEl.setPointerCapture(e.pointerId);joyMove(e);e.stopPropagation();});
 function joyMove(e){if(e.pointerId!==stick.id)return;const r=joyEl.getBoundingClientRect(),R=r.width/2;let dx=(e.clientX-r.left-R)/R,dy=(e.clientY-r.top-R)/R;const l=Math.hypot(dx,dy);if(l>1){dx/=l;dy/=l;}
-  stick.x=Math.sign(dx)*Math.pow(Math.abs(dx),1.5);stick.y=Math.sign(dy)*Math.pow(Math.abs(dy),1.5);joyKnob.style.transform='translate('+(dx*R*.6)+'px,'+(dy*R*.6)+'px)';}
+  const js=save.opt.jsens||1;stick.x=clamp(Math.sign(dx)*Math.pow(Math.abs(dx),1.5)*js,-1,1);stick.y=clamp(Math.sign(dy)*Math.pow(Math.abs(dy),1.5)*js,-1,1);joyKnob.style.transform='translate('+(dx*R*.6)+'px,'+(dy*R*.6)+'px)';}
 joyEl.addEventListener('pointermove',joyMove);
 const joyEnd=e=>{if(e.pointerId===stick.id){stick.id=null;stick.x=stick.y=0;joyKnob.style.transform='';}};joyEl.addEventListener('pointerup',joyEnd);joyEl.addEventListener('pointercancel',joyEnd);
 const look={id:null,ox:0,oy:0,y:0,p:0,ty:0,tp:0};
@@ -2373,12 +2394,13 @@ function openMore(){
   const B=(id,t,v)=>'<button class="btn" id="'+id+'">'+t+'<i>'+v+'</i></button>';
   showModal('<h2>'+(inGame?'⏸ ПАУЗА':'⚙ НАСТРОЙКИ')+'</h2>'+
    (inGame?'<div class="stat"><span>Очки: '+(myPilot?myPilot.score:0)+'</span><span>Кредиты: '+save.cr+'</span><span style="color:var(--blue)">Синие '+Math.round(T.blue.tickets)+'</span><span style="color:var(--red)">Красные '+Math.round(T.red.tickets)+'</span></div><button class="btn g" onclick="closeModal()">▶ ПРОДОЛЖИТЬ</button>':'')+
-   '<h3>УПРАВЛЕНИЕ</h3><div class="opt">'+B('mCtrl','Мышь',C[save.opt.ctrl])+B('mSens','Чувствительность',S[save.opt.sens]||'средняя')+B('mInv','Инверсия',save.opt.invY?'вкл':'выкл')+B('mAs','Автокрен',save.opt.assist?'вкл':'выкл')+B('mAim','Автоприцел',save.opt.aim?'вкл':'выкл')+'</div>'+
+   '<h3>УПРАВЛЕНИЕ</h3><div class="opt">'+B('mCtrl','Мышь',C[save.opt.ctrl])+B('mSens','Чувствительность',S[save.opt.sens]||'средняя')+B('mJs','Джойстик',{.7:'мягкий',1:'обычный',1.4:'резкий'}[save.opt.jsens||1])+B('mInv','Инверсия',save.opt.invY?'вкл':'выкл')+B('mAs','Автокрен',save.opt.assist?'вкл':'выкл')+B('mAim','Автоприцел',save.opt.aim?'вкл':'выкл')+'</div>'+
    '<h3>ЭКРАН И ЗВУК</h3><div class="opt">'+B('mQ','Графика',Q[save.opt.q])+B('mView','Камера',VIEWS[save.opt.view])+B('mKeys','Подсказки клавиш',save.opt.keys?'вкл':'выкл')+B('mSnd','Звук',save.opt.sound?'вкл':'выкл')+'</div>'+
    '<div class="opt" style="margin-top:.4rem"><button class="btn y" id="mHelp">⌨ УПРАВЛЕНИЕ</button>'+(inGame?'<button class="btn" id="mHg">✈ В АНГАР</button>':'<button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>')+'</div>');
   const mh=$('#mHg');if(mh)mh.onclick=()=>{closeModal();if(player){removePlane(player);player=null;}toHangar();};
   $('#mSnd').onclick=()=>{save.opt.sound=!save.opt.sound;if(save.opt.sound)audioInit();persist();openMore();};
   $('#mCtrl').onclick=()=>{save.opt.ctrl={aim:'joy',joy:'kb',kb:'aim'}[save.opt.ctrl]||'aim';persist();openMore();};
+  $('#mJs').onclick=()=>{save.opt.jsens={.7:1,1:1.4,1.4:.7}[save.opt.jsens||1]||1;persist();openMore();};
   $('#mSens').onclick=()=>{save.opt.sens={.6:1,1:1.6,1.6:.6}[save.opt.sens]||1;persist();openMore();};
   $('#mInv').onclick=()=>{save.opt.invY=!save.opt.invY;persist();openMore();};
   $('#mAim').onclick=()=>{save.opt.aim=!save.opt.aim;persist();openMore();};
@@ -2453,7 +2475,7 @@ function controlPlayer(p,dt){
   p.thr=thrTarget;p.brk=!!keys.KeyB||!!gp.brk||p.brk&&$('#bBrk').classList.contains('on');
   const gunOn=keys.Space||hold.gun||gp.gun,wepOn=keys.KeyF||hold.wep||gp.wep;
   if(p.state==='cat'&&(gunOn||wepOn||stick.id!==null&&Math.abs(stick.y)>.5)){p.autoGo=true;thrTarget=1;}
-  if(p.state==='parked'&&(gunOn||wepOn||thrTarget>.15))p.taxiGo=true;
+  if(p.state==='parked'&&(gunOn||wepOn||thrTarget>.04))p.taxiGo=true;
   if(p.state==='taxi'&&(gunOn||wepOn||thrTarget>.6))p.taxiFast=true;
   if(gunOn)fireGun(p);
   const w=curW(p),wd=w?W[w.id]:null;p.lockNeed=wd&&wd.lock||1;
@@ -2653,9 +2675,11 @@ function updateHud(dt){
   {const bb=E('boostb');bb.style.display=p.mods.boost?'grid':'none';bb.classList.toggle('on',p.boostT>0);setT('boostc',p.boostT>0?'АКТИВЕН':p.boostCd>0?Math.ceil(p.boostCd)+' с':'ГОТОВ');
    const mk=Object.keys(p.mods).join();if(mk!==updateHud.mk){updateHud.mk=mk;E('modst').innerHTML=Object.keys(p.mods).map(k=>'<span>'+MODS[k].i+' '+MODS[k].n.toUpperCase()+'</span>').join('');}}
   let hint='';
-  if(p.state==='fly'){const c=T[p.team].carrier;if(c.alive){cLocal(c,p.pos,tD);if(Math.hypot(tD.x,tD.z)<2500&&p.pos.y<500){
+  if(p.state==='fly'||p.state==='ground'){const c=T[p.team].carrier;if(c.alive&&p.state==='fly'){cLocal(c,p.pos,tD);if(Math.hypot(tD.x,tD.z)<2500&&p.pos.y<500){
       hint=!p.gear?'Посадка: выпустите шасси — L':'ПОСАДКА · скорость '+Math.round(p.speed*KT)+' (нужно < '+Math.round(150*KT)+' уз) · снижение '+Math.max(0,Math.round(-p.vel.y))+' (< 16 м/с)';}}
-    for(const z of BASES){if(Math.hypot(p.pos.x-z.cx,p.pos.z-z.cz)<z.R){const mine=p.team==='blue'?z.prog:-z.prog,pc=Math.round(Math.max(0,mine)*100),hp=Math.round(z.hp/z.maxhp*100);
+    if(p.state==='ground'){const c2=p.home.f,thr=new V3();cWorld(c2,0,RW.H,RW.L/2-40,thr);const d=Math.hypot(thr.x-p.pos.x,thr.z-p.pos.z),onRw=Math.abs(p.tx)<RW.W/2&&Math.abs(p.tz)<RW.L/2;
+      hint=onRw?'ВЗЛЁТ: ГАЗ НА МАКСИМУМ · '+Math.round(p.speed*KT)+' / 150 уз · потяни на себя':'РУЛЁЖКА: к полосе '+Math.round(d)+' м · '+Math.round(p.speed*KT)+' уз · джойстик — руль, B — тормоз';}
+    if(!hint)for(const z of BASES){if(Math.hypot(p.pos.x-z.cx,p.pos.z-z.cz)<z.R){const mine=p.team==='blue'?z.prog:-z.prog,pc=Math.round(Math.max(0,mine)*100),hp=Math.round(z.hp/z.maxhp*100);
       hint=z.owner===p.team?'◆ '+z.name+' — НАША БАЗА ('+hp+'%) · можно сесть на полосу':z.owner?'◆ '+z.name+': РАЗРУШЬТЕ БАЗУ — '+hp+'% (бомбы, ракеты, пушка)':
         p.pos.y>z.ALT?'◆ '+z.name+': опуститесь ниже '+z.ALT+' м для захвата':'◆ ЗАХВАТ '+z.name+': '+pc+'%'+(z.inside[enemyOf(p.team)]?' · враг мешает!':'');}}
     if(!hint&&aimMode()&&!isLocked())hint='Кликните по экрану, чтобы управлять мышью · Esc — меню';}
@@ -2687,6 +2711,7 @@ function updateHud(dt){
     const lkq=p.lockT===q&&p.locked;showT(q.pos,lkq?'#ff9a3c':'#e0584c',(lkq||p.autoT===q?q.pilot.call+' · ':'')+(d/1000).toFixed(1)+' км',lkq);}
   const ec=T[enemyOf(p.team)];
   for(const m of missiles){if(m.type!=='strike'||m.team===p.team)continue;const d=m.pos.distanceTo(p.pos);if(d<12000)showT(m.pos,'#ff3a2a','⚠ РАКЕТА '+(d/1000).toFixed(1)+' км',d<1500);}
+  if(p.state==='ground'||p.state==='parked'){const thr=new V3();cWorld(p.home.f,0,RW.H+6,RW.L/2-40,thr);if(!(Math.abs(p.tx)<RW.W/2&&Math.abs(p.tz)<RW.L/2))showT(thr,'#ffc94a','▼ ПОЛОСА '+Math.round(thr.distanceTo(p.pos))+' м',true);}
   for(const z of ZONES){const zp=tB.set(z.cx,250,z.cz),d=zp.distanceTo(p.pos);showT(zp,z.owner?(z.owner==='blue'?'#5aa8ff':'#ff6a5a'):'#ffffff','◆ '+z.short+' '+(d/1000).toFixed(1)+' км');}
   {const cw2=curW(p),ag=cw2&&W[cw2.id].kind!=='aa';for(const s of [...ec.boats,ec.carrier]){if(!s.alive)continue;const d=s.pos.distanceTo(p.pos);const lk=p.lockT===s&&p.locked;if(!lk&&d>(ag?11000:(s.kind==='carrier'?9000:5000)))continue;showT(s.pos,lk?'#ff9a3c':'#ffb347',(s.kind==='carrier'?'⚓ ':'')+(d/1000).toFixed(1)+' км',lk);}}
   if(cw&&cw.id==='bomb'&&p.state==='fly'){const t=(p.vel.y+Math.sqrt(p.vel.y*p.vel.y+19.6*Math.max(p.pos.y,1)))/9.8;tA.copy(p.pos).addScaledVector(p.vel,t);tA.y=0;showT(tA,'#ffffff','ПАДЕНИЕ');}
