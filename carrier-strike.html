@@ -94,8 +94,10 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 /* tablet / phone layout: left thumb flies, right thumb fights */
 body.touch #joy{display:block;position:absolute;left:max(2rem,env(safe-area-inset-left));bottom:max(2rem,env(safe-area-inset-bottom));width:14rem;height:14rem;border-radius:50%;background:#10261c66;border:2px solid #6cff8c77;pointer-events:auto;touch-action:none}
 body.touch #joy i{position:absolute;left:50%;top:50%;width:5.6rem;height:5.6rem;margin:-2.8rem 0 0 -2.8rem;border-radius:50%;background:#6cff8c55;border:2px solid #6cff8c;pointer-events:none}
-body.touch #yawL,body.touch #yawR{display:grid;width:5.4rem;height:5.4rem;bottom:calc(max(2rem,env(safe-area-inset-bottom)) + 12.5rem);font-size:1.6rem}
-body.touch #yawL{left:max(1rem,env(safe-area-inset-left))}body.touch #yawR{left:calc(max(1rem,env(safe-area-inset-left)) + 11rem)}
+body.touch #yawL,body.touch #yawR{display:grid;width:6.4rem;height:6.4rem;bottom:calc(max(2rem,env(safe-area-inset-bottom)) + 10.6rem);font:800 .95rem/1.15 var(--ui);color:#fff;background:#1b2027cc;border:2px solid #ffffff44;z-index:2}
+body.touch #yawL{left:calc(max(2rem,env(safe-area-inset-left)) - 1.6rem)}body.touch #yawR{left:calc(max(2rem,env(safe-area-inset-left)) + 9.2rem)}
+body.touch #yawL:active,body.touch #yawR:active{background:#6cff8c55}
+body.touch #turnL,body.touch #turnR{display:none!important}
 body.touch #thrUp,body.touch #thrDn{display:grid;width:5.8rem;height:5.8rem;right:calc(max(12px,env(safe-area-inset-right)) + 25rem);font-size:1.6rem}
 body.touch #thrUp{bottom:9.5rem}body.touch #thrDn{bottom:2.5rem}
 body.touch #fireg{left:auto;right:max(1.5rem,env(safe-area-inset-right));bottom:2rem;width:11rem;height:11rem}
@@ -301,7 +303,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
 </section>
 <section id="hud" hidden>
  <div id="pad"></div>
- <canvas id="hudc"></canvas><div id="vig"></div><div id="stk"><i></i></div><div id="joy"><i></i></div><button class="hb tap" id="yawL">◀<small>РУЛЬ</small></button><button class="hb tap" id="yawR">▶<small>РУЛЬ</small></button><button class="hb tap" id="thrUp">▲<small>ГАЗ</small></button><button class="hb tap" id="thrDn">▼<small>ГАЗ</small></button><button class="hb tap" id="autob">АВТО<small id="autoc">ВЫКЛ</small><kbd class="kk">I</kbd></button>
+ <canvas id="hudc"></canvas><div id="vig"></div><div id="stk"><i></i></div><div id="joy"><i></i></div><button class="hb tap" id="yawL">Поворот<br>влево</button><button class="hb tap" id="yawR">Поворот<br>вправо</button><button class="hb tap" id="thrUp">▲<small>ГАЗ</small></button><button class="hb tap" id="thrDn">▼<small>ГАЗ</small></button><button class="hb tap" id="autob">АВТО<small id="autoc">ВЫКЛ</small><kbd class="kk">I</kbd></button>
  <div id="dmg"></div><div id="hint"></div>
  <div id="topbar"><span style="color:var(--blue);font-size:1rem">СИНИЙ</span><b id="tkB">100</b><div class="tb" id="tbB"><i style="background:var(--blue);left:0"></i></div><b id="clock">20:00</b><div class="tb" id="tbR"><i style="background:var(--red);right:0"></i></div><b id="tkR">100</b><span style="color:var(--red);font-size:1rem">КРАСНЫЙ</span></div>
  <div id="obj"></div><div id="feed"></div>
@@ -2076,7 +2078,7 @@ pad.addEventListener('pointermove',e=>{if(e.pointerId===stick.id){const R=Math.m
 const endPad=e=>{if(e.pointerType==='mouse'){if(e.button===0)hold.gun=false;if(e.button===2)hold.wep=false;return;}if(e.pointerId===stick.id){stick.id=null;stick.x=stick.y=0;stkEl.style.display='none';}};
 pad.addEventListener('pointerup',endPad);pad.addEventListener('pointercancel',endPad);
 function holdBtn(id,k){const b=$(id);b.addEventListener('pointerdown',e=>{audioInit();hold[k]=true;b.setPointerCapture(e.pointerId);e.stopPropagation();});const u=()=>hold[k]=false;b.addEventListener('pointerup',u);b.addEventListener('pointercancel',u);}
-holdBtn('#fireg','gun');holdBtn('#firew','wep');holdBtn('#yawL','yl');holdBtn('#yawR','yr');holdBtn('#thrUp','tu');holdBtn('#thrDn','td');holdBtn('#turnL','tl');holdBtn('#turnR','tr');
+holdBtn('#fireg','gun');holdBtn('#firew','wep');holdBtn('#yawL','tl');holdBtn('#yawR','tr');holdBtn('#thrUp','tu');holdBtn('#thrDn','td');holdBtn('#turnL','tl');holdBtn('#turnR','tr');
 $('#slots').addEventListener('click',e=>{const sl=e.target.closest('.slot');if(sl&&player&&sl.dataset.i)player.sel=+sl.dataset.i;});
 $('#nextw').onclick=()=>{if(player)nextWep(player);};
 $('#zoomb').onclick=()=>zoom=!zoom;
