@@ -146,6 +146,8 @@ body.touch #keys{display:none!important}
 .mmStats i{display:block;height:.4rem;border-radius:.3rem;background:#ffffff1a;overflow:hidden}.mmStats i b{display:block;height:100%;background:linear-gradient(90deg,#3fb865,#6cff8c);font-size:0}
 /* compact HUD while flying (about a third smaller) */
 html.hudmode{font-size:clamp(7px,min(.85vw,1.6vh),12px)}
+#ckexit{display:none;position:absolute;top:max(.6rem,env(safe-area-inset-top));right:max(.8rem,env(safe-area-inset-right));z-index:5;pointer-events:auto;background:#0d1a24cc;border:1px solid #ffffff44;border-radius:1rem;color:#e6f2ff;font:800 1rem var(--ui);padding:.5rem 1rem;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+body.ckpt #ckexit{display:block}
 #hideb{position:absolute;top:max(.6rem,env(safe-area-inset-top));left:max(.8rem,env(safe-area-inset-left));z-index:5;pointer-events:auto;background:#10261cc0;border:2px solid #4adf7a88;border-radius:1rem;color:var(--green);font:800 1rem var(--ui);padding:.35rem .8rem;display:flex;gap:.4rem;align-items:center}
 #hideb span{font-size:.8rem;letter-spacing:.05em}
 #radarw{top:4.6rem!important}
@@ -154,7 +156,19 @@ html.hudmode{font-size:clamp(7px,min(.85vw,1.6vh),12px)}
 body.minui .topbtns,body.minui #loopb,body.minui #rollb,body.minui #zoomb,body.minui #strikeb,body.minui #autob,body.minui #boostb,body.minui #keys,body.minui #slots,body.minui #obj,body.minui #modst,
 body.minui #turnL,body.minui #turnR,body.minui #nextw,body.minui #ring,body.minui #rdspd,body.minui #rdalt,body.minui #feed,body.minui #hint,body.minui #thrp{display:none!important}
 body.minui #flareb{opacity:.75}
-body.ckpt #ring,body.ckpt #rdspd,body.ckpt #rdalt,body.ckpt #aim{display:none!important}
+body.ckpt #ring,body.ckpt #rdspd,body.ckpt #rdalt,body.ckpt #aim,body.ckpt .topbtns,body.ckpt #loopb,body.ckpt #rollb,body.ckpt #zoomb,body.ckpt #strikeb,body.ckpt #autob,body.ckpt #boostb,body.ckpt #obj,body.ckpt #slots,body.ckpt #modst,body.ckpt #hint,body.ckpt #keys,body.ckpt #nextw,body.ckpt #feed{display:none!important}
+body.ckpt #hideb{display:none}
+/* polished HUD buttons */
+.hb{background:radial-gradient(circle at 50% 30%,#1d2c38e6,#0b141cdd 70%)!important;border:1.5px solid #ffffff3a!important;color:#e8f4ff!important;box-shadow:0 .3rem 1rem #0007,inset 0 1px 0 #ffffff22;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);font-weight:800;letter-spacing:.02em;transition:transform .08s,box-shadow .08s}
+.hb:active{transform:scale(.94);box-shadow:0 0 1.4rem #6cff8c88,inset 0 0 1rem #6cff8c55}
+.hb small{color:#9fd8ff!important;font-weight:700}
+#fireg{background:radial-gradient(circle at 50% 30%,#5a1e1ee6,#2a0c0cdd 70%)!important;border-color:#ff8a7a66!important}
+#firew{background:radial-gradient(circle at 50% 30%,#1e3a5ae6,#0b1a2add 70%)!important;border-color:#8ac8ff66!important}
+.topbtns button{background:#0d1a24cc!important;border:1px solid #ffffff33!important;color:#e6f2ff!important;border-radius:.9rem!important;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#joy{background:radial-gradient(circle,#0d1a2444,#0d1a2499)!important;border:1.5px solid #ffffff44!important}#joy i{background:radial-gradient(circle at 40% 35%,#ffffffcc,#9fb8cc99)!important;border:none!important;box-shadow:0 .3rem 1rem #0008}
+#thr .tr{background:#0d1a24aa!important;border-color:#ffffff33!important}#thr .fl{background:linear-gradient(#6cff8c,#2fb860)!important}
+.card{background:linear-gradient(160deg,#0f2230f2,#081620f2)!important;border:1px solid #ffffff2a!important;border-radius:1.4rem!important}
+.card .btn{border-radius:.9rem}.opt .btn{background:#ffffff0c;border:1px solid #ffffff22;color:#e6f2ff}.opt .btn i{color:#7fd0ff}
 /* loading screen */
 #load{position:fixed;inset:0;z-index:200;background:radial-gradient(ellipse at 50% 40%,#123a5c,#06121c 70%);display:grid;place-items:center;transition:opacity .5s;pointer-events:none}
 #load.off{opacity:0}#load .in{display:flex;flex-direction:column;align-items:center;gap:1.4rem}
@@ -307,7 +321,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
  <div id="dmg"></div><div id="hint"></div>
  <div id="topbar"><span style="color:var(--blue);font-size:1rem">СИНИЙ</span><b id="tkB">100</b><div class="tb" id="tbB"><i style="background:var(--blue);left:0"></i></div><b id="clock">20:00</b><div class="tb" id="tbR"><i style="background:var(--red);right:0"></i></div><b id="tkR">100</b><span style="color:var(--red);font-size:1rem">КРАСНЫЙ</span></div>
  <div id="obj"></div><div id="feed"></div>
- <button id="hideb" title="Скрыть кнопки (H)">👁<span id="hidet">СКРЫТЬ</span></button>
+ <button id="ckexit" title="Вид">👁 ВИД</button><button id="hideb" title="Скрыть кнопки (H)">👁<span id="hidet">СКРЫТЬ</span></button>
  <div id="radarw"><canvas id="radar" width="260" height="260"></canvas><div id="thrp">0%</div></div>
  <div id="thr"><div class="ab" id="abb" style="position:relative">АБ<kbd class="kk">X</kbd></div><div class="tr"><div class="fl" id="thrf"></div></div></div>
  <div class="topbtns" id="topbtns">
@@ -354,13 +368,14 @@ const SAVE_KEY='carrierstrike.v1';
 const IS_TOUCH=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 let save={cr:1500,pts:0,xp:null,mods:{},owned:['a4'],upg:{},loadout:{},paint:{},sel:'a4',m:{k:0,b:0,l:0,done:[]},opt:{}};
 try{const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');if(s){save=Object.assign(save,s);}}catch(e){}
-const OPT0={sound:true,ctrl:'aim',sens:1,invY:false,assist:true,aim:true,steer:false,q:IS_TOUCH?1:3,view:0,keys:false,minui:false,ver:5};
+const OPT0={sound:true,ctrl:'aim',sens:1,invY:false,assist:true,aim:true,steer:false,q:IS_TOUCH?2:3,view:0,keys:false,minui:false,ver:6};
 if(save.opt&&save.opt.ver!==2&&save.opt.ver!==3){const o=save.opt;save.opt={sound:o.sound!==false,invY:!!o.invY,assist:o.assist!==false,ctrl:o.mouse?'joy':'aim',q:o.q===0?0:OPT0.q};}
 if(save.opt&&save.opt.ver===2){save.opt.q=Math.max(save.opt.q,OPT0.q);save.opt.ver=3;}
 /* v4: tablets go back to medium graphics (smoother flight); everybody gets the basic aim assist */
 if(save.opt&&save.opt.ver===3){if(IS_TOUCH&&save.opt.q>1)save.opt.q=1;save.opt.aim=true;save.opt.ver=4;}
 if(save.opt&&save.opt.ver===4){save.opt.keys=false;save.opt.ver=5;}
-save.opt=Object.assign({},OPT0,save.opt||{});save.opt.ver=5;
+if(save.opt&&save.opt.ver===5){if(save.opt.q<2)save.opt.q=2;save.opt.ver=6;}
+save.opt=Object.assign({},OPT0,save.opt||{});save.opt.ver=6;
 save.m=Object.assign({k:0,b:0,l:0,done:[]},save.m||{});
 if(save.xp==null)save.xp=save.pts||0;save.mods=save.mods||{};
 if(!save.owned.includes('f16'))save.owned.push('f16');
@@ -2242,6 +2257,7 @@ function stickActive(){return stick.id!==null;}
 const stkEl=$('#stk'),stkKnob=$('#stk i');
 function applyMinUI(){document.body.classList.toggle('minui',!!save.opt.minui);const t=$('#hidet');if(t)t.textContent=save.opt.minui?'ПОКАЗАТЬ':'СКРЫТЬ';}
 function toggleMinUI(){save.opt.minui=!save.opt.minui;persist();applyMinUI();}
+$('#ckexit').addEventListener('pointerdown',e=>{e.stopPropagation();cycleView();});
 $('#hideb').addEventListener('pointerdown',e=>{e.stopPropagation();toggleMinUI();});applyMinUI();
 /* any touch on the screen switches to the tablet layout (an iPad with a keyboard still gets the joystick) */
 window.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&!document.body.classList.contains('touch'))setTouchUI(true);},true);
@@ -2253,6 +2269,10 @@ function joyMove(e){if(e.pointerId!==stick.id)return;const r=joyEl.getBoundingCl
   stick.x=Math.sign(dx)*Math.pow(Math.abs(dx),1.5);stick.y=Math.sign(dy)*Math.pow(Math.abs(dy),1.5);joyKnob.style.transform='translate('+(dx*R*.6)+'px,'+(dy*R*.6)+'px)';}
 joyEl.addEventListener('pointermove',joyMove);
 const joyEnd=e=>{if(e.pointerId===stick.id){stick.id=null;stick.x=stick.y=0;joyKnob.style.transform='';}};joyEl.addEventListener('pointerup',joyEnd);joyEl.addEventListener('pointercancel',joyEnd);
+const look={id:null,ox:0,oy:0,y:0,p:0,ty:0,tp:0};
+pad.addEventListener('pointerdown',e=>{if(save.opt.view===2&&state==='hud'&&e.pointerType!=='mouse'&&look.id===null&&document.body.classList.contains('touch')){look.id=e.pointerId;look.ox=e.clientX;look.oy=e.clientY;look.by=look.ty;look.bp=look.tp;pad.setPointerCapture(e.pointerId);}});
+pad.addEventListener('pointermove',e=>{if(e.pointerId===look.id){look.ty=clamp(look.by-(e.clientX-look.ox)/innerWidth*3.4,-2.4,2.4);look.tp=clamp(look.bp-(e.clientY-look.oy)/innerHeight*1.6,-.5,1);}});
+const lookEnd=e=>{if(e.pointerId===look.id){look.id=null;look.ty=0;look.tp=0;}};pad.addEventListener('pointerup',lookEnd);pad.addEventListener('pointercancel',lookEnd);
 pad.addEventListener('pointerdown',e=>{audioInit();
   if(e.pointerType==='mouse'){lastDev='mouse';lockMouse();if(e.button===0)hold.gun=true;if(e.button===2)hold.wep=true;return;}
   lastDev='touch';setTouchUI(true);
@@ -2486,7 +2506,7 @@ function updateCockpit(p,dt){
   /* HUD glass: F-16 style symbology (pitch ladder rolling with the bank, flight path marker, heading tape, speed and altitude boxes) */
   ckMFD.th-=dt;if(ckMFD.th<=0){ckMFD.th=.05;
     const x=ckMFD.H.x,HW=512,H=420,C=HW/2,CY=H*.52,f=fwdOf(p,tB),pitch=Math.asin(clamp(f.y,-1,1))*57.3,bank=p.bank,ppd=26,G='#5dff86';
-    x.clearRect(0,0,W,H);x.strokeStyle=G;x.fillStyle=G;x.lineWidth=3.2;x.shadowColor='rgba(0,30,8,.95)';x.shadowBlur=5;x.font='bold 22px monospace';x.textAlign='center';x.textBaseline='middle';
+    x.clearRect(0,0,HW,H);x.strokeStyle=G;x.fillStyle=G;x.lineWidth=3.2;x.shadowColor='rgba(0,30,8,.95)';x.shadowBlur=5;x.font='bold 22px monospace';x.textAlign='center';x.textBaseline='middle';
     x.save();x.beginPath();x.rect(90,70,HW-180,H-120);x.clip();x.translate(C,CY);x.rotate(-bank);
     for(let d=Math.ceil((pitch-12)/5)*5;d<=pitch+12;d+=5){const y=(pitch-d)*ppd;if(d===0){x.beginPath();x.moveTo(-200,y);x.lineTo(-30,y);x.moveTo(30,y);x.lineTo(200,y);x.stroke();continue;}
       x.setLineDash(d<0?[10,7]:[]);x.beginPath();x.moveTo(-110,y+(d>0?12:-12));x.lineTo(-110,y);x.lineTo(-40,y);x.moveTo(40,y);x.lineTo(110,y);x.lineTo(110,y+(d>0?12:-12));x.stroke();x.setLineDash([]);
@@ -2550,7 +2570,8 @@ function updateCamera(dt){
     if(v===2){
       camQ.copy(p.q);tA.set(0,b.R*1.45,b.cz+b.R*.6).applyQuaternion(p.q);camera.position.copy(p.pos).add(tA);
       tC.set(0,1,0).applyQuaternion(p.q);camera.up.copy(tC);
-      tB.set(0,b.R*1.45-120,-1000).applyQuaternion(p.q).add(p.pos);
+      look.y+=(look.ty-look.y)*Math.min(1,dt*8);look.p+=(look.tp-look.p)*Math.min(1,dt*8);
+      tB.set(0,-.12,-1).applyAxisAngle(AX,look.p).applyAxisAngle(AY,look.y).multiplyScalar(1000).add(new V3(0,b.R*1.45,0)).applyQuaternion(p.q).add(p.pos);
       camera.lookAt(tB);if(!zoom)fovT+=4;
     }else if(aimMode()&&p.state==='fly'){
       const dist=(20+b.L*.45)*(v===1?.68:1);
@@ -2703,7 +2724,7 @@ function drawHud(p){
       c.strokeStyle='rgba(108,255,140,.7)';c.fillStyle='rgba(108,255,140,.85)';c.lineWidth=1.4;c.textAlign=left?'right':'left';
       const v0=Math.floor((val-step*6)/step)*step;for(let v=v0;v<=val+step*6;v+=step){if(v<0)continue;const y=cy-(v-val)*px;const L=v%big===0?14:7;c.beginPath();c.moveTo(left?x0+34:x0-34,y);c.lineTo(left?x0+34-L:x0-34+L,y);c.stroke();
         if(v%big===0)c.fillText(String(v),left?x0+16:x0-16,y);}c.restore();};
-   const ck=save.opt.view===2;tape(ck?60:cx-RR-150,Math.round(p.speed*KT),10,50,true);tape(ck?W-60:cx+RR+150,Math.round(p.pos.y),25,100,false);}
+   const ck=save.opt.view===2;if(!ck)tape(cx-RR-150,Math.round(p.speed*KT),10,50,true);if(!ck)tape(cx+RR+150,Math.round(p.pos.y),25,100,false);}
   /* gun boresight: where the nose (and the guns) actually point */
   const bs=prj(hv2.copy(p.pos).addScaledVector(f,800));
   if(bs){c.strokeStyle='#6cff8c';c.lineWidth=2;const [x,y]=bs;c.beginPath();c.moveTo(x-16,y);c.lineTo(x-6,y);c.moveTo(x+6,y);c.lineTo(x+16,y);c.moveTo(x,y-16);c.lineTo(x,y-6);c.stroke();c.beginPath();c.arc(x,y,1.8,0,7);c.fillStyle='#6cff8c';c.fill();}
