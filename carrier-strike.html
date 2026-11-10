@@ -142,6 +142,16 @@ body.touch #keys{display:none!important}
 .mmShow{background:linear-gradient(160deg,#0d2a1fb3,#06141cb3);border:1px solid #ffffff22;border-radius:1.4rem;padding:1rem 1.2rem;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);min-width:20rem}
 .mmStats{display:grid;grid-template-columns:auto 9rem;gap:.25rem .7rem;align-items:center;margin-top:.5rem;font-size:.8rem;font-weight:700;color:var(--dim);text-shadow:none}
 .mmStats i{display:block;height:.4rem;border-radius:.3rem;background:#ffffff1a;overflow:hidden}.mmStats i b{display:block;height:100%;background:linear-gradient(90deg,#3fb865,#6cff8c);font-size:0}
+/* compact HUD while flying (about a third smaller) */
+html.hudmode{font-size:clamp(7px,min(.85vw,1.6vh),12px)}
+#hideb{position:absolute;top:max(.6rem,env(safe-area-inset-top));left:max(.8rem,env(safe-area-inset-left));z-index:5;pointer-events:auto;background:#10261cc0;border:2px solid #4adf7a88;border-radius:1rem;color:var(--green);font:800 1rem var(--ui);padding:.35rem .8rem;display:flex;gap:.4rem;align-items:center}
+#hideb span{font-size:.8rem;letter-spacing:.05em}
+#radarw{top:4.6rem!important}
+.tg .tx{font-size:.85rem}
+/* minimal mode: only what you need to fly and shoot */
+body.minui .topbtns,body.minui #loopb,body.minui #rollb,body.minui #zoomb,body.minui #strikeb,body.minui #autob,body.minui #boostb,body.minui #keys,body.minui #slots,body.minui #obj,body.minui #modst,
+body.minui #turnL,body.minui #turnR,body.minui #nextw,body.minui #ring,body.minui #rdspd,body.minui #rdalt,body.minui #feed,body.minui #hint,body.minui #thrp{display:none!important}
+body.minui #flareb{opacity:.75}
 /* loading screen */
 #load{position:fixed;inset:0;z-index:200;background:radial-gradient(ellipse at 50% 40%,#123a5c,#06121c 70%);display:grid;place-items:center;transition:opacity .5s;pointer-events:none}
 #load.off{opacity:0}#load .in{display:flex;flex-direction:column;align-items:center;gap:1.4rem}
@@ -222,7 +232,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
 .rdbox{border:2px solid var(--green);background:#10261c88;padding:.3rem .8rem;font-size:2.3rem;letter-spacing:.05em;text-align:center;margin:.2rem 0}
 #msg{position:absolute;left:50%;top:calc(50% + min(44vh,44vw)/2 + 1.2rem);transform:translateX(-50%);color:var(--yellow);font-size:1.6rem;white-space:nowrap;text-shadow:0 0 6px #000}
 #big{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-family:var(--ui);font-size:2.6rem;font-weight:800;color:var(--blue);text-shadow:0 0 8px #000;text-align:center}
-#warn{position:absolute;left:50%;top:24%;transform:translateX(-50%);font-size:2.2rem;font-weight:800;color:var(--red);font-family:var(--ui);text-shadow:0 0 8px #000;text-align:center;line-height:1.2}
+#warn{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:1.5rem;font-weight:800;color:var(--red);font-family:var(--ui);text-shadow:0 0 8px #000;text-align:center;line-height:1.2}
 #hpbar{position:absolute;left:50%;bottom:8.6rem;transform:translateX(-50%);width:18rem;height:.7rem;background:#0008;border:2px solid #4adf7a88;border-radius:.4rem;overflow:hidden}
 #hpbar i{display:block;height:100%;background:var(--green)}
 .tg{position:absolute;left:0;top:0;pointer-events:none;font-size:1rem;white-space:nowrap;will-change:transform}
@@ -294,6 +304,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
  <div id="dmg"></div><div id="hint"></div>
  <div id="topbar"><span style="color:var(--blue);font-size:1rem">СИНИЙ</span><b id="tkB">100</b><div class="tb" id="tbB"><i style="background:var(--blue);left:0"></i></div><b id="clock">20:00</b><div class="tb" id="tbR"><i style="background:var(--red);right:0"></i></div><b id="tkR">100</b><span style="color:var(--red);font-size:1rem">КРАСНЫЙ</span></div>
  <div id="obj"></div><div id="feed"></div>
+ <button id="hideb" title="Скрыть кнопки (H)">👁<span id="hidet">СКРЫТЬ</span></button>
  <div id="radarw"><canvas id="radar" width="260" height="260"></canvas><div id="thrp">0%</div></div>
  <div id="thr"><div class="ab" id="abb" style="position:relative">АБ<kbd class="kk">X</kbd></div><div class="tr"><div class="fl" id="thrf"></div></div></div>
  <div class="topbtns" id="topbtns">
@@ -340,12 +351,13 @@ const SAVE_KEY='carrierstrike.v1';
 const IS_TOUCH=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 let save={cr:1500,pts:0,xp:null,mods:{},owned:['a4'],upg:{},loadout:{},paint:{},sel:'a4',m:{k:0,b:0,l:0,done:[]},opt:{}};
 try{const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');if(s){save=Object.assign(save,s);}}catch(e){}
-const OPT0={sound:true,ctrl:'aim',sens:1,invY:false,assist:true,aim:true,steer:false,q:IS_TOUCH?1:3,view:0,keys:true,ver:4};
+const OPT0={sound:true,ctrl:'aim',sens:1,invY:false,assist:true,aim:true,steer:false,q:IS_TOUCH?1:3,view:0,keys:false,minui:false,ver:5};
 if(save.opt&&save.opt.ver!==2&&save.opt.ver!==3){const o=save.opt;save.opt={sound:o.sound!==false,invY:!!o.invY,assist:o.assist!==false,ctrl:o.mouse?'joy':'aim',q:o.q===0?0:OPT0.q};}
 if(save.opt&&save.opt.ver===2){save.opt.q=Math.max(save.opt.q,OPT0.q);save.opt.ver=3;}
 /* v4: tablets go back to medium graphics (smoother flight); everybody gets the basic aim assist */
 if(save.opt&&save.opt.ver===3){if(IS_TOUCH&&save.opt.q>1)save.opt.q=1;save.opt.aim=true;save.opt.ver=4;}
-save.opt=Object.assign({},OPT0,save.opt||{});save.opt.ver=4;
+if(save.opt&&save.opt.ver===4){save.opt.keys=false;save.opt.ver=5;}
+save.opt=Object.assign({},OPT0,save.opt||{});save.opt.ver=5;
 save.m=Object.assign({k:0,b:0,l:0,done:[]},save.m||{});
 if(save.xp==null)save.xp=save.pts||0;save.mods=save.mods||{};
 if(!save.owned.includes('f16'))save.owned.push('f16');
@@ -1793,13 +1805,13 @@ function helpHtml(){
   '<h3>ДВИГАТЕЛЬ</h3><div class="leg">'+L('Shift / Z','Газ больше / меньше')+L('Колесо','Газ мышью')+L('X','Форсаж')+L('Shift на катапульте','Взлёт')+'</div>'+
   '<h3>ОРУЖИЕ</h3><div class="leg">'+L('Пробел / ЛКМ','Пушка (целься в оранжевый кружок)')+L('F / ПКМ','Выбранная ракета / бомба')+L('1 – 5','Выбор оружия')+L('R / Tab','Следующее оружие')+L('G','Тепловые ловушки')+'</div>'+
   '<h3>СИСТЕМЫ</h3><div class="leg">'+L('L','Шасси')+L('K','Закрылки')+L('B','Тормоз')+'</div>'+
-  '<h3>КАМЕРА И МЕНЮ</h3><div class="leg">'+L('C','Зум прицела')+L('V','Вид: сзади / близко / кабина')+L('M','Карта')+L('H','Подсказки клавиш на экране')+L('Esc / P','Меню и пауза')+'</div>'+
+  '<h3>КАМЕРА И МЕНЮ</h3><div class="leg">'+L('C','Зум прицела')+L('V','Вид: сзади / близко / кабина')+L('M','Карта')+L('H','Скрыть / показать кнопки на экране')+L('Esc / P','Меню и пауза')+'</div>'+
   '<h3>ОСТРОВА</h3><div style="color:var(--dim)">5 островов-баз с полосами: 2 штаба, 2 острова обороны и центральный. С любого своего острова можно вылететь (ангар → «ВЫЛЕТ С») и сесть на его полосу для перезарядки. Чтобы забрать вражеский остров: разбейте базу до 0% (бомбы, ракеты, пушка), затем летайте в кольце ниже 700 м. Центр нейтральный — кто первый захватит. Кто захватит все 5 островов — победил. За захват +300 CR и +200 XP, за разрушение базы +500 CR.</div>'+
   '<h3>РАКЕТЫ</h3><div class="leg">'+Object.keys(W).filter(k=>W[k].kind==='aa'||W[k].kind==='ag').map(k=>L(W[k].s,W[k].d+' · захват '+W[k].lock+' с · '+(W[k].range/1000)+' км')).join('')+'</div>'+
   '<div style="color:var(--dim)">Меняйте вооружение в ангаре кнопкой «КОНФИГУРАЦИЯ». Ракете нужен захват: держите цель в прицеле, пока не появится «ЗАХВАТ ЦЕЛИ». Геймпад: левый стик — полёт, RT — пушка, RB — ракета, A — смена оружия, LB — ловушки, Start — меню. На телефоне: тяга слева, перетаскивание по экрану — штурвал.</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
 }
 /* ---------- screens ---------- */
-function show(s){state=s;$('#mainMenu').hidden=s!=='menu';if(s!=='hud'){unlockMouse();if(typeof stick!=='undefined'){stick.id=null;$('#stk').style.display='none';}}$('#sideScr').hidden=s!=='side';$('#hangar').hidden=s!=='hangar';$('#hud').hidden=!(s==='hud'||s==='dead');}
+function show(s){state=s;document.documentElement.classList.toggle('hudmode',s==='hud'||s==='dead');$('#mainMenu').hidden=s!=='menu';if(s!=='hud'){unlockMouse();if(typeof stick!=='undefined'){stick.id=null;$('#stk').style.display='none';}}$('#sideScr').hidden=s!=='side';$('#hangar').hidden=s!=='hangar';$('#hud').hidden=!(s==='hud'||s==='dead');}
 let preview=null;
 function toSide(){show('side');renderSide();}
 /* ===== main-menu showcase ===== */
@@ -2002,7 +2014,7 @@ function markKb(){if(!document.body.classList.contains('haskb')){document.body.c
 if(!IS_TOUCH)markKb();
 function renderKeys(){const el=$('#keys');if(!el)return;el.classList.toggle('on',!!save.opt.keys);
   const k=(a,b)=>'<div><b>'+a+'</b><span>'+b+'</span></div>';
-  el.innerHTML=k('W A S D','полёт')+k('← →','ровный поворот')+k('Shift / Z','газ')+k('X','форсаж')+k('Пробел','пушка')+k('F','ракета')+k('1-5 / R','оружие')+k('G','ловушки')+k('L','шасси')+k('V / C','камера / зум')+k('N / J','петля / бочка')+k('Y','турбо')+k('U','ракетный удар')+k('I','автонаведение')+k('M','карта')+k('Esc','меню')+'<span class="h">H — скрыть подсказки</span>';}
+  el.innerHTML=k('W A S D','полёт')+k('← →','ровный поворот')+k('Shift / Z','газ')+k('X','форсаж')+k('Пробел','пушка')+k('F','ракета')+k('1-5 / R','оружие')+k('G','ловушки')+k('L','шасси')+k('V / C','камера / зум')+k('N / J','петля / бочка')+k('Y','турбо')+k('U','ракетный удар')+k('I','автонаведение')+k('M','карта')+k('H','скрыть кнопки')+k('Esc','меню')+'<span class="h">меню → «Подсказки клавиш» — убрать</span>';}
 renderKeys();
 window.addEventListener('keydown',e=>{
   audioInit();markKb();
@@ -2020,7 +2032,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='KeyX')p.ab=!p.ab;if(e.code==='KeyL')p.gear=!p.gear;if(e.code==='KeyK')p.flaps=!p.flaps;
   if(e.code==='KeyT'){p.assist=!p.assist;save.opt.assist=p.assist;persist();toast('Помощь в пилотировании: '+(p.assist?'вкл':'выкл'));}
   if(e.code==='KeyC')zoom=!zoom;if(e.code==='KeyM')openMap();if(e.code==='KeyV')cycleView();
-  if(e.code==='KeyH'){save.opt.keys=!save.opt.keys;persist();renderKeys();}
+  if(e.code==='KeyH')toggleMinUI();
   if(e.code==='KeyI')toggleSteer();if(e.code==='KeyY')useBoost();if(e.code==='KeyU')playerStrike();if(e.code==='KeyN')stunt('loop');if(e.code==='KeyJ')stunt('roll',e.shiftKey?-1:1);
 });
 window.addEventListener('keyup',e=>{keys[e.code]=false;});
@@ -2036,6 +2048,11 @@ window.addEventListener('wheel',e=>{if(state!=='hud'||!$('#modal').hidden)return
 window.addEventListener('contextmenu',e=>e.preventDefault());
 function stickActive(){return stick.id!==null;}
 const stkEl=$('#stk'),stkKnob=$('#stk i');
+function applyMinUI(){document.body.classList.toggle('minui',!!save.opt.minui);const t=$('#hidet');if(t)t.textContent=save.opt.minui?'ПОКАЗАТЬ':'СКРЫТЬ';}
+function toggleMinUI(){save.opt.minui=!save.opt.minui;persist();applyMinUI();}
+$('#hideb').addEventListener('pointerdown',e=>{e.stopPropagation();toggleMinUI();});applyMinUI();
+/* any touch on the screen switches to the tablet layout (an iPad with a keyboard still gets the joystick) */
+window.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&!document.body.classList.contains('touch'))setTouchUI(true);},true);
 function setTouchUI(on){document.body.classList.toggle('touch',!!on);}
 if(IS_TOUCH)setTouchUI(true);
 const joyEl=$('#joy'),joyKnob=$('#joy i');
@@ -2360,11 +2377,11 @@ function updateHud(dt){
     el.firstChild.style.borderColor=col;el.lastChild.style.color=col;el.lastChild.textContent=text;
     el.style.transform='translate('+((tC.x*.5+.5)*innerWidth)+'px,'+((-tC.y*.5+.5)*innerHeight-12)+'px) translate(-50%,0)';};
   for(const q of planes){if(!q.alive||q.team===p.team||q===p)continue;const d=q.pos.distanceTo(p.pos);if(d>7000)continue;
-    showT(q.pos,p.lockT===q&&p.locked?'#ff9a3c':'#e0584c',q.pilot.call+' ('+q.pilot.name+') '+(d/1000).toFixed(1)+' км',p.lockT===q&&p.locked);}
+    const lkq=p.lockT===q&&p.locked;showT(q.pos,lkq?'#ff9a3c':'#e0584c',(lkq||p.autoT===q?q.pilot.call+' · ':'')+(d/1000).toFixed(1)+' км',lkq);}
   const ec=T[enemyOf(p.team)];
   for(const m of missiles){if(m.type!=='strike'||m.team===p.team)continue;const d=m.pos.distanceTo(p.pos);if(d<12000)showT(m.pos,'#ff3a2a','⚠ РАКЕТА '+(d/1000).toFixed(1)+' км',d<1500);}
-  for(const z of ZONES){const zp=tB.set(z.cx,250,z.cz),d=zp.distanceTo(p.pos);showT(zp,z.owner?(z.owner==='blue'?'#5aa8ff':'#ff6a5a'):'#ffffff','◆ '+z.name+' · '+zoneText(z)+' · '+(d/1000).toFixed(1)+' км');}
-  for(const s of [...ec.boats,ec.carrier]){if(!s.alive)continue;const d=s.pos.distanceTo(p.pos);if(d>11000)continue;const lk=p.lockT===s&&p.locked;showT(s.pos,lk?'#ff9a3c':'#ffb347',(s.kind==='carrier'?'АВИАНОСЕЦ ':'КАТЕР ')+(d/1000).toFixed(1)+' км · '+fmtT(d/Math.max(p.speed,60)),lk);}
+  for(const z of ZONES){const zp=tB.set(z.cx,250,z.cz),d=zp.distanceTo(p.pos);showT(zp,z.owner?(z.owner==='blue'?'#5aa8ff':'#ff6a5a'):'#ffffff','◆ '+z.short+' '+(d/1000).toFixed(1)+' км');}
+  {const cw2=curW(p),ag=cw2&&W[cw2.id].kind!=='aa';for(const s of [...ec.boats,ec.carrier]){if(!s.alive)continue;const d=s.pos.distanceTo(p.pos);const lk=p.lockT===s&&p.locked;if(!lk&&d>(ag?11000:(s.kind==='carrier'?9000:5000)))continue;showT(s.pos,lk?'#ff9a3c':'#ffb347',(s.kind==='carrier'?'⚓ ':'')+(d/1000).toFixed(1)+' км',lk);}}
   if(cw&&cw.id==='bomb'&&p.state==='fly'){const t=(p.vel.y+Math.sqrt(p.vel.y*p.vel.y+19.6*Math.max(p.pos.y,1)))/9.8;tA.copy(p.pos).addScaledVector(p.vel,t);tA.y=0;showT(tA,'#ffffff','ПАДЕНИЕ');}
   for(let i=n;i<tgPool.length;i++)tgPool[i].style.display='none';
   drawRadar(p);
@@ -2422,7 +2439,7 @@ function drawHud(p){
   c.beginPath();c.moveTo(cx,ty+3);c.lineTo(cx-6,ty+11);c.lineTo(cx+6,ty+11);c.closePath();c.fill();
   c.fillText(String(Math.round(hd)%360).padStart(3,'0'),cx,ty+24);
   /* speed and altitude tapes beside the sight ring */
-  {const tape=(x0,val,step,big,left)=>{const h=RR*1.6,y0=cy-h/2,px=h/(step*10);c.save();c.beginPath();c.rect(x0-46,y0,92,h);c.clip();c.fillStyle='rgba(6,20,14,.35)';c.fillRect(x0-34,y0,68,h);
+  {const tape=(x0,val,step,big,left)=>{const h=RR*1.6,y0=cy-h/2,px=h/(step*10);c.save();c.beginPath();c.rect(x0-46,y0,92,h);c.clip();c.fillStyle='rgba(6,20,14,.12)';c.fillRect(x0-34,y0,68,h);
       c.strokeStyle='rgba(108,255,140,.7)';c.fillStyle='rgba(108,255,140,.85)';c.lineWidth=1.4;c.textAlign=left?'right':'left';
       const v0=Math.floor((val-step*6)/step)*step;for(let v=v0;v<=val+step*6;v+=step){if(v<0)continue;const y=cy-(v-val)*px;const L=v%big===0?14:7;c.beginPath();c.moveTo(left?x0+34:x0-34,y);c.lineTo(left?x0+34-L:x0-34+L,y);c.stroke();
         if(v%big===0)c.fillText(String(v),left?x0+16:x0-16,y);}c.restore();};
