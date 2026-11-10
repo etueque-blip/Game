@@ -412,7 +412,7 @@ const DEFS=[
  b:{tanks:1,lerx:1,L:17,R:1.1,wing:[7.8,2,5.2,3.2,1.2,-.1,.02],tail:[3.2,1.2,2.9,1.8,6.7,.1,-.1],fins:[[1.8,6.2,3.2,3.6,1.5,2,.1],[-1.8,6.2,3.2,3.6,1.5,2,-.1]],cz:-3.5,intake:'under',iz:-1.5,eng:2}},
 {id:'j7',name:'J-7 Лёгкий перехватчик',cls:'ПЕРЕХВАТЧИК',country:'CHINA',price:1500,lvl:1,mods:['boost','gunaim'],trait:'БЫСТРЫЙ ПОДЪЁМ',maxSpd:370,thrust:1.3,turn:1.3,hp:90,stall:64,gun:'Тип 23-2 23mm',ammo:200,flares:24,color:0xbcc5cc,camo:0x8f9aa4,base:[6,8,7,4,3],
  b:{L:13.5,R:.85,wing:[7,1.2,3.6,5.2,1.6,-.1,0],tail:[2.6,1,2.2,1.4,5.4,0,0],fins:[[0,5,2.6,3,1.2,2,0]],cz:-2.4,intake:'nose',iz:0,eng:1}},
-{id:'mir',name:'Мираж III',cls:'ПЕРЕХВАТЧИК',country:'OTHER',price:2400,lvl:2,mods:['gunaim'],trait:'ДЕЛЬТА-КРЫЛО',maxSpd:390,thrust:1.15,turn:1.25,hp:95,stall:66,gun:'DEFA 30mm',ammo:250,flares:24,color:0xcbbf9f,camo:0x8f7d5a,base:[7,6,7,5,4],
+{id:'mir',name:'Мираж 2000',cls:'ПЕРЕХВАТЧИК',country:'OTHER',price:2400,lvl:2,mods:['gunaim'],trait:'ДЕЛЬТА-КРЫЛО',maxSpd:390,thrust:1.15,turn:1.25,hp:95,stall:66,gun:'DEFA 30mm',ammo:250,flares:24,color:0xcbbf9f,camo:0x8f7d5a,base:[7,6,7,5,4],
  b:{L:15,R:.9,wing:[9.2,1.2,3.8,7.8,1.4,-.1,0],tail:null,fins:[[0,5.8,3,4.4,1.5,2.4,0]],cz:-2.6,intake:'side',iz:-.9,eng:1}},
 {id:'fa18',name:'F/A-18E Супер Хорнет',cls:'ПАЛУБНЫЙ ИСТРЕБИТЕЛЬ',country:'USA',price:4500,lvl:3,mods:['boost','gunaim'],trait:'УНИВЕРСАЛ: ВЫСОКИЙ УГОЛ АТАКИ',maxSpd:420,thrust:1.25,turn:1.4,hp:150,stall:56,gun:'M61A2 20mm',ammo:578,flares:40,color:0x9aa3ab,camo:0x737c86,base:[7,7,8,7,6],
  b:{tanks:1,tipMsl:1,lerx:1,L:18.3,R:1.15,wing:[7.2,2.2,6.8,3.4,.6,-.05,0],tail:[3.2,1.3,3.1,1.8,7,.05,-.05],fins:[[1.5,4.8,3.6,3.6,1.6,2,.35],[-1.5,4.8,3.6,3.6,1.6,2,-.35]],cz:-4.6,intake:'side',iz:-1.4,eng:2}},
@@ -507,7 +507,7 @@ let ENVTEX=null,CLOUDMAT=null;
 /* ---- optional real 3D models (put files in the site's real/ folder; see README) ---- */
 const REAL={};let REALCFG={},REALCK=null;
 function fitModel(obj,len,cfg){
-  cfg=cfg||{};obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
+  cfg=cfg||{};const hid=cfg.hide||[];if(hid.length){const rm=[];obj.traverse(o=>{if(o.isLight||(o.name&&hid.some(h=>o.name.indexOf(h)>=0)))rm.push(o);});rm.forEach(o=>o.parent&&o.parent.remove(o));}obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
   const bb=new THREE.Box3().setFromObject(obj),sz=bb.getSize(new V3()),c=bb.getCenter(new V3());
   if(!cfg.rotY&&sz.x>sz.z*1.15){obj.rotation.y=Math.PI/2;obj.updateMatrixWorld(true);bb.setFromObject(obj);bb.getSize(sz);bb.getCenter(c);}
   const k=(cfg.scale||1)*len/Math.max(sz.z,.001);const w=new THREE.Group();obj.position.sub(c);w.add(obj);w.scale.setScalar(k);
@@ -520,7 +520,9 @@ function loadRealModels(){
   if(!THREE.GLTFLoader||!/^https?:$/.test(location.protocol))return;
   const ld=new THREE.GLTFLoader();
   fetch('real/config.json').then(r=>r.ok?r.json():{}).catch(()=>({})).then(cfg=>{REALCFG=cfg||{};
-    for(const id of (REALCFG.models||[])){const d=DEF[id];if(!d)continue;ld.load('real/'+id+'.glb',gl=>{REAL[id]=fitModel(gl.scene,d.b.L,REALCFG[id]);if(preview&&save.sel===id)buildPreview();toast('3D-модель загружена: '+d.name);},undefined,()=>{});}
+    /* one model at a time, the player's jet first, so the start is not flooded */
+    const q=(REALCFG.models||[]).filter(id=>DEF[id]).sort((a,b)=>(b===save.sel)-(a===save.sel));
+    const next=()=>{const id=q.shift();if(!id)return;const d=DEF[id];ld.load('real/'+id+'.glb',gl=>{try{REAL[id]=fitModel(gl.scene,d.b.L,REALCFG[id]);if(preview&&save.sel===id)buildPreview();}catch(e){}next();},undefined,()=>next());};next();
     if(REALCFG.cockpit)ld.load('real/cockpit.glb',gl=>{REALCK=gl.scene;},undefined,()=>{});});
 }
 /* environment map (sky above, sea below): gives metal and glass real reflections */
@@ -2084,6 +2086,7 @@ function helpHtml(){
   '<h3>СИСТЕМЫ</h3><div class="leg">'+L('L','Шасси')+L('K','Закрылки')+L('B','Тормоз')+'</div>'+
   '<h3>КАМЕРА И МЕНЮ</h3><div class="leg">'+L('C','Зум прицела')+L('V','Вид: сзади / близко / кабина')+L('M','Карта')+L('H','Скрыть / показать кнопки на экране')+L('Esc / P','Меню и пауза')+'</div>'+
   '<h3>ОСТРОВА</h3><div style="color:var(--dim)">5 островов-баз с полосами: 2 штаба, 2 острова обороны и центральный. С любого своего острова можно вылететь (ангар → «ВЫЛЕТ С») и сесть на его полосу для перезарядки. Чтобы забрать вражеский остров: разбейте базу до 0% (бомбы, ракеты, пушка), затем летайте в кольце ниже 700 м. Центр нейтральный — кто первый захватит. Кто захватит все 5 островов — победил. За захват +300 CR и +200 XP, за разрушение базы +500 CR.</div>'+
+  '<h3>3D-МОДЕЛИ</h3><div style="color:var(--dim);font-size:.85rem">Модели самолётов с Sketchfab (CC BY / CC BY-NC-SA): F-16 — MrrrBoB; Рафаль, F/A-18, Су-33 — andertan; Мираж 2000, F-35, МиГ-29, F-4 — bohmerang; AV-8B — 42manako. Спасибо авторам!</div>'+
   '<h3>РАКЕТЫ</h3><div class="leg">'+Object.keys(W).filter(k=>W[k].kind==='aa'||W[k].kind==='ag').map(k=>L(W[k].s,W[k].d+' · захват '+W[k].lock+' с · '+(W[k].range/1000)+' км')).join('')+'</div>'+
   '<div style="color:var(--dim)">Меняйте вооружение в ангаре кнопкой «КОНФИГУРАЦИЯ». Ракете нужен захват: держите цель в прицеле, пока не появится «ЗАХВАТ ЦЕЛИ». Геймпад: левый стик — полёт, RT — пушка, RB — ракета, A — смена оружия, LB — ловушки, Start — меню. На телефоне: тяга слева, перетаскивание по экрану — штурвал.</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
 }
