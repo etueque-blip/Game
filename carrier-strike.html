@@ -514,11 +514,15 @@ const waterMat=new THREE.ShaderMaterial({
  uniforms:{t:{value:0},cam:{value:new V3()},sun:{value:SUN},ships:{value:shipU},isl:{value:islU},hz:{value:PAL.hz},zn:{value:PAL.zn},sunC:{value:PAL.sunC}},
  vertexShader:'varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
  fragmentShader:'uniform float t;uniform vec3 cam;uniform vec3 sun,hz,zn,sunC;uniform vec4 ships[8];uniform vec4 isl[6];varying vec3 vW;'+
- 'float h(vec2 p){return sin(p.x*.021+t*.8)*.5+sin(p.y*.033-t*.6)*.5+sin((p.x+p.y)*.052+t*1.3)*.3+sin((p.x-p.y)*.113+t*1.9)*.18+sin(p.x*.27+p.y*.19+t*2.6)*.07;}'+
- 'float r(vec2 p){return sin(p.x*.61+t*3.1)*sin(p.y*.47-t*2.7)*.5+sin(p.x*.83-p.y*.91+t*3.7)*.25+sin(p.x*1.37+p.y*1.13-t*4.3)*.12;}'+
- 'void main(){vec2 p=vW.xz;float d=length(vW-cam);float amp=3./(1.+d*.0012);float e=1.2;float h0=h(p);'+
+ 'float hs(vec2 p){p=mod(p,289.);return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}'+
+ 'float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hs(i),hs(i+vec2(1.,0.)),f.x),mix(hs(i+vec2(0.,1.)),hs(i+vec2(1.,1.)),f.x),f.y);}'+
+ /* long swell + wind chop made of rotated noise octaves: no repeating stripes */
+ 'float h(vec2 p){float s=sin(dot(p,vec2(.019,.007))+t*.9)*.45+sin(dot(p,vec2(-.012,.026))+t*.7)*.35+sin(dot(p,vec2(.031,-.017))+t*1.3)*.18;'+
+ 'vec2 q=p*.045;float a=.55,c=0.;mat2 m=mat2(.8,.6,-.6,.8);for(int i=0;i<4;i++){c+=a*(vn(q+vec2(t*.35,t*.2))*2.-1.);q=m*q*2.03;a*=.5;}return s+c*.9;}'+
+ 'float r(vec2 p){vec2 q=p*.32;return (vn(q+vec2(t*1.1,-t*.7))+vn(q*2.1-vec2(t*1.5,t*.9))*.5)-.75;}'+
+ 'void main(){vec2 p=vW.xz;float d=length(vW-cam);float amp=2.6/(1.+d*.001);float e=1.5;float h0=h(p);'+
  'vec3 n=normalize(vec3(-(h(p+vec2(e,0.))-h0)*amp,1.,-(h(p+vec2(0.,e))-h0)*amp));'+
- 'float da=.8/(1.+d*.008);float r0=r(p);n=normalize(n+vec3(-(r(p+vec2(.4,0.))-r0)*da,0.,-(r(p+vec2(0.,.4))-r0)*da));'+
+ 'float da=1.4/(1.+d*.006);float r0=r(p);n=normalize(n+vec3(-(r(p+vec2(.5,0.))-r0)*da,0.,-(r(p+vec2(0.,.5))-r0)*da));'+
  'vec3 V=normalize(cam-vW);float fr=pow(1.-max(dot(n,V),0.),4.)*.8+.025;vec3 R=reflect(-V,n);R.y=abs(R.y);'+
  'vec3 deep=vec3(.015,.13,.32);vec3 sh=vec3(.05,.34,.58);vec3 base=mix(deep,sh,clamp(.5+h(p*.5)*.25,0.,1.));'+
  'float shal=0.;for(int i=0;i<6;i++){float di=length(p-isl[i].xy)/isl[i].z;shal=max(shal,smoothstep(isl[i].z>1000.?1.22:1.45,.98,di));}'+
@@ -526,7 +530,8 @@ const waterMat=new THREE.ShaderMaterial({
  'base+=vec3(.02,.12,.12)*clamp(h0*.6,0.,1.);'+
  'vec3 skyc=mix(hz,zn*1.25,clamp(R.y*1.5,0.,1.));'+
  'vec3 col=mix(base,skyc,fr);float sd=max(dot(R,sun),0.);col+=sunC*(pow(sd,300.)*1.8+pow(sd,40.)*.12+pow(sd,8.)*.06);'+
- 'float cr=h(p*1.7+t*.4)*.5+h(p*.6-t*.2)*.5;col+=vec3(.9,.97,1.)*smoothstep(.55,.95,cr)*.12/(1.+d*.0004);col*=1.+.08*sin(p.x*.004+p.y*.003);'+
+ 'float wc=smoothstep(.55,1.05,h0)*smoothstep(.45,.85,vn(p*.09+vec2(t*.25,t*.1)))*vn(p*.6-t*.4);col=mix(col,vec3(.92,.96,1.),clamp(wc*1.4,0.,.75)/(1.+d*.0007));'+
+ 'col+=sunC*pow(sd,1400.)*8.*step(.55,vn(p*1.7+t*2.));col*=.94+.12*vn(p*.0025);'+
  'float fm=0.;for(int i=0;i<8;i++){vec4 s=ships[i];if(s.w<=0.)continue;vec2 q=p-s.xy;float sn=sin(s.z),cs=cos(s.z);vec2 l=vec2(q.x*cs-q.y*sn,q.x*sn+q.y*cs);'+
  'float el=length(vec2(l.x/(s.w*.25),l.y/(s.w*1.02)));fm+=smoothstep(1.5,1.,el);'+
  'float bk=max(l.y-s.w*.8,0.);fm+=step(0.,l.y-s.w*.8)*exp(-abs(l.x)/(s.w*.12+bk*.08))*exp(-bk/(s.w*2.5))*.9;}'+
@@ -885,7 +890,13 @@ function buildJet(d,paint,team,lite){
   }
   const [wc,wt,ws,wsw,wz,wy,wd]=b.wing;
   [[1,wd],[-1,-wd]].forEach(([sg,dh])=>{const m=new THREE.Mesh(lite?wingGeo(wc,wt,ws,wsw,.2,sg<0):foilGeo(wc,-wc/2,wt,-wc/2+wsw,ws,.065,sg),bodyW);m.position.set(0,wy,wz);m.rotation.z=dh;g.add(m);});
-  const stabs=[],rudders=[];
+  const stabs=[],rudders=[],ails=[],flaps=[];
+  if(!lite){const te=f=>wc/2+f*((-wc/2+wsw+wt)-wc/2),ch=f=>wc+(wt-wc)*f;
+    const surf=(sg,f0,f1)=>{const fm=(f0+f1)/2,ac=.24*ch(fm),dx=sg*ws*(f1-f0),dz=te(f1)-te(f0),L=Math.hypot(dx,dz);
+      const outer=new THREE.Group();outer.position.set(sg*ws*fm,wy+ws*fm*Math.sin(wd)+.01,wz+te(fm)-ac);outer.rotation.y=Math.atan2(-dz,dx);
+      const pivot=new THREE.Group();outer.add(pivot);const bx=new THREE.Mesh(new THREE.BoxGeometry(L*.98,.07,ac),bodyW);bx.position.z=ac/2;pivot.add(bx);
+      const ln=new THREE.Mesh(new THREE.BoxGeometry(L*.98,.075,.03),dark);ln.position.z=.01;pivot.add(ln);g.add(outer);return {g:outer,p:pivot,s:sg};};
+    for(const sg of[1,-1]){ails.push(surf(sg,.5,.9));flaps.push(surf(sg,.14,.46));}}
   if(b.tail){const [tc,tt,ts,tsw,tz,ty,td]=b.tail;[[1,td],[-1,-td]].forEach(([sg,dh])=>{const m=new THREE.Mesh(lite?wingGeo(tc,tt,ts,tsw,.14,sg<0):foilGeo(tc,-tc/2,tt,-tc/2+tsw,ts,.06,sg),bodyW);m.position.set(0,ty,tz);m.rotation.z=dh;m.userData.side=sg;m.userData.dh=dh;g.add(m);stabs.push(m);});}
   let finTop=null;
   b.fins.forEach((f,fi)=>{const m=new THREE.Mesh(lite?finGeo(f[3],f[4],f[2],f[5],.14):foilGeo(f[3],0,f[4],f[5],f[2],.07,1).rotateZ(Math.PI/2),bodyW);m.position.set(f[0],b.R*.6,f[1]);m.rotation.z=f[6]||0;g.add(m);m.userData.rz=f[6]||0;rudders.push(m);
@@ -914,7 +925,7 @@ function buildJet(d,paint,team,lite){
     const tip=new THREE.Mesh(new THREE.ConeGeometry(.11,.4,8).rotateX(-Math.PI/2),mat(0x555a60));tip.position.z=-1.6;ms.add(tip);
     const fin=new THREE.Mesh(new THREE.BoxGeometry(.5,.03,.3),mat(0xe9edf0));fin.position.z=1.2;ms.add(fin);const fin2=fin.clone();fin2.rotation.z=Math.PI/2;ms.add(fin2);
     if(b.tipMsl)ms.position.set(s*(ws+.15),wy+ws*Math.sin(wd),wz-(wc/2-wsw-wt/2)-.2);else ms.position.set(s*ws*.5,wy-.35+Math.abs(ws*.5)*Math.sin(wd),wz-.5);g.add(ms);msls.push(ms);
-    if(!lite&&b.tipMsl){const m2=ms.clone();m2.position.set(s*ws*.62,wy-.35+Math.abs(ws*.62)*Math.sin(wd),wz-.2);g.add(m2);const py2=new THREE.Mesh(new THREE.BoxGeometry(.12,.3,1.5),mat(0x50565c));py2.position.set(s*ws*.62,wy-.17,wz-.1);g.add(py2);}
+    if(!lite&&b.tipMsl){const m2=ms.clone();msls.push(m2);m2.position.set(s*ws*.62,wy-.35+Math.abs(ws*.62)*Math.sin(wd),wz-.2);g.add(m2);const py2=new THREE.Mesh(new THREE.BoxGeometry(.12,.3,1.5),mat(0x50565c));py2.position.set(s*ws*.62,wy-.17,wz-.1);g.add(py2);}
     if(b.tanks&&!lite){const tk=new THREE.Mesh(new THREE.SphereGeometry(1,14,10),mat(0xd6dadd,{roughness:.4}));tk.scale.set(.42,.42,2.2);tk.position.set(s*ws*.38,wy-.75,wz-.3);g.add(tk);}
     if(!lite){const py=new THREE.Mesh(new THREE.BoxGeometry(.12,.3,1.6),mat(0x50565c));py.position.set(s*ws*.5,wy-.17+Math.abs(ws*.5)*Math.sin(wd),wz-.4);g.add(py);}}
   /* team roundels on the wings */
@@ -932,9 +943,9 @@ function buildJet(d,paint,team,lite){
   let vcone=null;if(!lite){const vc=document.createElement('canvas');vc.width=8;vc.height=128;const vx=vc.getContext('2d');const gr=vx.createLinearGradient(0,0,0,128);gr.addColorStop(0,'rgba(255,255,255,0)');gr.addColorStop(.25,'rgba(255,255,255,.9)');gr.addColorStop(1,'rgba(255,255,255,0)');vx.fillStyle=gr;vx.fillRect(0,0,8,128);
     vcone=new THREE.Mesh(new THREE.ConeGeometry(b.R*2.6,b.L*.42,24,1,true).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(vc),transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));
     vcone.position.z=wz+b.L*.06;vcone.userData.fx=true;vcone.visible=false;g.add(vcone);}
-  g.userData={vcone,flames,cores,glows,diam,stabs,rudders,R:b.R,gear,strobe,msls,canopy,tips:[new V3(-ws,tipY,tipZ),new V3(ws,tipY,tipZ)],gearH:gh+.36};
+  g.userData={vcone,flames,cores,glows,diam,stabs,rudders,ails,flaps,R:b.R,gear,strobe,msls,canopy,tips:[new V3(-ws,tipY,tipZ),new V3(ws,tipY,tipZ)],gearH:gh+.36};
   [...flames,...cores,...glows].forEach(f=>{f.castShadow=false;f.receiveShadow=false;});
-  bake(g,new Set([gear,canopy,vcone,...flames,...cores,...glows,...stabs,...rudders]));
+  bake(g,new Set([gear,canopy,vcone,...ails.map(a=>a.g),...flaps.map(a=>a.g),...flames,...cores,...glows,...stabs,...rudders]));
   return shade(g);
 }
 function deckTexture(){
@@ -1268,7 +1279,7 @@ function newPlane(pilot,def,team,paint,loadIdx){
     inp:{x:0,y:0,yaw:0},assist:true,ammo:def.ammo,sel:0,flares:def.flares,cd:{gun:0,wep:0,fl:0,rk:0},shield:0,state:'fly',launchT:0,
     isPlayer:!!pilot.isPlayer,up:u,gear:false,flaps:false,brk:false,g:1,bank:0,stalled:false,smokeT:0,ai:{rt:0,tgt:null,egress:0,lock:0,skill:rnd(.6,1)},lastHit:null,role:pilot.role};
   p.mods=pilot.isPlayer?activeMods(def):{};p.boostT=0;p.boostCd=0;
-  applyLoad(p,loadIdx);p.radius=def.b.R*3.2;pilot.plane=p;planes.push(p);return p;
+  applyLoad(p,loadIdx);addStores(p);p.radius=def.b.R*3.2;pilot.plane=p;planes.push(p);return p;
 }
 function spawnBot(pilot){
   const t=T[pilot.isPlayer?myTeam:(T.blue.pilots.includes(pilot)?'blue':'red')],id=t.id;
@@ -1331,6 +1342,10 @@ function flyPlane(p,dt){
   p.g+=((1+rr.p*p.speed/9.8*.9)-p.g)*Math.min(1,dt*5);p.g=clamp(p.g,-3,9);
   {const vc=p.mesh.userData.vcone,M=p.speed/340;if(vc){const a=clamp(1-Math.abs(M-1.01)/.07,0,1)*.55;vc.visible=a>.01;vc.material.opacity=a;vc.scale.set(1,1,.9+Math.random()*.2);}
    if((p.prevM||0)<1&&M>=1)sonicBoom(p);p.prevM=M;}
+  updateStores(p);
+  {const u=p.mesh.userData;const fl=(p.flaps||p.gear?.42:0)+(p.brk?.0:0);
+   if(u.ails)for(const a of u.ails)a.p.rotation.x=clamp(a.s*rr.r*.22+fl*.35,-.45,.55);
+   if(u.flaps)for(const a of u.flaps)a.p.rotation.x+=((fl)-a.p.rotation.x)*Math.min(1,dt*3);}
   {const u=p.mesh.userData;if(u.stabs)for(const st of u.stabs)st.rotation.set(clamp(-rr.p*.25+st.userData.side*rr.r*.06,-.35,.35),0,st.userData.dh);
    if(u.rudders)for(const rd of u.rudders)rd.rotation.set(0,clamp(-rr.y*.8-rr.r*.03,-.3,.3),rd.userData.rz);}
   engineFx(p,bst?2.3:p.ab?1.6:(p.thr>.8?.8:.25*p.thr),p.thr>.05||bst);if(bst&&p.isPlayer)camShake=Math.max(camShake,.12);
@@ -1389,6 +1404,27 @@ function updatePlane(p,dt){
   flyPlane(p,dt);
   collide(p,dt);
   if(p.hp<p.maxhp*.45&&p.alive){p.smokeT-=dt;if(p.smokeT<=0){p.smokeT=.05;smoke(p.pos.x,p.pos.y,p.pos.z,3,8,2.2,.6,.6,p.hp<p.maxhp*.2);if(p.hp<p.maxhp*.2)fire(p.pos.x,p.pos.y,p.pos.z,3,1,.3,1);}}
+}
+function addStores(p){
+  const b=p.def.b,[wc,wt,ws,wsw,wz,wy,wd]=b.wing,g=new THREE.Group(),items=[];
+  const agw=(p.weps||[]).find(w=>W[w.id].kind!=='aa');if(!agw){p.stores=null;return;}
+  const id=agw.id,olive=mat(0x4d5a3a,{roughness:.7}),white=mat(0xe4e7ea,{roughness:.5}),dk=mat(0x24282d);
+  const make=()=>{const s=new THREE.Group();
+    if(id==='bomb'){const c=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,1.7,10).rotateX(Math.PI/2),olive);s.add(c);const n=new THREE.Mesh(new THREE.ConeGeometry(.2,.6,10).rotateX(-Math.PI/2),olive);n.position.z=-1.15;s.add(n);
+      for(let k=0;k<4;k++){const f=new THREE.Mesh(new THREE.BoxGeometry(.5,.02,.35),olive);f.position.z=.9;f.rotation.z=k*Math.PI/4;s.add(f);}const band=new THREE.Mesh(new THREE.CylinderGeometry(.205,.205,.1,10).rotateX(Math.PI/2),mat(0xe0c020));band.position.z=-.5;s.add(band);}
+    else if(id==='rocket'){const c=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,2.2,12).rotateX(Math.PI/2),white);s.add(c);const fr=new THREE.Mesh(new THREE.CircleGeometry(.28,12),dk);fr.position.z=-1.11;fr.rotation.y=Math.PI;s.add(fr);
+      const nc=new THREE.Mesh(new THREE.CylinderGeometry(.24,.3,.3,12).rotateX(Math.PI/2),white);nc.position.z=-1.25;s.add(nc);}
+    else{const m=mslMesh(id);s.add(m);}
+    return s;};
+  const n=id==='bomb'?4:2,xs=[.22,.56];
+  for(let i=0;i<n;i++){const sd=i%2?1:-1,row=Math.floor(i/2),st=make();st.position.set(sd*ws*xs[row],wy-.75-(id==='harpoon'?.2:0),wz+.2);g.add(st);
+    const py=new THREE.Mesh(new THREE.BoxGeometry(.12,.35,1.4),mat(0x50565c));py.position.set(sd*ws*xs[row],wy-.3,wz+.1);g.add(py);items.push(st);}
+  p.mesh.add(g);p.stores={g,items,max:agw.n,id};
+}
+function updateStores(p){
+  const u=p.mesh.userData;const aaLeft=p.isPlayer&&p.weps?p.weps.filter(w=>W[w.id].kind==='aa').reduce((a,w)=>a+w.n,0):p.aa;
+  if(u.msls)u.msls.forEach((m,i)=>m.visible=i<aaLeft);
+  if(p.stores){const w=(p.weps||[]).find(x=>x.id===p.stores.id),left=p.isPlayer?(w?w.n:0):p.ag,k=Math.ceil(left/p.stores.max*p.stores.items.length);p.stores.items.forEach((s,i)=>s.visible=i<k);}
 }
 function rearm(p){applyLoad(p,p.isPlayer?(save.loadout[p.def.id]||0):p.loadIdx);p.hp=p.maxhp;p.ammo=p.def.ammo;p.flares=p.def.flares;}
 
@@ -2324,7 +2360,7 @@ function updateCockpit(p,dt){
     x.fillStyle='#fff';x.beginPath();x.arc(W/2+p.pos.x*S,W/2+p.pos.z*S,4,0,7);x.fill();x.fillStyle='#ffc94a';x.font='bold 16px monospace';x.fillText(Math.round(p.speed*KT)+' KT  '+Math.round(p.pos.y)+' M',8,20);ckMFD.R.t.needsUpdate=true;}
 }
 /* ---------- camera ---------- */
-const camQ=new QT();let camFov=62,orbit=0,deathPos=new V3();
+let camLean=0;const camQ=new QT();let camFov=62,orbit=0,deathPos=new V3();
 function updateCamera(dt){
   orbit+=dt*.18;
   let fovT=zoom?30:62;
@@ -2357,12 +2393,13 @@ function updateCamera(dt){
     }else if(aimMode()&&p.state==='fly'){
       const dist=(20+b.L*.45)*(v===1?.68:1);
       camera.position.copy(p.pos).addScaledVector(aimDir,-dist).addScaledVector(aimUp,v===1?3.2:5);
-      camera.up.copy(aimUp);tB.copy(p.pos).addScaledVector(aimDir,1500);camera.lookAt(tB);camQ.copy(p.q);
+      camLean+=(clamp(p.inp.x,-1,1)-camLean)*Math.min(1,dt*2.5);tC.crossVectors(aimDir,aimUp).normalize();
+      camera.up.copy(aimUp);tB.copy(p.pos).addScaledVector(aimDir,1500).addScaledVector(tC,camLean*130);camera.lookAt(tB);camQ.copy(p.q);
     }else{
       camQ.slerp(p.q,1-Math.exp(-(p.state==='fly'?6:20)*dt));
       const dist=(20+b.L*.45)*(v===1?.68:1)+(p.ab?3:0);
       tA.set(0,4.6*(v===1?.75:1),dist).applyQuaternion(camQ);camera.position.copy(p.pos).add(tA);
-      camera.up.set(0,1,0).applyQuaternion(camQ);tB.set(0,1,-70).applyQuaternion(camQ).add(p.pos);camera.lookAt(tB);
+      camLean+=(clamp(p.inp.x,-1,1)-camLean)*Math.min(1,dt*2.5);camera.up.set(0,1,0).applyQuaternion(camQ);tB.set(camLean*6,1,-70).applyQuaternion(camQ).add(p.pos);camera.lookAt(tB);
     }
     deathPos.copy(p.pos);
     if(camera.position.y<2)camera.position.y=2;
