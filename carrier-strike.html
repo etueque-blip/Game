@@ -355,7 +355,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
 <div id="rot">Поверните телефон горизонтально</div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 'use strict';
 const $=s=>document.querySelector(s);
@@ -504,6 +504,25 @@ const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:
  fragmentShader:SKY_GLSL});
 const sky=new THREE.Mesh(new THREE.SphereGeometry(40000,32,16),skyMat);sky.renderOrder=-10;sky.frustumCulled=false;scene.add(sky);
 let ENVTEX=null,CLOUDMAT=null;
+/* ---- optional real 3D models (put files in the site's real/ folder; see README) ---- */
+const REAL={};let REALCFG={},REALCK=null;
+function fitModel(obj,len,cfg){
+  cfg=cfg||{};obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
+  const bb=new THREE.Box3().setFromObject(obj),sz=bb.getSize(new V3()),c=bb.getCenter(new V3());
+  if(!cfg.rotY&&sz.x>sz.z*1.15){obj.rotation.y=Math.PI/2;obj.updateMatrixWorld(true);bb.setFromObject(obj);bb.getSize(sz);bb.getCenter(c);}
+  const k=(cfg.scale||1)*len/Math.max(sz.z,.001);const w=new THREE.Group();obj.position.sub(c);w.add(obj);w.scale.setScalar(k);
+  if(cfg.flip)w.rotation.y=Math.PI;if(cfg.y)w.position.y=cfg.y;return w;}
+function applyReal(g,d){
+  const keep=g.userData.keepSet;g.children.forEach(o=>{if(o.isMesh&&!keep.has(o)&&!o.userData.fx)o.visible=false;});
+  const u=g.userData;if(u.canopy)u.canopy.visible=false;[...(u.ails||[]),...(u.flaps||[])].forEach(a=>a.g.visible=false);(u.stabs||[]).concat(u.rudders||[]).forEach(o=>o.visible=false);
+  const m=REAL[d.id].clone(true);m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material&&!o.material.envMap&&o.material.isMeshStandardMaterial)o.material.envMap=ENVTEX;}});g.add(m);u.real=m;}
+function loadRealModels(){
+  if(!THREE.GLTFLoader||!/^https?:$/.test(location.protocol))return;
+  const ld=new THREE.GLTFLoader();
+  fetch('real/config.json').then(r=>r.ok?r.json():{}).catch(()=>({})).then(cfg=>{REALCFG=cfg||{};
+    for(const id of (REALCFG.models||[])){const d=DEF[id];if(!d)continue;ld.load('real/'+id+'.glb',gl=>{REAL[id]=fitModel(gl.scene,d.b.L,REALCFG[id]);if(preview&&save.sel===id)buildPreview();toast('3D-модель загружена: '+d.name);},undefined,()=>{});}
+    if(REALCFG.cockpit)ld.load('real/cockpit.glb',gl=>{REALCK=gl.scene;},undefined,()=>{});});
+}
 /* environment map (sky above, sea below): gives metal and glass real reflections */
 try{
   const c=document.createElement('canvas');c.width=512;c.height=256;const x=c.getContext('2d');const g=x.createLinearGradient(0,0,0,256);
@@ -963,7 +982,9 @@ function buildJet(d,paint,team,lite){
     vcone.position.z=wz+b.L*.06;vcone.userData.fx=true;vcone.visible=false;g.add(vcone);}
   g.userData={vcone,flames,cores,glows,diam,stabs,rudders,ails,flaps,R:b.R,gear,strobe,msls,canopy,tips:[new V3(-ws,tipY,tipZ),new V3(ws,tipY,tipZ)],gearH:gh+.36};
   [...flames,...cores,...glows].forEach(f=>{f.castShadow=false;f.receiveShadow=false;});
+  g.userData.keepSet=new Set([gear,canopy,vcone,...flames,...cores,...glows,...diam]);
   bake(g,new Set([gear,canopy,vcone,...ails.map(a=>a.g),...flaps.map(a=>a.g),...flames,...cores,...glows,...stabs,...rudders]));
+  if(!lite&&REAL[d.id])applyReal(g,d);
   return shade(g);
 }
 function deckTexture(){
@@ -2547,6 +2568,15 @@ function buildCockpit(p){
   {const th=add(new THREE.BoxGeometry(.06,.12,.05),dark,-.48,-.56,-.2,.2);ckMFD_th=th;const gr=add(new THREE.BoxGeometry(.08,.05,.08),M(0x2a2f36),-.48,-.49,-.21);}
   /* control stick between the knees */
   add(new THREE.CylinderGeometry(.018,.026,.3,8),dark,0,-.78,-.32,.25);add(new THREE.SphereGeometry(.03,10,8),dark,0,-.64,-.36);
+  /* canopy glass with a soft sky reflection streak, canopy-bow mirrors, quilted side walls */
+  {const gc=document.createElement('canvas');gc.width=gc.height=256;const gx=gc.getContext('2d');const gr=gx.createLinearGradient(0,0,256,256);gr.addColorStop(0,'rgba(255,255,255,0)');gr.addColorStop(.45,'rgba(255,255,255,0)');gr.addColorStop(.5,'rgba(255,255,255,.18)');gr.addColorStop(.56,'rgba(255,255,255,0)');gx.fillStyle=gr;gx.fillRect(0,0,256,256);
+   const glass=new THREE.Mesh(new THREE.SphereGeometry(1.15,24,12,0,Math.PI*2,0,Math.PI/2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(gc),transparent:true,depthWrite:false,side:THREE.BackSide,toneMapped:false,color:0xcfe6ff}));glass.scale.set(.75,.7,1.4);glass.position.set(0,-.25,-.3);g.add(glass);
+   for(const sx of[-1,1]){const mr=add(new THREE.BoxGeometry(.16,.06,.02),M(0x9fb6c8,{metalness:1,roughness:.05}),sx*.34,.25,-1.05);mr.rotation.y=sx*.25;}
+   const qt=document.createElement('canvas');qt.width=qt.height=128;const qx=qt.getContext('2d');qx.fillStyle='#3d5676';qx.fillRect(0,0,128,128);qx.strokeStyle='rgba(0,0,0,.16)';qx.lineWidth=2;for(let i=0;i<=128;i+=16){qx.beginPath();qx.moveTo(i,0);qx.lineTo(i,128);qx.moveTo(0,i);qx.lineTo(128,i);qx.stroke();}
+   qx.fillStyle='rgba(255,255,255,.12)';for(let i=8;i<128;i+=16)for(let j=8;j<128;j+=16)qx.fillRect(i-1,j-1,2,2);
+   const qtex=new THREE.CanvasTexture(qt);qtex.wrapS=qtex.wrapT=THREE.RepeatWrapping;qtex.repeat.set(2,1);
+   g.children.forEach(o=>{if(o.isMesh&&o.material===wall){o.material=M(0xffffff,{map:qtex,roughness:.6,metalness:.3});}});}
+  if(REALCK){g.children.slice().forEach(o=>{if(o!==g.children.find(x=>x.material&&x.material.map===hudT))o.visible=false;});const rc=REALCK.clone(true);const c2=REALCFG.cockpit||{};rc.scale.setScalar(c2.scale||1);rc.position.set(c2.x||0,c2.y||-.9,c2.z||-.2);if(c2.rotY)rc.rotation.y=c2.rotY;g.add(rc);}
   g.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=false;o.renderOrder=5;}});
   g.visible=false;p.mesh.add(g);p.cockpit=g;ckMFD={L,R:Rr,G1,G2,H:{c:hc,x:hc.getContext('2d'),t:hudT},ball,t:0,th:0};
 }
@@ -2859,6 +2889,7 @@ function frame(now){
 }
 /* installable app: register the offline cache when served from a real site */
 try{if('serviceWorker' in navigator&&location.protocol==='https:'&&window.top===window)navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
+loadRealModels();
 initWorld();resetMatch();show('menu');buildShowcase();buildPreview();renderMenu();MOOD.v=1;applyMood(1);
 /* warm up: compile every shader once behind the loading screen so the first flight does not stutter */
 (function(){
