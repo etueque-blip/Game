@@ -2512,7 +2512,7 @@ function useBoost(){const p=player;if(!p||p.state!=='fly')return;
   if(!p.mods.boost)return toast(DEF[p.def.id].mods.includes('boost')?'Турбо не куплен/выключен — ангар → СПЕЦМОДУЛИ':'На этом самолёте нет турбо-ускорителя');
   if(p.boostCd>0)return toast('Турбо перезаряжается: '+Math.ceil(p.boostCd)+' с');
   p.boostT=5;p.boostCd=18;sfx('cat');toast('ТУРБО!');}
-function toggleSteer(){save.opt.steer=!save.opt.steer;persist();toast('Автонаведение на противника: '+(save.opt.steer?'ВКЛ — отпустите управление, самолёт сам довернёт на цель':'ВЫКЛ'));}
+function toggleSteer(){save.opt.steer=!save.opt.steer;persist();toast('Автонаведение на противника: '+(save.opt.steer?'ВКЛ — отпустите управление: самолёт сам догонит врага и сам стреляет':'ВЫКЛ'));}
 function stunt(type,dir){
   const p=player;if(!p||p.state!=='fly'||p.stunt)return;
   if(type==='loop'&&p.speed<p.def.stall*2.1){p.ab=true;thrTarget=1;toast('Мало скорости для петли — разгонитесь (форсаж включён)');return;}
@@ -2611,10 +2611,20 @@ function controlPlayer(p,dt){
   /* auto-steer: when the stick is idle the jet turns itself onto the nearest enemy and leads it for the guns */
   p.autoT=null;
   if(save.opt.steer&&p.state==='fly'&&!p.stunt&&!tc&&!kbOn&&stick.id===null&&!(lastDev==='pad'&&(Math.abs(gp.x)+Math.abs(gp.y))>.1)){
-    let tq=p.lockT&&p.lockT.alive&&p.lockT.kind==='plane'?p.lockT:null,bd=4000;fwdOf(p,tB);
-    if(!tq)for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;tA.copy(q.pos).sub(p.pos);const d=tA.length();if(d<bd&&tA.dot(tB)/d>.17){bd=d;tq=q;}}
+    /* keep the same target until it dies or runs away; otherwise pick the best one all around (front ones count as closer) */
+    let tq=p.lockT&&p.lockT.alive&&p.lockT.kind==='plane'?p.lockT:null;fwdOf(p,tB);
+    if(!tq&&p.autoKeep&&p.autoKeep.alive&&p.autoKeep.state==='fly'&&p.autoKeep.pos.distanceTo(p.pos)<9000)tq=p.autoKeep;
+    if(!tq){let bs=1e9;for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;tA.copy(q.pos).sub(p.pos);const d=tA.length();if(d>8000)continue;const sc=d*(1+(1-tA.dot(tB)/d)*1.2);if(sc<bs){bs=sc;tq=q;}}}
+    p.autoKeep=tq;
     if(tq){const vb=p.speed+900,d0=tq.pos.distanceTo(p.pos);let t=d0/vb;tA.copy(tq.pos).addScaledVector(tq.vel,t);t=tA.distanceTo(p.pos)/vb;tA.copy(tq.pos).addScaledVector(tq.vel,t);tA.y+=.5*9.8*.6*t*t;
-      tA.sub(p.pos).normalize();aimDir.lerp(tA,Math.min(1,dt*5)).normalize();orthoAim();aimSteer(p);p.aimCtl=true;sx=p.inp.x;sy=p.inp.y;yw=p.inp.yaw;p.autoT=tq;}}
+      tA.sub(p.pos).normalize();
+      /* never chase it into the sea or a mountain */
+      const gnd=Math.max(0,terrainH(p.pos.x+p.vel.x*3,p.pos.z+p.vel.z*3));if(p.pos.y+p.vel.y*3<gnd+180&&tA.y<.15){tA.y=.25;tA.normalize();}
+      aimDir.lerp(tA,Math.min(1,dt*8)).normalize();orthoAim();aimSteer(p);p.aimCtl=true;sx=p.inp.x;sy=p.inp.y;yw=p.inp.yaw;p.autoT=tq;
+      /* auto fire: guns when the lead point is on the nose, missile when locked */
+      const fw=fwdOf(p,new V3()),on=Math.acos(clamp(tA.dot(fw),-1,1));p.autoGun=d0<1400&&on<(p.mods.gunaim?.18:.12)&&p.ammo>0;
+      p.autoMsl=p.locked&&p.lockT&&p.lockT.alive&&p.lockT.pos.distanceTo(p.pos)>450&&p.cd.wep<=0&&curW(p)&&curW(p).n>0&&W[curW(p).id].kind==='aa';}}
+  if(!p.autoT){p.autoGun=false;p.autoMsl=false;}
   if(tc&&p.state==='fly'&&!p.stunt){
     if(!p.turnHold)p.turnHold=p.pos.y;p.aimCtl=false;p.assist=true;p.freeRoll=false;
     sx=tc*.85;sy=clamp(.42+(-p.vel.y)*.05+(p.turnHold-p.pos.y)*.006,-.4,1);yw=tc*.25;
@@ -2627,7 +2637,7 @@ function controlPlayer(p,dt){
   if(hold.td)thrTarget=Math.max(0,thrTarget-dt*.6);
   if(keys.KeyZ||keys.ControlLeft||keys.Minus||keys.NumpadSubtract)thrTarget=Math.max(0,thrTarget-dt*.6);
   p.thr=thrTarget;p.brk=!!keys.KeyB||!!gp.brk||p.brk&&$('#bBrk').classList.contains('on');
-  const gunOn=keys.Space||hold.gun||gp.gun,wepOn=keys.KeyF||hold.wep||gp.wep;
+  const gunOn=keys.Space||hold.gun||gp.gun||p.autoGun,wepOn=keys.KeyF||hold.wep||gp.wep||p.autoMsl;
   if(p.state==='cat'&&(gunOn||wepOn||stick.id!==null&&Math.abs(stick.y)>.5)){p.autoGo=true;thrTarget=1;}
   if(p.state==='parked'&&(gunOn||wepOn||thrTarget>.04))p.taxiGo=true;
   if(p.state==='taxi'&&(gunOn||wepOn||thrTarget>.6))p.taxiFast=true;
@@ -2861,7 +2871,7 @@ function updateHud(dt){
     const h=Object.values(grp).map(g=>{const inc=g.team!==p.team;return '<div class="'+(inc?'in':'out')+'">'+(inc?'⚠ РАКЕТЫ НА «'+g.t.short+'» · '+g.n+' шт · '+Math.ceil(g.eta)+' с · СБЕЙТЕ ИЗ ПУШКИ!':'🚀 НАШ УДАР → «'+g.t.short+'» · '+g.n+' шт · '+Math.ceil(g.eta)+' с')+'</div>';}).join('');
     if(h!==updateHud.al){updateHud.al=h;E('alerts').innerHTML=h;}
     setT('strikec',strikeCd[p.team]>0?Math.ceil(strikeCd[p.team])+' с':'ГОТОВ');}
-  E('autob').classList.toggle('on',!!save.opt.steer);setT('autoc',save.opt.steer?(p.autoT?'ЦЕЛЬ':'ВКЛ'):'ВЫКЛ');
+  E('autob').classList.toggle('on',!!save.opt.steer);setT('autoc',save.opt.steer?(p.autoGun?'ОГОНЬ!':p.autoT?'ЦЕЛЬ':'ВКЛ'):'ВЫКЛ');
   E('aim').style.display=aimMode()&&p.state==='fly'?'':'none';
   {const ab=E('apsb');ab.style.display=p.mods.aps?'grid':'none';ab.classList.toggle('on',p.aps>0&&p.apsCd<=0&&missiles.some(m=>m.target===p));setT('apsc',p.aps<=0?'ПУСТО':p.apsCd>0?Math.ceil(p.apsCd)+' с':'x'+p.aps);}
   {const bb=E('boostb');bb.style.display=p.mods.boost?'grid':'none';bb.classList.toggle('on',p.boostT>0);setT('boostc',p.boostT>0?'АКТИВЕН':p.boostCd>0?Math.ceil(p.boostCd)+' с':'ГОТОВ');
