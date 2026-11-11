@@ -252,6 +252,9 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
 #msg{position:absolute;left:50%;top:calc(50% + min(44vh,44vw)/2 + 1.2rem);transform:translateX(-50%);color:var(--yellow);font-size:1.6rem;white-space:nowrap;text-shadow:0 0 6px #000}
 #big{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-family:var(--ui);font-size:2.6rem;font-weight:800;color:var(--blue);text-shadow:0 0 8px #000;text-align:center}
 #warn{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:1.5rem;font-weight:800;color:var(--red);font-family:var(--ui);text-shadow:0 0 8px #000;text-align:center;line-height:1.2}
+#mtrack{position:absolute;left:calc(max(16px,env(safe-area-inset-left)) + 14.2rem);top:.8rem;width:10.5rem;background:#0b1c14c8;border:1px solid #2a5d41;border-radius:.6rem;padding:.3rem .5rem;font:700 .68rem var(--ui);pointer-events:none}
+#mtrack b{color:var(--yellow);font-size:.68rem}#mtrack div{position:relative;margin-top:.25rem;padding-bottom:.25rem}#mtrack span{color:#d8f5e0}#mtrack em{float:right;font-style:normal;color:var(--yellow)}#mtrack i{position:absolute;left:0;bottom:0;height:3px;background:var(--green);border-radius:2px}
+body.ckpt #mtrack{display:none}
 #tgtbar{position:absolute;left:50%;top:6.4rem;transform:translateX(-50%);display:none;min-width:20rem;background:#0b1c14e0;border:2px solid var(--red);border-radius:.7rem;padding:.35rem .8rem .5rem;font:800 .95rem var(--ui);color:#fff;pointer-events:none;text-align:center}
 #tgtbar em{float:right;font-style:normal;color:var(--yellow);margin-left:.8rem}#tgtbar b{float:left}#tgtbar span{display:block;clear:both;height:.75rem;background:#0008;border-radius:.3rem;overflow:hidden;margin-top:.3rem}#tgtbar i{display:block;height:100%;width:100%;transition:width .25s}
 #hpbar{position:absolute;left:50%;bottom:8.6rem;transform:translateX(-50%);width:18rem;height:.7rem;background:#0008;border:2px solid #4adf7a88;border-radius:.4rem;overflow:hidden}
@@ -340,7 +343,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
  <div id="rdspd"><div>СКОР. УЗЛЫ</div><div class="rdbox" id="vspd">000</div><div id="vg">1.0 G</div><div id="vm">M 0.00</div></div>
  <div id="rdalt"><div>ВЫСОТА М</div><div class="rdbox" id="valt">00000</div><div id="vaoa">AOA 0.0</div><div id="vgear">Шасси: Вниз</div></div>
  <div id="msg"></div><div id="big"></div><div id="warn"></div>
- <div id="hpbar"><i id="hpf"></i></div><div id="tgtbar"><b></b><em></em><span><i></i></span></div>
+ <div id="mtrack"></div><div id="hpbar"><i id="hpf"></i></div><div id="tgtbar"><b></b><em></em><span><i></i></span></div>
  <div id="tgs"></div>
  <button class="hb tap" id="fireg">Пушка<small id="gunn">400</small><kbd class="kk">Пробел</kbd></button>
  <button class="hb tap" id="firew"><span id="wname">Ракета</span><small id="wcnt">2</small><kbd class="kk">F</kbd></button>
@@ -856,7 +859,30 @@ function bigBoom(pos,size,water){
     fireP.emit(pos.x,pos.y,pos.z,Math.cos(a)*Math.cos(e)*sp,Math.sin(e)*sp,Math.sin(a)*Math.cos(e)*sp,rnd(1.4,2.4),size*.12+.6,.2,[1.8,1.2,.5,1],[.6,.2,.05,0],size*3);}
   sfx('boom',pos);const d=camera.position.distanceTo(pos);if(d<size*60)camShake=Math.min(1.5,camShake+size*.04*(1-d/(size*60)));
 }
-function updateShock(dt){for(const m of shockPool){if(!m.visible)continue;const u=m.userData;u.t+=dt;const k=u.t/u.life;if(k>=1){m.visible=false;continue;}
+/* mushroom cloud: orange fireball that climbs on a smoke stem and spreads into a cap, plus a ground shock ring */
+const nukes=[];let ringMesh=null;
+function nuke(pos,k){k=k||1;bigBoom(pos,40*k,false);flash(pos,420*k,1.1);boomLight(pos,14*k);sfx('boom',pos);setTimeout(()=>sfx('boom',pos),250);
+  nukes.push({p:pos.clone().setY(Math.max(pos.y,2)),t:0,k});
+  if(!ringMesh){ringMesh=new THREE.Mesh(new THREE.RingGeometry(.86,1,48),new THREE.MeshBasicMaterial({color:0xffd2a0,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));ringMesh.rotation.x=-Math.PI/2;ringMesh.frustumCulled=false;scene.add(ringMesh);}
+  ringMesh.position.copy(pos).setY(Math.max(pos.y,1)+1);ringMesh.userData={t:0,k};ringMesh.visible=true;
+  const d=camera.position.distanceTo(pos);if(d<4000)camShake=Math.min(2,camShake+1.4*(1-d/4000));}
+function updateNukes(dt){
+  if(ringMesh&&ringMesh.visible){const u=ringMesh.userData;u.t+=dt;const q=u.t/2.2;if(q>=1)ringMesh.visible=false;else{ringMesh.scale.setScalar(30+q*700*u.k);ringMesh.material.opacity=.5*(1-q);}}
+  for(let i=nukes.length-1;i>=0;i--){const n=nukes[i];n.t+=dt;const k=n.k,T=n.t;if(T>7){nukes.splice(i,1);continue;}
+    const h=Math.min(1,T/3.2)*260*k,hot=Math.max(0,1-T/4.5);
+    /* rising fireball cap: rolls outward, glows orange, then goes grey */
+    for(let j=0;j<5;j++){const a=Math.random()*6.28,r=(25+Math.min(1,T/2.5)*190)*k*Math.sqrt(Math.random());
+      const x=n.p.x+Math.cos(a)*r,z=n.p.z+Math.sin(a)*r,y=n.p.y+h+rnd(-15,30)*k*(1-.5*r/(215*k));
+      if(Math.random()<hot*.9)fireP.emit(x,y,z,Math.cos(a)*8,rnd(4,14),Math.sin(a)*8,rnd(.6,1.1),(20+30*hot)*k,(40+30*hot)*k,[1.6,.75,.25,1],[.9,.25,.05,0],0);
+      smokeP.emit(x,y,z,Math.cos(a)*10*k,rnd(2,10),Math.sin(a)*10*k,rnd(3,5),30*k,90*k,[.32+.4*hot,.22+.15*hot,.16,.75],[.4,.38,.37,0],0);}
+    /* stem */
+    if(T<5)for(let j=0;j<3;j++){const y=n.p.y+Math.random()*h,w=(14+(y-n.p.y)*.04)*k*.5;
+      smokeP.emit(n.p.x+rnd(-w,w),y,n.p.z+rnd(-w,w),rnd(-3,3),rnd(10,25),rnd(-3,3),rnd(2,3.5),18*k,45*k,[.36+.3*hot,.26+.1*hot,.2,.7],[.42,.4,.4,0],0);
+      if(Math.random()<hot)fireP.emit(n.p.x+rnd(-w,w),y,n.p.z+rnd(-w,w),0,rnd(15,30),0,.7,12*k,20*k,[1.5,.6,.2,1],[.8,.2,.05,0],0);}
+    /* skirt of dust at the bottom */
+    if(T<2.5)for(let j=0;j<3;j++){const a=Math.random()*6.28,r=T*120*k;smokeP.emit(n.p.x+Math.cos(a)*r,n.p.y+3,n.p.z+Math.sin(a)*r,Math.cos(a)*40,rnd(2,8),Math.sin(a)*40,rnd(2,3),20*k,60*k,[.6,.5,.4,.6],[.6,.55,.5,0],0);}
+  }}
+function updateShock(dt){updateNukes(dt);for(const m of shockPool){if(!m.visible)continue;const u=m.userData;u.t+=dt;const k=u.t/u.life;if(k>=1){m.visible=false;continue;}
   m.scale.setScalar(u.R*(1-Math.pow(1-k,3)));m.material.opacity=.16*(1-k)*(1-k);}}
 
 /* ---------- model builders ---------- */
@@ -1389,9 +1415,9 @@ function buildZones(){
 function zoneColor(z){return z.owner?ZCOL[z.owner]:ZCOL.none;}
 function hitBase(b,pos,m){if(!b.owner||b.hp<=0)return false;cLocal(b,pos,tD);return Math.abs(tD.x+145)<230+m&&Math.abs(tD.z)<RW.L/2+40+m&&pos.y<RW.H+55+m&&pos.y>RW.H-6;}
 function dmgBase(b,a,by,w){
-  if(!b.owner||b.hp<=0||match.over)return;b.hp-=a;if(by&&by.isPlayer){hitMark();tgtHp('ОСТРОВ «'+b.name+'»',b.hp,b.maxhp,b.owner);}
+  if(!b.owner||b.hp<=0||match.over)return;b.hp-=a;if(by&&by.isPlayer){hitMark();prog('t',a);tgtHp('ОСТРОВ «'+b.name+'»',b.hp,b.maxhp,b.owner);}
   if(b.hp<=0){const lost=b.owner;b.hp=0;b.owner=null;b.prog=0;
-    for(let i=0;i<5;i++){tA.copy(b.pos);tA.x+=rnd(-80,80);tA.z+=rnd(-120,120);setTimeout(()=>explosion(tA.clone(),40,false),i*250);}sfx('boom');
+    nuke(b.pos.clone(),1.2);for(let i=0;i<5;i++){const q=b.pos.clone();q.x+=rnd(-80,80);q.z+=rnd(-120,120);setTimeout(()=>explosion(q,40,false),300+i*250);}
     feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> [БАЗА] <span style="color:'+(lost==='blue'?'var(--blue)':'var(--red)')+'">'+b.name+' УНИЧТОЖЕНА</span>');
     if(by&&by.team!==lost)award(by,500,400);if(!match.training)T[lost].tickets=Math.max(0,T[lost].tickets-10);
     if(player&&player.team===lost)toast('Наша база «'+b.short+'» разрушена! Отбейте остров');checkEnd();}
@@ -1407,7 +1433,7 @@ function updateZones(dt){
     if(!z.owner&&!match.over){const d=nb-nr;if(d)z.prog=clamp(z.prog+Math.sign(d)*Math.min(3,Math.abs(d))*dt*.05,-1,1);else z.prog*=1-dt*.02;
       if(z.prog>=1||z.prog<=-1){z.owner=z.prog>0?'blue':'red';z.hp=z.maxhp*.35;
         feed('<span style="color:'+(z.owner==='blue'?'var(--blue)':'var(--red)')+'">◆ '+z.name+': ЗАХВАЧЕН '+(z.owner==='blue'?'СИНИМИ':'КРАСНЫМИ')+'</span>');
-        if(player&&player.alive&&player.team===z.owner&&Math.hypot(player.pos.x-z.cx,player.pos.z-z.cz)<z.R){save.cr+=300;addXp(200);if(myPilot)myPilot.score+=200;persist();toast('ОСТРОВ «'+z.short+'» ЗАХВАЧЕН! +300 CR · +200 XP');sfx('beep');}
+        if(player&&player.alive&&player.team===z.owner&&Math.hypot(player.pos.x-z.cx,player.pos.z-z.cz)<z.R){save.cr+=300;addXp(200);if(myPilot)myPilot.score+=200;persist();prog('z');toast('ОСТРОВ «'+z.short+'» ЗАХВАЧЕН! +300 CR · +200 XP');sfx('beep');}
         checkEnd();}}
     if(z.owner){z.hp=Math.min(z.maxhp,z.hp+z.maxhp*.006*dt);
       if(!match.training&&!match.over){z.drainT+=dt;if(z.drainT>=20){z.drainT=0;const en=T[enemyOf(z.owner)];en.tickets=Math.max(0,en.tickets-1);checkEnd();}
@@ -1712,7 +1738,7 @@ function killPlane(p,by,w){
   p.alive=false;explosion(p.pos,18,false);sfx('boom',p.pos);
   const col=T[p.team].color===T.blue.color?'var(--blue)':'var(--red)';
   feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> ['+(w||'?')+'] <span style="color:'+col+'">'+pname(p)+'</span>');
-  if(by&&by.team!==p.team){award(by,100,100);if(by.isPlayer){mission('k');}}
+  if(by&&by.team!==p.team){award(by,100,100);if(by.isPlayer){prog('k');if(w==='пушка')prog('g');}}
   if(!match.training)T[p.team].tickets=Math.max(0,T[p.team].tickets-4);
   const wasPlayer=p.isPlayer;
   if(w==='вода'||w==='столкновение'||p.state!=='fly')removePlane(p);else makeWreck(p);
@@ -1749,10 +1775,10 @@ function updateWrecks(dt){
 function dmgShip(s,a,by,w){
   if(s.kind==='base')return dmgBase(s,a*(w==='пушка'?.5:1),by,w);
   if(!s.alive||match.over)return;
-  s.hp-=a;if(by&&by.isPlayer){hitMark();tgtHp(s.name,s.hp,s.maxhp||900,s.team);}
+  s.hp-=a;if(by&&by.isPlayer){hitMark();tgtHp(s.name,s.hp,s.maxhp||900,s.team);if(s.kind==='carrier')prog('d',a);}
   if(s.kind==='carrier'&&!match.training)T[s.team].tickets=Math.max(0,T[s.team].tickets-a/CARR_HP*50);
   if(s.hp<=0){
-    s.alive=false;explosion(s.pos.clone().setY(15),s.kind==='carrier'?60:34,false);sfx('boom');
+    s.alive=false;if(s.kind==='carrier')nuke(s.pos.clone().setY(15),1.1);else explosion(s.pos.clone().setY(15),34,false);sfx('boom');
     feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> ['+(w||'?')+'] <span style="color:'+(s.team==='blue'?'var(--blue)':'var(--red)')+'">'+s.name+'</span>');
     if(s.kind==='boat'){if(!match.training)T[s.team].tickets=Math.max(0,T[s.team].tickets-12);if(by&&by.team!==s.team){award(by,150,150);if(by.isPlayer)mission('b');}}
     else{if(by&&by.team!==s.team)award(by,1000,500);}
@@ -1834,7 +1860,7 @@ function updateBullets(dt){
     for(const p of planes){if(!p.alive||p.team===b.team||p.state==='cat')continue;
       if(segDist(prevB,b.p,p.pos)<p.radius*(b.by&&b.by.isPlayer?1.4:1)){dmgPlane(p,b.dmg,b.by,'пушка');hit=true;fire(b.p.x,b.p.y,b.p.z,1.2,.2,.15,3);break;}}
     if(!hit&&b.by){for(const s of shipTargets(enemyOf(b.team))){if(hitShip(s,b.p,2)){dmgShip(s,b.dmg*(s.kind==='carrier'?.35:.6),b.by,'пушка');hit=true;fire(b.p.x,b.p.y,b.p.z,1.5,.2,.2,3);break;}}}
-    if(!hit){for(let j=missiles.length-1;j>=0;j--){const m=missiles[j];if(m.team!==b.team&&(m.type==='ship'||m.type==='strike')&&m.pos.distanceTo(b.p)<(m.type==='strike'?14:9)){m.hp-=1;if(m.hp<=0){explosion(m.pos,m.type==='strike'?22:10,false);if(b.by&&b.by.isPlayer){save.cr+=60;addXp(40);persist();toast('Ракета сбита! +60 CR');}removeMissile(j);}hit=true;break;}}}
+    if(!hit){for(let j=missiles.length-1;j>=0;j--){const m=missiles[j];if(m.team!==b.team&&!m.drop&&m.pos.distanceTo(b.p)<(m.type==='strike'?14:m.type==='ship'?9:6)){m.hp-=1;if(m.hp<=0){explosion(m.pos,m.type==='strike'?22:10,false);if(b.by&&b.by.isPlayer){save.cr+=80;addXp(40);persist();prog('m');toast('💥 Ракета сбита! +80 CR');}removeMissile(j);}hit=true;break;}}}
     if(hit){bullets.splice(i,1);continue;}
   }
   for(let i=0;i<Math.min(bullets.length,BMAX);i++){const b=bullets[i];bulletPos[i*6]=b.p.x;bulletPos[i*6+1]=b.p.y;bulletPos[i*6+2]=b.p.z;
@@ -1932,7 +1958,7 @@ function useAps(p){
   p.aps--;p.apsCd=12;best.apsT=true;
   const mesh=mslMesh('aim9');mesh.scale.setScalar(.7);scene.add(mesh);
   const pos=new V3(0,.4,p.def.b.L/2+1).applyQuaternion(p.q).add(p.pos),dir=new V3(0,.15,1).applyQuaternion(p.q).normalize();
-  apsShots.push({mesh,pos,dir,speed:Math.max(60,p.speed*.25),tgt:best,age:0});
+  apsShots.push({mesh,pos,dir,speed:Math.max(60,p.speed*.25),tgt:best,age:0,by:p});
   flash(pos,14,.25);boomLight(pos,1.5);sfx('missile');if(p.isPlayer){camShake=Math.min(1.2,camShake+.25);toast('🛡 ПРОТИВОРАКЕТА ПОШЛА!');voice('Противоракета пошла');}
 }
 function updateAps(dt){
@@ -1940,7 +1966,7 @@ function updateAps(dt){
   for(let i=apsShots.length-1;i>=0;i--){const a=apsShots[i];a.age+=dt;a.speed=Math.min(1100,a.speed+1400*dt);
     const t=a.tgt,alive=missiles.includes(t);
     if(alive&&a.age>.15){tA.copy(t.pos).sub(a.pos);const d=tA.length();tA.normalize();tB.copy(a.dir).lerp(tA,Math.min(1,dt*9)).normalize();a.dir.copy(tB);
-      if(d<35+a.speed*dt){explosion(t.pos,8);const k=missiles.indexOf(t);if(k>=0)removeMissile(k);scene.remove(a.mesh);apsShots.splice(i,1);if(a.age<9)toast('🛡 РАКЕТА СБИТА!');continue;}}
+      if(d<35+a.speed*dt){bigBoom(t.pos,14,false);const k=missiles.indexOf(t);if(k>=0)removeMissile(k);scene.remove(a.mesh);apsShots.splice(i,1);if(a.by&&a.by.isPlayer){save.cr+=100;addXp(50);persist();prog('m');toast('🛡 РАКЕТА СБИТА! +100 CR');}continue;}}
     a.pos.addScaledVector(a.dir,a.speed*dt);a.mesh.position.copy(a.pos);tQ2.setFromUnitVectors(new V3(0,0,-1),a.dir);a.mesh.quaternion.copy(tQ2);
     fire(a.pos.x-a.dir.x*1.5,a.pos.y-a.dir.y*1.5,a.pos.z-a.dir.z*1.5,2.2,.5,.12,0);smoke(a.pos.x-a.dir.x*2.5,a.pos.y-a.dir.y*2.5,a.pos.z-a.dir.z*2.5,1.8,6,2.4,.15,.6);
     if(a.age>6||(!alive&&a.age>1.5)){if(!alive)explosion(a.pos,3);scene.remove(a.mesh);apsShots.splice(i,1);}}
@@ -1965,7 +1991,7 @@ function updateMissiles(dt){
         for(let k=0;k<6;k++){fire(tA.x+rnd(-1,1),tA.y+rnd(-1,1),tA.z+rnd(-1,1),rnd(2.5,4),.9,.22,0);smoke(tA.x+rnd(-2,2),tA.y+rnd(-2,2),tA.z+rnd(-2,2),rnd(3,5),9,4,.2,.5);}
         sfx('missile',m.pos);if(m.by&&m.by.isPlayer)camShake=Math.min(1.2,camShake+.3);}
       continue;}
-    if(m.ign>0)m.ign-=dt;
+    if(m.ign>0)m.ign-=dt;if(player&&m.target===player)m.onMe=1;
     const homing=m.type==='aa'||m.type==='sam'||m.type==='agm';
     if(m.type==='ship'||m.type==='strike'){m.speed=Math.min(m.vmax,m.speed+(m.type==='strike'?90:120)*dt);}
     else if(m.type==='agm'){m.speed=Math.min(m.vmax,m.speed+200*dt);}
@@ -2008,9 +2034,10 @@ function updateMissiles(dt){
     }
     if(boom){
       const dm=m.dmg,w=W[m.wid]?W[m.wid].s:(m.type==='sam'?'ЗРК':'ПКР');
+      if(m.onMe&&player&&player.alive&&m.pos.distanceTo(player.pos)>45){save.cr+=40;addXp(20);persist();prog('e');toast('Ушёл от ракеты! +40 CR');}
       bigBoom(m.pos,m.type==='strike'?50:m.type==='ship'||m.type==='agm'?32:22,m.pos.y<4);
       if(m.type==='ship'){blast(m.pos,60,0,m.dmg,m.by,m.team,w);}
-      else if(m.type==='strike'){blast(m.pos,75,60,m.dmg,m.by,m.team,'РАКЕТНЫЙ УДАР');explosion(m.pos,45,false);}
+      else if(m.type==='strike'){blast(m.pos,75,60,m.dmg,m.by,m.team,'РАКЕТНЫЙ УДАР');nuke(m.pos,.7);}
       else if(m.type==='agm'){blast(m.pos,m.skim?55:40,40,m.dmg,m.by,m.team,w);}
       else blast(m.pos,34,dm,dm*2,m.by,m.team,w);
       removeMissile(i);
@@ -2142,13 +2169,26 @@ let feedItems=[];
 function feed(h){feedItems.push({h,t:7});if(feedItems.length>5)feedItems.shift();renderFeed();}
 function renderFeed(){$('#feed').innerHTML=feedItems.map(f=>'<div>'+f.h+'</div>').join('');}
 let msgText='';function say(s){msgText=s;$('#msg').textContent=s;}
-function mission(id){
-  save.m[id]=(save.m[id]||0)+1;const defs={k:[3,300,'Сбить 3 самолёта'],b:[1,400,'Потопить катер'],l:[1,200,'Посадка на авианосец']};
-  const d=defs[id];if(save.m[id]>=d[0]&&!save.m.done.includes(id)){save.m.done.push(id);save.cr+=d[1];addXp(150);persist();toast('Задание выполнено: '+d[2]+'  +'+d[1]+' CR');}
-}
-function missionsHtml(){
-  const defs=[['k',3,300,'Сбить 3 самолёта'],['b',1,400,'Потопить 1 катер'],['l',1,200,'Посадить самолёт на авианосец']];
-  return '<h2>Задания</h2><table>'+defs.map(d=>'<tr><td>'+d[3]+'</td><td>'+Math.min(save.m[d[0]]||0,d[1])+'/'+d[1]+'</td><td style="color:var(--yellow)">+'+d[2]+' CR</td><td>'+(save.m.done.includes(d[0])?'✔':'')+'</td></tr>').join('')+'</table><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
+/* missions: always 3 active tasks; each one done gets harder next time and pays more. Progress shows in flight. */
+const MT={k:['Сбить самолёты',[1,3,5,8,12],120],g:['Сбить самолёт из пушки',[1,2,4,6],150],m:['Сбить вражеские ракеты (пушка или ПРО)',[1,2,4,6],150],
+  e:['Уйти от ракеты (ловушки или манёвр)',[1,2,4,6],110],b:['Потопить катер',[1,2,3,5],170],d:['Урон авианосцу',[400,1000,2000,3500],180],
+  t:['Урон вражескому острову',[600,1500,3000,5000],160],z:['Захватить остров',[1,2,3],320],l:['Посадка на авианосец или остров',[1,2,4],120],s:['Сделать бочку или петлю',[1,3,5],60]};
+function msave(){if(!save.ms||!save.ms.act){save.ms={act:[],done:0,lv:{}};}const M=save.ms;
+  while(M.act.length<3){const free=Object.keys(MT).filter(k=>!M.act.some(a=>a.id===k));M.act.push({id:free[Math.floor(Math.random()*free.length)],n:0});}return M;}
+function mgoal(a){const t=MT[a.id],lv=Math.min(save.ms.lv[a.id]||0,t[1].length-1);return t[1][lv];}
+function mreward(a){const lv=save.ms.lv[a.id]||0;return Math.round(MT[a.id][2]*(1+lv*.6)/10)*10;}
+function prog(id,amt){const M=msave();let ch=false;
+  for(let i=0;i<M.act.length;i++){const a=M.act[i];if(a.id!==id)continue;a.n+=amt||1;ch=true;const gl=mgoal(a);
+    if(a.n>=gl){const r=mreward(a);save.cr+=r;addXp(80+r/4);M.done++;M.lv[id]=(M.lv[id]||0)+1;M.act.splice(i,1);msave();
+      toast('✔ ЗАДАНИЕ ВЫПОЛНЕНО: '+MT[id][0]+'  +'+r+' CR');sfx('lock');i--;}}
+  if(ch){persist();renderTrack();}}
+function mission(id){prog(id);}
+function renderTrack(){const el=$('#mtrack');if(!el)return;const M=msave();
+  el.innerHTML='<b>ЗАДАНИЯ</b>'+M.act.map(a=>{const gl=mgoal(a),n=Math.min(Math.floor(a.n),gl);return '<div><span>'+MT[a.id][0]+'</span><em>'+n+'/'+gl+'</em><i style="width:'+(n/gl*100)+'%"></i></div>';}).join('');}
+function missionsHtml(){const M=msave();
+  return '<h2>Задания</h2><div style="color:var(--dim);margin-bottom:.5rem">Всегда 3 задания. Выполнил — сразу деньги и новое задание, следующий раз сложнее, но дороже. Выполнено всего: <b style="color:var(--yellow)">'+M.done+'</b></div><table>'+
+   M.act.map(a=>{const gl=mgoal(a);return '<tr><td>'+MT[a.id][0]+'</td><td>'+Math.min(Math.floor(a.n),gl)+'/'+gl+'</td><td style="color:var(--yellow)">+'+mreward(a)+' CR</td></tr>';}).join('')+
+   '</table><h3>Деньги в бою</h3><div style="color:var(--dim);font-size:.9rem">Самолёт +100 · катер +150 · сбитая ракета +80 (ПРО +100) · уход от ракеты +40 · захват острова +300 · разрушение базы +500 · посадка +25</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
 }
 function boardHtml(){
   const all=[];['blue','red'].forEach(id=>T[id].pilots.forEach(p=>all.push({n:p.isPlayer?'Вы':p.call+' ('+p.name+')',s:p.score,t:id})));
@@ -2176,7 +2216,7 @@ function helpHtml(){
   '<div style="color:var(--dim)">Меняйте вооружение в ангаре кнопкой «КОНФИГУРАЦИЯ». Ракете нужен захват: держите цель в прицеле, пока не появится «ЗАХВАТ ЦЕЛИ». Геймпад: левый стик — полёт, RT — пушка, RB — ракета, A — смена оружия, LB — ловушки, Start — меню. На телефоне: тяга слева, перетаскивание по экрану — штурвал.</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
 }
 /* ---------- screens ---------- */
-function show(s){state=s;document.documentElement.classList.toggle('hudmode',s==='hud'||s==='dead');$('#mainMenu').hidden=s!=='menu';if(s!=='hud'){unlockMouse();if(typeof stick!=='undefined'){stick.id=null;$('#stk').style.display='none';}}$('#sideScr').hidden=s!=='side';$('#hangar').hidden=s!=='hangar';$('#hud').hidden=!(s==='hud'||s==='dead');}
+function show(s){state=s;if(s==='hud')setTimeout(renderTrack,0);document.documentElement.classList.toggle('hudmode',s==='hud'||s==='dead');$('#mainMenu').hidden=s!=='menu';if(s!=='hud'){unlockMouse();if(typeof stick!=='undefined'){stick.id=null;$('#stk').style.display='none';}}$('#sideScr').hidden=s!=='side';$('#hangar').hidden=s!=='hangar';$('#hud').hidden=!(s==='hud'||s==='dead');}
 let preview=null;
 function toSide(){show('side');renderSide();}
 /* ===== main-menu showcase ===== */
@@ -2579,7 +2619,7 @@ function controlPlayer(p,dt){
   }else if(p.turnHold){p.turnHold=0;p.assist=save.opt.assist;}
   if(p.stunt){const st=p.stunt;p.aimCtl=false;
     if(st.type==='loop'){sx=clamp(-p.bank*.8,-.3,.3)*(Math.abs(p.bank)<1.4?1:0);sy=1;}else{sx=st.dir;sy=.12;}yw=0;
-    if(st.acc>=6.2832||kbOn&&st.t>.4||p.state!=='fly'){p.stunt=null;say('');}else st.t+=dt;}
+    if(st.acc>=6.2832||kbOn&&st.t>.4||p.state!=='fly'){if(st.acc>=6.2832&&p.isPlayer)prog('s');p.stunt=null;say('');}else st.t+=dt;}
   p.inp.x=clamp(sx,-1,1);p.inp.y=clamp(sy,-1,1);p.inp.yaw=clamp(yw,-1,1);
   if(keys.ShiftLeft||keys.ShiftRight||keys.Equal||keys.NumpadAdd||hold.tu)thrTarget=Math.min(1,thrTarget+dt*.6);
   if(hold.td)thrTarget=Math.max(0,thrTarget-dt*.6);
