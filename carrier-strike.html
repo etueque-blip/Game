@@ -520,17 +520,19 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(40000,32,16),skyMat);sky.rende
 let ENVTEX=null,CLOUDMAT=null;
 /* ---- optional real 3D models (put files in the site's real/ folder; see README) ---- */
 const REAL={};let REALCFG={},REALCK=null;
+function fixMats(obj){obj.traverse(o=>{if(!o.isMesh)return;(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(!m||m.userData.fixed)return;m.userData.fixed=1;
+    const glass=/glass|canopy|hud|light|lamp|window/i.test(m.name+' '+o.name+' '+(o.parent&&o.parent.name));
+    if(!glass){if(m.transparent){m.transparent=false;m.depthWrite=true;m.alphaTest=m.map?.4:0;m.opacity=1;}if(m.metalness>.35){m.metalness=.3;m.metalnessMap=null;}if(m.roughness<.35)m.roughness=.45;}
+    if(m.isMeshStandardMaterial){m.envMap=ENVTEX;m.envMapIntensity=glass?1.4:1;}m.needsUpdate=true;});});}
 function fitModel(obj,len,cfg,belly){
   cfg=cfg||{};const hid=cfg.hide||[];
   /* tame downloaded materials: full metal goes black in shadow on tablets, and some bodies are wrongly marked see-through */
-  obj.traverse(o=>{if(!o.isMesh)return;(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(!m||m.userData.fixed)return;m.userData.fixed=1;
-    const glass=/glass|canopy|hud|light|lamp|window/i.test(m.name+' '+o.name+' '+(o.parent&&o.parent.name));
-    if(!glass){if(m.transparent){m.transparent=false;m.depthWrite=true;m.alphaTest=m.map?.4:0;m.opacity=1;}if(m.metalness>.35){m.metalness=.3;m.metalnessMap=null;}if(m.roughness<.35)m.roughness=.45;}
-    if(m.isMeshStandardMaterial){m.envMap=ENVTEX;m.envMapIntensity=glass?1.4:1;}m.needsUpdate=true;});});if(hid.length){const rm=[];obj.traverse(o=>{if(o.isLight||(o.name&&hid.some(h=>o.name.indexOf(h)>=0)))rm.push(o);});rm.forEach(o=>o.parent&&o.parent.remove(o));}obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
+  fixMats(obj);obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;
+if(hid.length){const rm=[];obj.traverse(o=>{if(o.isLight||(o.name&&hid.some(h=>o.name.indexOf(h)>=0)))rm.push(o);});rm.forEach(o=>o.parent&&o.parent.remove(o));}obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
   const bb=new THREE.Box3().setFromObject(obj),sz=bb.getSize(new V3()),c=bb.getCenter(new V3());
   if(!cfg.rotY&&sz.x>sz.z*1.15){obj.rotation.y=Math.PI/2;obj.updateMatrixWorld(true);bb.setFromObject(obj);bb.getSize(sz);bb.getCenter(c);}
   const k=(cfg.scale||1)*len/Math.max(sz.z,.001);const w=new THREE.Group();obj.position.sub(c);w.add(obj);w.scale.setScalar(k);
-  if(cfg.flip)w.rotation.y=Math.PI;/* sit the belly where the game's own fuselage bottom is, so the landing gear meets it */w.position.y=(belly!=null?belly-(bb.min.y-c.y)*k:0)+(cfg.y||0);return w;}
+  if(cfg.flip)w.rotation.y=Math.PI;/* sit the belly where the game's own fuselage bottom is, so the landing gear meets it */w.position.y=(belly!=null?belly-(bb.min.y-c.y)*k:0)+(cfg.y||0);w.userData.minY=w.position.y+(bb.min.y-c.y)*k;w.userData.ownGear=!!cfg.ownGear;return w;}
 /* repaint a real model: its texture keeps panel lines and shading, but the colour becomes the chosen paint */
 const PAINTMAT={},NOPAINT=/canopy|glass|cockpit|hud|instr|light|pilot|seat|window|lamp|nozzle|exhaust|engine/i;
 function paintedMat(m,col){
@@ -542,7 +544,7 @@ function paintedMat(m,col){
 function applyReal(g,d,paint){
   const keep=g.userData.keepSet;g.children.forEach(o=>{if(o.isMesh&&!keep.has(o)&&!o.userData.fx)o.visible=false;});
   const u=g.userData;if(u.canopy)u.canopy.visible=false;[...(u.ails||[]),...(u.flaps||[])].forEach(a=>a.g.visible=false);(u.stabs||[]).concat(u.rudders||[]).forEach(o=>o.visible=false);
-  const m=REAL[d.id].clone(true);m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(paint!=null&&o.material&&!Array.isArray(o.material)&&!o.material.transparent&&!NOPAINT.test(o.name+' '+(o.parent&&o.parent.name)+' '+o.material.name))o.material=paintedMat(o.material,paint);if(o.material&&!o.material.envMap&&o.material.isMeshStandardMaterial)o.material.envMap=ENVTEX;}});g.add(m);u.real=m;}
+  const m=REAL[d.id].clone(true);if(REAL[d.id].userData.ownGear){/* model has its own wheels down: stand them on the deck, drop the game's gear */m.position.y+=-u.gearH-REAL[d.id].userData.minY;u.gear.scale.setScalar(1e-4);}m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(paint!=null&&o.material&&!Array.isArray(o.material)&&!o.material.transparent&&!NOPAINT.test(o.name+' '+(o.parent&&o.parent.name)+' '+o.material.name))o.material=paintedMat(o.material,paint);if(o.material&&!o.material.envMap&&o.material.isMeshStandardMaterial)o.material.envMap=ENVTEX;}});g.add(m);u.real=m;}
 function loadRealModels(){
   if(!THREE.GLTFLoader||!/^https?:$/.test(location.protocol))return;
   const ld=new THREE.GLTFLoader();
@@ -550,7 +552,10 @@ function loadRealModels(){
     /* one model at a time, the player's jet first, so the start is not flooded */
     const q=(REALCFG.models||[]).filter(id=>DEF[id]).sort((a,b)=>(b===save.sel)-(a===save.sel));
     const next=()=>{const id=q.shift();if(!id)return;const d=DEF[id];ld.load('real/'+id+'.glb',gl=>{try{REAL[id]=fitModel(gl.scene,d.b.L,REALCFG[id],-d.b.R*.92);if(preview&&save.sel===id)buildPreview();}catch(e){}next();},undefined,()=>next());};next();
-    if(REALCFG.cockpit)ld.load('real/cockpit.glb',gl=>{REALCK=gl.scene;},undefined,()=>{});});
+    /* cockpit: turn it to face -z, size it to a real tub and put the eye where the pilot sits */
+    if(REALCFG.cockpit)ld.load('real/cockpit.glb',gl=>{const c=REALCFG.cockpit||{},o=gl.scene;fixMats(o);o.traverse(x=>{if(x.isLight||x.isCamera)x.visible=false;});
+      if(c.rotY)o.rotation.y=c.rotY;o.updateMatrixWorld(true);const bb=new THREE.Box3().setFromObject(o),sz=bb.getSize(new V3()),k=(c.width||1)/Math.max(sz.x,.001);
+      const w=new THREE.Group();w.add(o);w.scale.setScalar(k);w.position.set(-(bb.min.x+sz.x/2)*k+(c.x||0),(c.bottom!=null?c.bottom:-1)-bb.min.y*k,(c.front!=null?c.front:-1.1)-bb.min.z*k);REALCK=w;},undefined,()=>{});});
 }
 /* environment map (sky above, sea below): gives metal and glass real reflections */
 try{
@@ -2147,7 +2152,7 @@ function helpHtml(){
   '<h3>СИСТЕМЫ</h3><div class="leg">'+L('L','Шасси')+L('K','Закрылки')+L('B','Тормоз')+'</div>'+
   '<h3>КАМЕРА И МЕНЮ</h3><div class="leg">'+L('C','Зум прицела')+L('V','Вид: сзади / близко / кабина')+L('M','Карта')+L('H','Скрыть / показать кнопки на экране')+L('Esc / P','Меню и пауза')+'</div>'+
   '<h3>ОСТРОВА</h3><div style="color:var(--dim)">5 островов-баз с полосами: 2 штаба, 2 острова обороны и центральный. С любого своего острова можно вылететь (ангар → «ВЫЛЕТ С») и сесть на его полосу для перезарядки. Чтобы забрать вражеский остров: разбейте базу до 0% (бомбы, ракеты, пушка), затем летайте в кольце ниже 700 м. Центр нейтральный — кто первый захватит. Кто захватит все 5 островов — победил. За захват +300 CR и +200 XP, за разрушение базы +500 CR.</div>'+
-  '<h3>3D-МОДЕЛИ</h3><div style="color:var(--dim);font-size:.85rem">Модели самолётов с Sketchfab (CC BY / CC BY-NC-SA): F-16 — MrrrBoB; Рафаль, F/A-18, Су-33 — andertan; Мираж 2000, F-35, МиГ-29, F-4, B-2 — bohmerang; AV-8B — 42manako. Спасибо авторам!</div>'+
+  '<h3>3D-МОДЕЛИ</h3><div style="color:var(--dim);font-size:.85rem">Модели самолётов с Sketchfab (CC BY / CC BY-NC-SA): F-16 — MrrrBoB; Рафаль, F/A-18, Су-33 — andertan; Мираж 2000, F-35, МиГ-29, F-4, B-2 — bohmerang; AV-8B — 42manako; МиГ-21 (J-7) — NETRUNNER_pl; A-4 — johnnokomis; кабина F-16 — rukh. Спасибо авторам!</div>'+
   '<h3>РАКЕТЫ</h3><div class="leg">'+Object.keys(W).filter(k=>W[k].kind==='aa'||W[k].kind==='ag').map(k=>L(W[k].s,W[k].d+' · захват '+W[k].lock+' с · '+(W[k].range/1000)+' км')).join('')+'</div>'+
   '<div style="color:var(--dim)">Меняйте вооружение в ангаре кнопкой «КОНФИГУРАЦИЯ». Ракете нужен захват: держите цель в прицеле, пока не появится «ЗАХВАТ ЦЕЛИ». Геймпад: левый стик — полёт, RT — пушка, RB — ракета, A — смена оружия, LB — ловушки, Start — меню. На телефоне: тяга слева, перетаскивание по экрану — штурвал.</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
 }
@@ -2643,7 +2648,7 @@ function buildCockpit(p){
    qx.fillStyle='rgba(255,255,255,.12)';for(let i=8;i<128;i+=16)for(let j=8;j<128;j+=16)qx.fillRect(i-1,j-1,2,2);
    const qtex=new THREE.CanvasTexture(qt);qtex.wrapS=qtex.wrapT=THREE.RepeatWrapping;qtex.repeat.set(2,1);
    g.children.forEach(o=>{if(o.isMesh&&o.material===wall){o.material=M(0xffffff,{map:qtex,roughness:.6,metalness:.3});}});}
-  if(REALCK){g.children.slice().forEach(o=>{if(o!==g.children.find(x=>x.material&&x.material.map===hudT))o.visible=false;});const rc=REALCK.clone(true);const c2=REALCFG.cockpit||{};rc.scale.setScalar(c2.scale||1);rc.position.set(c2.x||0,c2.y||-.9,c2.z||-.2);if(c2.rotY)rc.rotation.y=c2.rotY;g.add(rc);}
+  if(REALCK){g.children.slice().forEach(o=>{if(o!==g.children.find(x=>x.material&&x.material.map===hudT))o.visible=false;});const rc=REALCK.clone(true);g.add(rc);}
   g.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=false;o.renderOrder=5;}});
   g.visible=false;p.mesh.add(g);p.cockpit=g;ckMFD={L,R:Rr,G1,G2,H:{c:hc,x:hc.getContext('2d'),t:hudT},ball,t:0,th:0};
 }
