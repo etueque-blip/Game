@@ -542,7 +542,7 @@ function paintedMat(m,col){
     '#include <map_fragment>\n float lum=dot(diffuseColor.rgb,vec3(.299,.587,.114));\n diffuseColor.rgb=uTint*clamp(lum*2.2,.25,1.6);');};
   n.customProgramCacheKey=()=>'paint';n.needsUpdate=true;return PAINTMAT[k]=n;}
 function applyReal(g,d,paint){
-  const keep=g.userData.keepSet;g.children.forEach(o=>{if(o.isMesh&&!keep.has(o)&&!o.userData.fx)o.visible=false;});
+  const keep=g.userData.keepSet,gen=g.userData.genHidden=[];g.children.forEach(o=>{if(o.isMesh&&!keep.has(o)&&!o.userData.fx){o.visible=false;gen.push(o);}});
   const u=g.userData;if(u.canopy)u.canopy.visible=false;[...(u.ails||[]),...(u.flaps||[])].forEach(a=>a.g.visible=false);(u.stabs||[]).concat(u.rudders||[]).forEach(o=>o.visible=false);
   const m=REAL[d.id].clone(true);if(REAL[d.id].userData.ownGear){/* model has its own wheels down: stand them on the deck, drop the game's gear */m.position.y+=-u.gearH-REAL[d.id].userData.minY;u.gear.scale.setScalar(1e-4);}m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(paint!=null&&o.material&&!Array.isArray(o.material)&&!o.material.transparent&&!NOPAINT.test(o.name+' '+(o.parent&&o.parent.name)+' '+o.material.name))o.material=paintedMat(o.material,paint);if(o.material&&!o.material.envMap&&o.material.isMeshStandardMaterial)o.material.envMap=ENVTEX;}});g.add(m);u.real=m;}
 function loadRealModels(){
@@ -2639,7 +2639,6 @@ function buildCockpit(p){
   add(new THREE.PlaneGeometry(.47,.38),new THREE.MeshBasicMaterial({map:hudT,transparent:true,depthWrite:false,toneMapped:false,side:THREE.DoubleSide}),0,-.04,-1.0,-.12);
   {const th=add(new THREE.BoxGeometry(.06,.12,.05),dark,-.48,-.56,-.2,.2);ckMFD_th=th;const gr=add(new THREE.BoxGeometry(.08,.05,.08),M(0x2a2f36),-.48,-.49,-.21);}
   /* control stick between the knees */
-  add(new THREE.CylinderGeometry(.018,.026,.3,8),dark,0,-.78,-.32,.25);add(new THREE.SphereGeometry(.03,10,8),dark,0,-.64,-.36);
   /* canopy glass with a soft sky reflection streak, canopy-bow mirrors, quilted side walls */
   {const gc=document.createElement('canvas');gc.width=gc.height=256;const gx=gc.getContext('2d');const gr=gx.createLinearGradient(0,0,256,256);gr.addColorStop(0,'rgba(255,255,255,0)');gr.addColorStop(.45,'rgba(255,255,255,0)');gr.addColorStop(.5,'rgba(255,255,255,.18)');gr.addColorStop(.56,'rgba(255,255,255,0)');gx.fillStyle=gr;gx.fillRect(0,0,256,256);
    const glass=new THREE.Mesh(new THREE.SphereGeometry(1.15,24,12,0,Math.PI*2,0,Math.PI/2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(gc),transparent:true,depthWrite:false,side:THREE.BackSide,toneMapped:false,color:0xcfe6ff}));glass.scale.set(.75,.7,1.4);glass.position.set(0,-.25,-.3);g.add(glass);
@@ -2649,11 +2648,38 @@ function buildCockpit(p){
    const qtex=new THREE.CanvasTexture(qt);qtex.wrapS=qtex.wrapT=THREE.RepeatWrapping;qtex.repeat.set(2,1);
    g.children.forEach(o=>{if(o.isMesh&&o.material===wall){o.material=M(0xffffff,{map:qtex,roughness:.6,metalness:.3});}});}
   if(REALCK){g.children.slice().forEach(o=>{if(o!==g.children.find(x=>x.material&&x.material.map===hudT))o.visible=false;});const rc=REALCK.clone(true);g.add(rc);}
+  const hands=buildHands(p.def);g.add(hands.g);
   g.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=false;o.renderOrder=5;}});
-  g.visible=false;p.mesh.add(g);p.cockpit=g;ckMFD={L,R:Rr,G1,G2,H:{c:hc,x:hc.getContext('2d'),t:hudT},ball,t:0,th:0};
+  g.visible=false;p.mesh.add(g);p.cockpit=g;ckMFD={L,R:Rr,G1,G2,H:{c:hc,x:hc.getContext('2d'),t:hudT},ball,t:0,th:0,hands};
 }
+/* pilot's gloved hands on the stick and throttle (eye-relative: x right, y up, -z forward) */
+function buildHands(def){
+  const g=new THREE.Group(),glove=mat(0x2b2722,{roughness:.85}),suit=mat(0x596048,{roughness:.92}),blk=mat(0x15171a,{roughness:.5}),red=mat(0xb02a22,{roughness:.5});
+  const side=def.id==='f16',cyl=(r1,r2,h,m)=>new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,10),m);
+  const hand=(sg,grip)=>{const h=new THREE.Group();
+    const palm=new THREE.Mesh(new THREE.SphereGeometry(.05,12,10),glove);palm.scale.set(.8,1.15,1);palm.position.set(sg*.03,0,.025);h.add(palm);
+    /* fingers curl round the grip: half rings in front of it, one per finger, knuckles slightly staggered */
+    for(let i=0;i<4;i++){const f=new THREE.Mesh(new THREE.TorusGeometry(.034,.0115,6,12,Math.PI*1.15),glove);f.rotation.x=Math.PI/2;f.rotation.z=sg>0?Math.PI*.95:-Math.PI*.1;f.position.set(0,.035-i*.021,0);h.add(f);
+      const k=new THREE.Mesh(new THREE.SphereGeometry(.013,8,6),glove);k.position.set(sg*.03,.035-i*.021,-.02);h.add(k);}
+    const th=cyl(.012,.013,.06,glove);th.position.set(sg*.005,.06,-.005);th.rotation.x=-.6;h.add(th);
+    const cuff=cyl(.045,.05,.06,glove);cuff.rotation.x=Math.PI/2-.5;cuff.position.set(sg*.03,-.02,.08);h.add(cuff);
+    const arm=cyl(.05,.065,.42,suit);arm.rotation.x=Math.PI/2-.55;arm.rotation.z=-sg*.15;arm.position.set(sg*.06,-.12,.28);h.add(arm);
+    return h;};
+  /* stick: side-stick on the right console for the F-16, centre stick between the knees for the rest */
+  const sp=new THREE.Group();sp.position.set(side?.31:0,side?-.8:-1,side?-.46:-.5);g.add(sp);
+  const L=side?.1:.3;const shaft=cyl(.016,.022,L,blk);shaft.position.y=L/2;sp.add(shaft);
+  const grip=cyl(.024,.026,.13,blk);grip.position.y=L+.065;sp.add(grip);const trg=new THREE.Mesh(new THREE.BoxGeometry(.012,.025,.012),red);trg.position.set(0,L+.09,-.028);sp.add(trg);
+  const boot=cyl(.05,.07,.05,blk);boot.position.y=.02;sp.add(boot);
+  const rh=hand(1,grip);rh.position.set(0,L+.07,0);rh.scale.setScalar(.85);sp.add(rh);
+  /* throttle on the left console, slides forward with power */
+  const tp=new THREE.Group();tp.position.set(-.37,-.78,-.36);g.add(tp);
+  const rail=new THREE.Mesh(new THREE.BoxGeometry(.06,.02,.22),blk);rail.position.set(0,-.02,-.05);tp.add(rail);
+  const lv=new THREE.Group();tp.add(lv);const tl=cyl(.014,.016,.12,blk);tl.position.y=.06;lv.add(tl);const th=cyl(.026,.026,.09,blk);th.position.y=.13;lv.add(th);
+  const lh=hand(-1);lh.position.set(0,.13,0);lh.scale.setScalar(.85);lv.add(lh);
+  return {g,sp,lv,sx:0,sy:0};}
 function updateCockpit(p,dt){
   if(!ckMFD)return;
+  {const h=ckMFD.hands;if(h){const k=Math.min(1,dt*12);h.sx+=(p.inp.x-h.sx)*k;h.sy+=(p.inp.y-h.sy)*k;h.sp.rotation.set(h.sy*.32,0,-h.sx*.32);h.lv.position.z=.04-p.thr*.12-(p.ab?.03:0);h.lv.rotation.x=-p.thr*.35;}}
   {const bk=p.bank,f=fwdOf(p,tA);ckMFD.ball.rotation.set(Math.asin(clamp(f.y,-1,1)),0,bk);}
   /* HUD glass: F-16 style symbology (pitch ladder rolling with the bank, flight path marker, heading tape, speed and altitude boxes) */
   ckMFD.th-=dt;if(ckMFD.th<=0){ckMFD.th=.05;
@@ -2716,6 +2742,8 @@ function updateCamera(dt){
     const p=player,v=save.opt.view,b=p.def.b,cp=p.mesh.userData.canopy;
     if(!zoom)fovT=62+clamp(p.speed/p.def.maxSpd,0,1.2)*6+(p.ab?4:0);
     if(cp)cp.visible=v!==2;
+    /* inside the cockpit the downloaded model's fuselage would cover the panel and hands: show the game's slim body there instead */
+    {const u=p.mesh.userData;if(u.real&&u.inCk!==(v===2)){u.inCk=v===2;u.real.visible=!u.inCk;u.genHidden.forEach(o=>o.visible=u.inCk);}}
     document.body.classList.toggle('ckpt',v===2);
     if(v===2&&!p.cockpit)buildCockpit(p);if(p.cockpit){p.cockpit.visible=v===2;if(v===2)updateCockpit(p,dt);}
     {const nr=v===2?.08:1;if(camera.near!==nr){camera.near=nr;}}
