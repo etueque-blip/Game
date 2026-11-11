@@ -252,6 +252,8 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
 #msg{position:absolute;left:50%;top:calc(50% + min(44vh,44vw)/2 + 1.2rem);transform:translateX(-50%);color:var(--yellow);font-size:1.6rem;white-space:nowrap;text-shadow:0 0 6px #000}
 #big{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-family:var(--ui);font-size:2.6rem;font-weight:800;color:var(--blue);text-shadow:0 0 8px #000;text-align:center}
 #warn{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:1.5rem;font-weight:800;color:var(--red);font-family:var(--ui);text-shadow:0 0 8px #000;text-align:center;line-height:1.2}
+#tgtbar{position:absolute;left:50%;top:6.4rem;transform:translateX(-50%);display:none;min-width:20rem;background:#0b1c14e0;border:2px solid var(--red);border-radius:.7rem;padding:.35rem .8rem .5rem;font:800 .95rem var(--ui);color:#fff;pointer-events:none;text-align:center}
+#tgtbar em{float:right;font-style:normal;color:var(--yellow);margin-left:.8rem}#tgtbar b{float:left}#tgtbar span{display:block;clear:both;height:.75rem;background:#0008;border-radius:.3rem;overflow:hidden;margin-top:.3rem}#tgtbar i{display:block;height:100%;width:100%;transition:width .25s}
 #hpbar{position:absolute;left:50%;bottom:8.6rem;transform:translateX(-50%);width:18rem;height:.7rem;background:#0008;border:2px solid #4adf7a88;border-radius:.4rem;overflow:hidden}
 #hpbar i{display:block;height:100%;background:var(--green)}
 .tg{position:absolute;left:0;top:0;pointer-events:none;font-size:1rem;white-space:nowrap;will-change:transform}
@@ -338,7 +340,7 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
  <div id="rdspd"><div>СКОР. УЗЛЫ</div><div class="rdbox" id="vspd">000</div><div id="vg">1.0 G</div><div id="vm">M 0.00</div></div>
  <div id="rdalt"><div>ВЫСОТА М</div><div class="rdbox" id="valt">00000</div><div id="vaoa">AOA 0.0</div><div id="vgear">Шасси: Вниз</div></div>
  <div id="msg"></div><div id="big"></div><div id="warn"></div>
- <div id="hpbar"><i id="hpf"></i></div>
+ <div id="hpbar"><i id="hpf"></i></div><div id="tgtbar"><b></b><em></em><span><i></i></span></div>
  <div id="tgs"></div>
  <button class="hb tap" id="fireg">Пушка<small id="gunn">400</small><kbd class="kk">Пробел</kbd></button>
  <button class="hb tap" id="firew"><span id="wname">Ракета</span><small id="wcnt">2</small><kbd class="kk">F</kbd></button>
@@ -843,6 +845,19 @@ function explosion(pos,size,water){
   for(let i=0;i<n;i++){smoke(pos.x+rnd(-1,1)*size*.3,pos.y+rnd(0,1)*size*.3,pos.z+rnd(-1,1)*size*.3,size*.8,size*2.6,rnd(1.8,3.6),size*.25,.65,true);}
   if(water){for(let i=0;i<n*1.5;i++)smokeP.emit(pos.x+rnd(-1,1)*size*.3,0,pos.z+rnd(-1,1)*size*.3,rnd(-1,1)*size*.5,rnd(.6,1.6)*size*1.1,rnd(-1,1)*size*.5,rnd(1.2,2.4),size*.4,size*1.6,[1,1,1,.8],[1,1,1,0],size*.9);}
 }
+
+/* missile impact: a big fireball, a white shock sphere racing out, burning debris and a heavy boom */
+const shockPool=[];let shockI=0;
+function bigBoom(pos,size,water){
+  explosion(pos,size,water);explosion(pos.clone().add(new V3(rnd(-1,1),rnd(0,1),rnd(-1,1)).multiplyScalar(size*.3)),size*.6,false);
+  if(shockPool.length<6){const m=new THREE.Mesh(new THREE.SphereGeometry(1,20,14),new THREE.MeshBasicMaterial({color:0xffc890,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.BackSide}));m.visible=false;m.frustumCulled=false;scene.add(m);shockPool.push(m);}
+  const sh=shockPool[shockI++%shockPool.length];sh.position.copy(pos);sh.userData={t:0,life:.55,R:size*3.2};sh.visible=true;
+  for(let i=0;i<10;i++){const a=Math.random()*6.28,e=rnd(-.2,1.2),sp=rnd(.8,1.6)*size*2.6;
+    fireP.emit(pos.x,pos.y,pos.z,Math.cos(a)*Math.cos(e)*sp,Math.sin(e)*sp,Math.sin(a)*Math.cos(e)*sp,rnd(1.4,2.4),size*.12+.6,.2,[1.8,1.2,.5,1],[.6,.2,.05,0],size*3);}
+  sfx('boom',pos);const d=camera.position.distanceTo(pos);if(d<size*60)camShake=Math.min(1.5,camShake+size*.04*(1-d/(size*60)));
+}
+function updateShock(dt){for(const m of shockPool){if(!m.visible)continue;const u=m.userData;u.t+=dt;const k=u.t/u.life;if(k>=1){m.visible=false;continue;}
+  m.scale.setScalar(u.R*(1-Math.pow(1-k,3)));m.material.opacity=.16*(1-k)*(1-k);}}
 
 /* ---------- model builders ---------- */
 /* merge all static meshes under root that share a material into one mesh (far fewer draw calls) */
@@ -1374,7 +1389,7 @@ function buildZones(){
 function zoneColor(z){return z.owner?ZCOL[z.owner]:ZCOL.none;}
 function hitBase(b,pos,m){if(!b.owner||b.hp<=0)return false;cLocal(b,pos,tD);return Math.abs(tD.x+145)<230+m&&Math.abs(tD.z)<RW.L/2+40+m&&pos.y<RW.H+55+m&&pos.y>RW.H-6;}
 function dmgBase(b,a,by,w){
-  if(!b.owner||b.hp<=0||match.over)return;b.hp-=a;if(by&&by.isPlayer)hitMark();
+  if(!b.owner||b.hp<=0||match.over)return;b.hp-=a;if(by&&by.isPlayer){hitMark();tgtHp('ОСТРОВ «'+b.name+'»',b.hp,b.maxhp,b.owner);}
   if(b.hp<=0){const lost=b.owner;b.hp=0;b.owner=null;b.prog=0;
     for(let i=0;i<5;i++){tA.copy(b.pos);tA.x+=rnd(-80,80);tA.z+=rnd(-120,120);setTimeout(()=>explosion(tA.clone(),40,false),i*250);}sfx('boom');
     feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> [БАЗА] <span style="color:'+(lost==='blue'?'var(--blue)':'var(--red)')+'">'+b.name+' УНИЧТОЖЕНА</span>');
@@ -1687,7 +1702,7 @@ function award(by,cr,pts){
 function dmgPlane(p,a,by,w){
   if(!p.alive||p.shield>0||match.over)return;
   if(match.training&&p.isPlayer===false&&by&&by.isPlayer===false)return;
-  p.hp-=a;p.lastHit=by;
+  p.hp-=a;p.lastHit=by;if(by&&by.isPlayer&&!p.isPlayer)tgtHp(p.def.name+' · '+p.pilot.call,p.hp,p.maxhp,p.team);
   if(p.isPlayer){dmgFlash=Math.min(1,dmgFlash+a/40);sfx('hit');}
   if(by&&by.isPlayer)hitMark();
   if(p.hp<=0)killPlane(p,by,w);
@@ -1734,7 +1749,7 @@ function updateWrecks(dt){
 function dmgShip(s,a,by,w){
   if(s.kind==='base')return dmgBase(s,a*(w==='пушка'?.5:1),by,w);
   if(!s.alive||match.over)return;
-  s.hp-=a;if(by&&by.isPlayer)hitMark();
+  s.hp-=a;if(by&&by.isPlayer){hitMark();tgtHp(s.name,s.hp,s.maxhp||900,s.team);}
   if(s.kind==='carrier'&&!match.training)T[s.team].tickets=Math.max(0,T[s.team].tickets-a/CARR_HP*50);
   if(s.hp<=0){
     s.alive=false;explosion(s.pos.clone().setY(15),s.kind==='carrier'?60:34,false);sfx('boom');
@@ -1746,6 +1761,9 @@ function dmgShip(s,a,by,w){
 }
 let dmgFlash=0,hitFlash=0,deadBy='',deadT=0,state='side';
 function hitMark(){hitFlash=1;sfx('tick');}
+let tgtT=0;function tgtHp(name,hp,max,team){const el=$('#tgtbar');if(!el)return;const k=clamp(hp/max,0,1);tgtT=4;el.style.display='block';
+  el.querySelector('b').textContent=name;el.querySelector('em').textContent=k<=0?'УНИЧТОЖЕН!':Math.ceil(k*100)+'%';
+  const f=el.querySelector('i');f.style.width=(k*100)+'%';f.style.background=k>.5?'#4adf7a':k>.25?'#ffc94a':'#ff4a3a';el.style.borderColor=team==='blue'?'var(--blue)':'var(--red)';}
 function checkEnd(){
   if(match.over||match.training)return;
   for(const id of['blue','red']){const t=T[id];if(t.tickets<=0||!t.carrier.alive){endMatch(enemyOf(id));return;}}
@@ -1990,6 +2008,7 @@ function updateMissiles(dt){
     }
     if(boom){
       const dm=m.dmg,w=W[m.wid]?W[m.wid].s:(m.type==='sam'?'ЗРК':'ПКР');
+      bigBoom(m.pos,m.type==='strike'?50:m.type==='ship'||m.type==='agm'?32:22,m.pos.y<4);
       if(m.type==='ship'){blast(m.pos,60,0,m.dmg,m.by,m.team,w);}
       else if(m.type==='strike'){blast(m.pos,75,60,m.dmg,m.by,m.team,'РАКЕТНЫЙ УДАР');explosion(m.pos,45,false);}
       else if(m.type==='agm'){blast(m.pos,m.skim?55:40,40,m.dmg,m.by,m.team,w);}
@@ -2939,7 +2958,7 @@ function step(dt){
   for(const id of['blue','red'])for(const pl of T[id].pilots){if(pl.isPlayer||pl.plane)continue;pl.rt-=dt;if(pl.rt<=0&&!match.over)spawnBot(pl);}
   for(const p of planes){if(!p.alive)continue;if(p.isPlayer)controlPlayer(p,dt);else botThink(p,dt);updatePlane(p,dt);}
   planes=planes.filter(p=>p.alive);
-  updateShips(dt);updateWrecks(dt);updateZones(dt);updateStrikes(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateAps(dt);updateFlares(dt);
+  updateShips(dt);updateWrecks(dt);updateZones(dt);updateStrikes(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateAps(dt);updateShock(dt);if(tgtT>0){tgtT-=dt;if(tgtT<=0)$('#tgtbar').style.display='none';}updateFlares(dt);
   smokeP.update(dt);fireP.update(dt);updateFx(dt);
   if(state==='dead'){deadT-=dt;if(deadT<=0)toHangar();}
   if(state==='side'&&Math.floor(performance.now()/1000)!==renderSide.s){renderSide.s=Math.floor(performance.now()/1000);renderSide();}
