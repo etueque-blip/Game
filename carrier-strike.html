@@ -253,6 +253,9 @@ body.haskb #keys.on{display:grid;grid-template-columns:1fr 1fr;column-gap:.9rem}
 #msg{position:absolute;left:50%;top:calc(50% + min(44vh,44vw)/2 + 1.2rem);transform:translateX(-50%);color:var(--yellow);font-size:1.6rem;white-space:nowrap;text-shadow:0 0 6px #000}
 #big{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-family:var(--ui);font-size:2.6rem;font-weight:800;color:var(--blue);text-shadow:0 0 8px #000;text-align:center}
 #warn{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:1.5rem;font-weight:800;color:var(--red);font-family:var(--ui);text-shadow:0 0 8px #000;text-align:center;line-height:1.2}
+#coach{position:absolute;left:50%;bottom:calc(max(1rem,env(safe-area-inset-bottom)) + 9.6rem);transform:translateX(-50%);max-width:min(90vw,40rem);text-align:center;background:#0b1c14e6;border:2px solid var(--yellow);border-radius:.8rem;padding:.45rem 1rem;font:800 1.05rem var(--ui);color:#fff;pointer-events:none;text-shadow:0 1px 3px #000;display:none}
+#coach.red{border-color:#ff4a3a;background:#3a0c0ce6;animation:cblink .5s infinite alternate}@keyframes cblink{to{border-color:#ffd04a}}#coach.grn{border-color:var(--green)}
+body.ckpt #coach{bottom:1rem;font-size:.9rem}
 #mtrack{position:absolute;left:calc(max(16px,env(safe-area-inset-left)) + 14.2rem);top:.8rem;width:10.5rem;background:#0b1c14c8;border:1px solid #2a5d41;border-radius:.6rem;padding:.3rem .5rem;font:700 .68rem var(--ui);pointer-events:none}
 #mtrack b{color:var(--yellow);font-size:.68rem}#mtrack div{position:relative;margin-top:.25rem;padding-bottom:.25rem}#mtrack span{color:#d8f5e0}#mtrack em{float:right;font-style:normal;color:var(--yellow)}#mtrack i{position:absolute;left:0;bottom:0;height:3px;background:var(--green);border-radius:2px}
 body.ckpt #mtrack{display:none}
@@ -344,7 +347,7 @@ body.ckpt #mtrack{display:none}
  <div id="rdspd"><div>СКОР. УЗЛЫ</div><div class="rdbox" id="vspd">000</div><div id="vg">1.0 G</div><div id="vm">M 0.00</div></div>
  <div id="rdalt"><div>ВЫСОТА М</div><div class="rdbox" id="valt">00000</div><div id="vaoa">AOA 0.0</div><div id="vgear">Шасси: Вниз</div></div>
  <div id="msg"></div><div id="big"></div><div id="warn"></div>
- <div id="mtrack"></div><div id="hpbar"><i id="hpf"></i></div><div id="tgtbar"><b></b><em></em><span><i></i></span></div>
+ <div id="mtrack"></div><div id="coach"></div><div id="hpbar"><i id="hpf"></i></div><div id="tgtbar"><b></b><em></em><span><i></i></span></div>
  <div id="tgs"></div>
  <button class="hb tap" id="fireg">Пушка<small id="gunn">400</small><kbd class="kk">Пробел</kbd></button>
  <button class="hb tap" id="firew"><span id="wname">Ракета</span><small id="wcnt">2</small><kbd class="kk">F</kbd></button>
@@ -868,10 +871,10 @@ function bigBoom(pos,size,water){
 }
 /* mushroom cloud: orange fireball that climbs on a smoke stem and spreads into a cap, plus a ground shock ring */
 const nukes=[];let ringMesh=null;
-function nuke(pos,k){k=k||1;bigBoom(pos,40*k,false);flash(pos,420*k,1.1);boomLight(pos,14*k);sfx('boom',pos);setTimeout(()=>sfx('boom',pos),250);
+function nuke(pos,k,small){k=k||1;if(!small){bigBoom(pos,40*k,false);setTimeout(()=>sfx('boom',pos),250);}flash(pos,420*k,1.1);boomLight(pos,14*k);sfx('boom',pos);
   nukes.push({p:pos.clone().setY(Math.max(pos.y,2)),t:0,k});
   if(!ringMesh){ringMesh=new THREE.Mesh(new THREE.RingGeometry(.86,1,48),new THREE.MeshBasicMaterial({color:0xffd2a0,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));ringMesh.rotation.x=-Math.PI/2;ringMesh.frustumCulled=false;scene.add(ringMesh);}
-  ringMesh.position.copy(pos).setY(Math.max(pos.y,1)+1);ringMesh.userData={t:0,k};ringMesh.visible=true;
+  if(!small){ringMesh.position.copy(pos).setY(Math.max(pos.y,1)+1);ringMesh.userData={t:0,k};ringMesh.visible=true;}
   const d=camera.position.distanceTo(pos);if(d<4000)camShake=Math.min(2,camShake+1.4*(1-d/4000));}
 function updateNukes(dt){
   if(ringMesh&&ringMesh.visible){const u=ringMesh.userData;u.t+=dt;const q=u.t/2.2;if(q>=1)ringMesh.visible=false;else{ringMesh.scale.setScalar(30+q*700*u.k);ringMesh.material.opacity=.5*(1-q);}}
@@ -1735,7 +1738,7 @@ function award(by,cr,pts){
 function dmgPlane(p,a,by,w){
   if(!p.alive||p.shield>0||match.over)return;
   if(match.training&&p.isPlayer===false&&by&&by.isPlayer===false)return;
-  if(by&&by.isPlayer&&!p.isPlayer)a*=2;/* enemies go down twice as fast to your fire */
+  if(by&&by.isPlayer&&!p.isPlayer)a*=2;if(p.isPlayer&&!(by&&by.isPlayer))a*=.6;/* enemies go down twice as fast to your fire */
   p.hp-=a;p.lastHit=by;if(by&&by.isPlayer&&!p.isPlayer)tgtHp(p.def.name+' · '+p.pilot.call,p.hp,p.maxhp,p.team);
   if(p.isPlayer){dmgFlash=Math.min(1,dmgFlash+a/40);sfx('hit');}
   if(by&&by.isPlayer)hitMark();
@@ -1949,7 +1952,7 @@ function mslMesh(key){
 }
 function launchMissile(by,target,type,team,pos,wid){
   const w=W[wid]||null;
-  const mesh=mslMesh(wid||(type==='ship'?'ship':type==='strike'?'strike':'aim9'));scene.add(mesh);
+  const mesh=mslMesh(wid||(type==='ship'?'ship':type==='strike'?'strike':'aim9'));if(by)mesh.scale.setScalar(1.6);scene.add(mesh);
   const m={mesh,pos:pos.clone(),dir:new V3(),speed:0,target,team,by,type,wid,age:0,hp:type==='ship'?3:type==='strike'?4:1,chk:0,turn:w?w.turn:2.4,vmax:w?w.v:640,dmg:w?w.dmg:70,lostT:0,
     ir:w?!!w.ir:true,flareP:w?w.flare:.38,skim:!!(w&&w.skim),burn:w?w.burn:5.5,life:w?w.life:12};
   if(by){if(by.isPlayer){m.flareP*=.25;m.turn*=1.6;m.vmax*=1.1;m.fuse=55;}tA.set(0,0,-1).applyQuaternion(by.q);m.dir.copy(tA);m.speed=by.speed*(type==='agm'?.9:1)+40;if(by.vel&&(type==='aa'||type==='agm')){m.drop=.34;m.dropV=by.vel.clone().add(new V3(0,-5,0).applyQuaternion(by.q));m.dq=by.q.clone();}m.turn*=1+.08*by.up.msl;m.vmax*=1+.06*by.up.msl;m.dmg*=1+.07*by.up.wpn;}
@@ -2013,7 +2016,7 @@ function updateMissiles(dt){
     if(m.target&&homing){
       m.chk-=dt;
       if(m.chk<=0&&m.target.kind==='plane'&&m.ir){m.chk=.15;
-        for(const f of flares){const d=f.pos.distanceTo(m.pos);if(d<1600){tA.copy(f.pos).sub(m.pos).normalize();if(tA.dot(m.dir)>.8&&Math.random()<(m.type==='sam'?.5:m.flareP)){m.target=f;break;}}}}
+        for(const f of flares){const d=f.pos.distanceTo(m.pos);if(d<1600){tA.copy(f.pos).sub(m.pos).normalize();if(tA.dot(m.dir)>.8&&Math.random()<(m.type==='sam'?(m.target===player?.8:.5):m.flareP)){m.target=f;break;}}}}
     }
     if(m.target){
       tA.copy(m.target.pos);
@@ -2030,6 +2033,7 @@ function updateMissiles(dt){
     m.pos.addScaledVector(m.dir,m.speed*dt);
     m.mesh.position.copy(m.pos);tQ2.setFromUnitVectors(new V3(0,0,-1),m.dir);m.mesh.quaternion.copy(tQ2);
     if(m.age<m.burn||m.type==='ship'||m.type==='strike'){if(m.type==='strike')fire(m.pos.x-m.dir.x*6,m.pos.y-m.dir.y*6,m.pos.z-m.dir.z*6,4,1,.18,0);fire(m.pos.x-m.dir.x*2,m.pos.y-m.dir.y*2,m.pos.z-m.dir.z*2,1.6,.4,.1,0);}
+    if(m.by){fire(m.pos.x-m.dir.x*3.5,m.pos.y-m.dir.y*3.5,m.pos.z-m.dir.z*3.5,2.6,.6,.08,0);}
     if(m.ign>0){fire(m.pos.x-m.dir.x*2.6,m.pos.y-m.dir.y*2.6,m.pos.z-m.dir.z*2.6,2.4+m.ign,.7,.12,0);smoke(m.pos.x-m.dir.x*5,m.pos.y-m.dir.y*5,m.pos.z-m.dir.z*5,2.6+m.ign*2,8,3.5,.2,.55);}
     smoke(m.pos.x-m.dir.x*3,m.pos.y-m.dir.y*3,m.pos.z-m.dir.z*3,m.type==='strike'?4:m.type==='ship'?2.4:1.6,m.type==='strike'?14:m.type==='ship'?7:5,m.type==='strike'?5:m.type==='ship'?3:2.2,.15,.6);
     let boom=false,ent=null;
@@ -2043,7 +2047,7 @@ function updateMissiles(dt){
     if(boom){
       const dm=m.dmg,w=W[m.wid]?W[m.wid].s:(m.type==='sam'?'ЗРК':'ПКР');
       if(m.onMe&&player&&player.alive&&m.pos.distanceTo(player.pos)>45){save.cr+=40;addXp(20);persist();prog('e');toast('Ушёл от ракеты! +40 CR');}
-      bigBoom(m.pos,m.type==='strike'?50:m.type==='ship'||m.type==='agm'?32:22,m.pos.y<4);
+      bigBoom(m.pos,m.type==='strike'?50:m.type==='ship'||m.type==='agm'?32:22,m.pos.y<4);if(m.type!=='strike'&&m.type!=='sam'&&nukes.length<4)nuke(m.pos.clone(),m.type==='aa'?.3:.45,true);
       if(m.type==='ship'){blast(m.pos,60,0,m.dmg,m.by,m.team,w);}
       else if(m.type==='strike'){blast(m.pos,75,60,m.dmg,m.by,m.team,'РАКЕТНЫЙ УДАР');nuke(m.pos,.7);}
       else if(m.type==='agm'){blast(m.pos,m.skim?55:40,40,m.dmg,m.by,m.team,w);}
@@ -2209,7 +2213,8 @@ function kbHtml(){
   const wd={Tab:3.4,Caps:4,Shift:5,Ctrl:3.4,Alt:3,Space:16,Esc:2.6};
   return '<div class="kbv">'+rows.map((r,ri)=>'<div class="r" style="padding-left:'+[0,0,.4,.8,0][ri]+'rem">'+r.map(k=>'<div class="key '+(KEYCAT[k]||'')+'" style="min-width:'+(wd[k]||2.4)+'rem">'+(k==='Space'?'ПРОБЕЛ':k)+'</div>').join('')+'</div>').join('')+'</div>';
 }
-function helpHtml(){
+function helpHtml(){return howtoHtml(false)+'<hr style="border-color:#ffffff22">'+helpHtml0();}
+function helpHtml0(){
   const L=(k,t)=>'<div><i><span class="kbd">'+k+'</span></i><span>'+t+'</span></div>';
   return '<h2>⌨ Управление</h2>'+kbHtml()+
   '<div style="display:flex;gap:1rem;flex-wrap:wrap;font-size:.9rem"><span><span class="dot" style="background:#1f6b3a"></span>Полёт</span><span><span class="dot" style="background:#8a5a12"></span>Двигатель</span><span><span class="dot" style="background:#8a2a22"></span>Оружие</span><span><span class="dot" style="background:#1f4f8a"></span>Системы</span><span><span class="dot" style="background:#5a3a8a"></span>Камера и меню</span></div>'+
@@ -2347,8 +2352,23 @@ $('#launch').onclick=()=>{
   audioInit();const d=DEF[save.sel];
   if(!save.owned.includes(d.id)){if(level()<d.lvl)return toast('Этот самолёт открывается на уровне пилота '+d.lvl);if(save.cr<d.price)return toast('Нужно '+d.price+' CR');save.cr-=d.price;save.owned.push(d.id);persist();toast('Куплено: '+d.name);renderHangar();return;}
   if(match.over)return;
+  if(!save.howto){save.howto=1;persist();showModal(howtoHtml(true));return;}
   openSpawnPicker();
 };
+/* the whole game on one card, for the first sortie */
+function howtoHtml(go){
+  const r=(i,t,d)=>'<div style="display:flex;gap:.8rem;align-items:flex-start;margin:.55rem 0"><b style="font-size:1.6rem;min-width:2.2rem;text-align:center">'+i+'</b><div><b>'+t+'</b><div style="color:var(--dim);font-size:.9rem">'+d+'</div></div></div>';
+  return '<h2>Как играть — за 1 минуту</h2>'+
+   r('🎯','ЦЕЛЬ','Ты — синие. Сбивай красные самолёты и забирай острова. Кто первым обнулит очки врага (вверху экрана) — победил.')+
+   r('🛫','ВЗЛЁТ','Жми ▲ ГАЗ до конца. На 150 узлах потяни джойстик НА СЕБЯ — самолёт взлетит.')+
+   r('🔺','ГДЕ ВРАГ','Красные ромбы и красные стрелки по краю экрана — это враги. Лети к ним.')+
+   r('🔫','КАК СБИТЬ','Наведи круг на врага и жми ПУШКА. Или держи врага в круге 1–2 секунды — появится ЗАХВАТ — жми РАКЕТУ.')+
+   r('🤖','ЛЕНЬ ЦЕЛИТЬСЯ?','Включи АВТО — самолёт сам догонит врага, сам стреляет и сам уходит от ракет.')+
+   r('🚀','В ТЕБЯ РАКЕТА','Экран мигает красным — жми ЛОВУШКИ и резко поворачивай.')+
+   r('🏝','ОСТРОВА','Белый ◆ — ничей: пролети над ним низко. Красный ◆ — вражеский: сначала разбомби, потом пролети низко. Красные острова и корабли стреляют ПВО — подлетай с ловушками.')+
+   r('💰','ДЕНЬГИ','За всё: самолёты, ракеты, острова, задания (слева сверху). На деньги — новые самолёты в ангаре.')+
+   '<div style="color:var(--yellow);margin:.4rem 0">Внизу экрана всегда подсказка — что делать прямо сейчас.</div>'+
+   (go?'<button class="btn g" onclick="closeModal();openSpawnPicker()">ПОНЯТНО — В БОЙ!</button>':'<button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>');}
 function openSpawnPicker(){
   const sps=spawnPoints(myTeam);
   showModal('<h2>📍 Где вылетать?</h2><div class="spwrap"><canvas id="spmap" width="560" height="560"></canvas><div class="splist">'+
@@ -2908,6 +2928,23 @@ function updateHud(dt){
         p.pos.y>z.ALT?'◆ '+z.name+': опуститесь ниже '+z.ALT+' м для захвата':'◆ ЗАХВАТ '+z.name+': '+pc+'%'+(z.inside[enemyOf(p.team)]?' · враг мешает!':'');}}
     if(!hint&&aimMode()&&!isLocked())hint='Кликните по экрану, чтобы управлять мышью · Esc — меню';}
   setT('hint',hint);
+  /* coach: the single most useful thing to do right now, in plain words */
+  if(!updateHud.ct||performance.now()-updateHud.ct>300){updateHud.ct=performance.now();let ct='',cc='';
+    const inc=missiles.find(m=>m.target===p&&m.pos.distanceTo(p.pos)<4000);
+    if(p.state==='parked')ct='① Нажми ▲ ГАЗ — самолёт поедет к полосе';
+    else if(p.state==='taxi'||p.state==='ground')ct=hint?'② '+hint:'② Газ ▲ до конца, на скорости 150 уз потяни джойстик НА СЕБЯ';
+    else if(p.state==='cat'||p.state==='launch')ct='Взлёт! Держи газ на максимуме';
+    else if(p.state==='fly'){
+      if(inc){cc='red';ct='🚀 В ТЕБЯ РАКЕТА '+clockDir(p,inc.pos)[0]+'! Жми ЛОВУШКИ'+(p.mods.aps&&p.aps>0?' или ПРО':'')+' и резко поверни';}
+      else if(p.hp<p.maxhp*.35)ct='🔧 Самолёт сильно повреждён — сядь на свою полосу (синий ◆) для ремонта';
+      else{let tq=null,bd=1e9;for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;const d=q.pos.distanceTo(p.pos);if(d<bd){bd=d;tq=q;}}
+        const wd=curW(p)?W[curW(p).id]:null;
+        if(tq&&p.locked&&p.lockT===tq){cc='grn';ct='🎯 ЗАХВАТ! Жми '+(IS_TOUCH?'кнопку РАКЕТЫ':'F')+' — ракета сама догонит';}
+        else if(tq&&bd<1800){cc='grn';ct='Враг рядом '+(bd/1000).toFixed(1)+' км! Круг на красный ромб → ПУШКА'+(wd&&wd.kind==='aa'?' · или жди ЗАХВАТ → РАКЕТА':'');}
+        else if(tq&&bd<7000)ct='Враг в '+(bd/1000).toFixed(1)+' км — лети по красной стрелке'+(save.opt.steer?'':' · или включи АВТО, он сам догонит и собьёт');
+        else{const fz=BASES.filter(z=>z.owner!==p.team).sort((u,v)=>Math.hypot(u.cx-p.pos.x,u.cz-p.pos.z)-Math.hypot(v.cx-p.pos.x,v.cz-p.pos.z))[0];
+          ct=fz?(fz.owner?'Разбомби вражескую базу «'+fz.short+'» (красный ◆), потом пролети над ней низко — она станет твоей':'Пролети низко над островом «'+fz.short+'» (белый ◆) — он станет твоим'):'Ищи врагов — красные точки на радаре';}}}
+    const ce=E('coach');ce.textContent=ct;ce.style.display=ct&&save.opt.coach!==false?'block':'none';ce.className=cc;}
   setT('big',p.shield>0&&p.state==='fly'?'Защита при вылете '+Math.ceil(p.shield):'');
   const spdKt=Math.round(p.speed*KT);setT('vspd',String(spdKt).padStart(3,'0'));
   setT('valt',String(Math.max(0,Math.round(p.pos.y-(p.state==='fly'?0:DECK_Y)))).padStart(5,'0'));
