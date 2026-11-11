@@ -267,6 +267,7 @@ body.ckpt #mtrack{display:none}
 .tg .dm{width:1.4rem;height:1.4rem;border:2px solid;transform:rotate(45deg);margin:0 auto}
 .tg .tx{text-align:center;margin-top:.4rem;text-shadow:0 0 4px #000;font-weight:500}
 .tg.lk .dm{width:2.6rem;height:2.6rem;border-width:3px}
+.tg.sq .dm{transform:none;width:1rem;height:1rem;border-width:2px;border-radius:2px}.tg.sq.big .dm{width:1.5rem;height:1.5rem}.tg.sq.lk .dm{width:2.2rem;height:2.2rem;border-width:3px}.tg.sq .tx{margin-top:.15rem;font-size:.8rem;font-weight:700}.tg.zn{opacity:.7}.tg.zn .dm{width:.9rem;height:.9rem}
 #hitm{position:absolute;left:50%;top:50%;width:3rem;height:3rem;transform:translate(-50%,-50%) rotate(45deg);border:3px solid #fff;opacity:0;pointer-events:none}
 #dmg{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 12rem #ff2a1a;opacity:0}
 /* overlays */
@@ -2361,7 +2362,7 @@ function howtoHtml(go){
   return '<h2>Как играть — за 1 минуту</h2>'+
    r('🎯','ЦЕЛЬ','Ты — синие. Сбивай красные самолёты и забирай острова. Кто первым обнулит очки врага (вверху экрана) — победил.')+
    r('🛫','ВЗЛЁТ','Жми ▲ ГАЗ до конца. На 150 узлах потяни джойстик НА СЕБЯ — самолёт взлетит.')+
-   r('🔺','ГДЕ ВРАГ','Красные ромбы и красные стрелки по краю экрана — это враги. Лети к ним.')+
+   r('🔺','ГДЕ ВРАГ','Красные квадраты и красные стрелки по краю экрана — это враги. Лети к ним.')+
    r('🔫','КАК СБИТЬ','Наведи круг на врага и жми ПУШКА. Или держи врага в круге 1–2 секунды — появится ЗАХВАТ — жми РАКЕТУ.')+
    r('🤖','ЛЕНЬ ЦЕЛИТЬСЯ?','Включи АВТО — самолёт сам догонит врага, сам стреляет и сам уходит от ракет.')+
    r('🚀','В ТЕБЯ РАКЕТА','Экран мигает красным — жми ЛОВУШКИ и резко поворачивай.')+
@@ -2940,7 +2941,7 @@ function updateHud(dt){
       else{let tq=null,bd=1e9;for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;const d=q.pos.distanceTo(p.pos);if(d<bd){bd=d;tq=q;}}
         const wd=curW(p)?W[curW(p).id]:null;
         if(tq&&p.locked&&p.lockT===tq){cc='grn';ct='🎯 ЗАХВАТ! Жми '+(IS_TOUCH?'кнопку РАКЕТЫ':'F')+' — ракета сама догонит';}
-        else if(tq&&bd<1800){cc='grn';ct='Враг рядом '+(bd/1000).toFixed(1)+' км! Круг на красный ромб → ПУШКА'+(wd&&wd.kind==='aa'?' · или жди ЗАХВАТ → РАКЕТА':'');}
+        else if(tq&&bd<1800){cc='grn';ct='Враг рядом '+(bd/1000).toFixed(1)+' км! Круг на красный квадрат → ПУШКА'+(wd&&wd.kind==='aa'?' · или жди ЗАХВАТ → РАКЕТА':'');}
         else if(tq&&bd<7000)ct='Враг в '+(bd/1000).toFixed(1)+' км — лети по красной стрелке'+(save.opt.steer?'':' · или включи АВТО, он сам догонит и собьёт');
         else{const fz=BASES.filter(z=>z.owner!==p.team).sort((u,v)=>Math.hypot(u.cx-p.pos.x,u.cz-p.pos.z)-Math.hypot(v.cx-p.pos.x,v.cz-p.pos.z))[0];
           ct=fz?(fz.owner?'Разбомби вражескую базу «'+fz.short+'» (красный ◆), потом пролети над ней низко — она станет твоей':'Пролети низко над островом «'+fz.short+'» (белый ◆) — он станет твоим'):'Ищи врагов — красные точки на радаре';}}}
@@ -2965,16 +2966,19 @@ function updateHud(dt){
   setT('warn',w);
   // targets
   let n=0;
-  const showT=(pos,col,text,lock)=>{if(n>=14||!project(pos,tC))return;const el=tgEl(n++);el.style.display='';el.className='tg'+(lock?' lk':'');
+  const showT=(pos,col,text,lock,cls)=>{if(n>=12||!project(pos,tC))return;const el=tgEl(n++);el.style.display='';el.className='tg'+(lock?' lk':'')+(cls?' '+cls:'');
     el.firstChild.style.borderColor=col;el.lastChild.style.color=col;el.lastChild.textContent=text;
     el.style.transform='translate('+((tC.x*.5+.5)*innerWidth)+'px,'+((-tC.y*.5+.5)*innerHeight-12)+'px) translate(-50%,0)';};
-  for(const q of planes){if(!q.alive||q.team===p.team||q===p)continue;const d=q.pos.distanceTo(p.pos);if(d>7000)continue;
-    const lkq=p.lockT===q&&p.locked;showT(q.pos,lkq?'#ff9a3c':'#e0584c',(lkq||p.autoT===q?q.pilot.call+' · ':'')+(d/1000).toFixed(1)+' км',lkq);}
+  /* enemy planes: a small square on each (6 nearest), text only on the nearest / locked one */
+  {const en=planes.filter(q=>q.alive&&q.team!==p.team&&q!==p).map(q=>[q,q.pos.distanceTo(p.pos)]).filter(a=>a[1]<7000).sort((a,b)=>a[1]-b[1]).slice(0,6);
+   en.forEach(([q,d],i)=>{const lkq=p.lockT===q&&p.locked,main=i===0||lkq||p.autoT===q;showT(q.pos,lkq?'#ff9a3c':'#ff4a3a',main?(d/1000).toFixed(1)+' км':'',lkq,main?'sq big':'sq');});}
+  const busy=planes.some(q=>q.alive&&q.team!==p.team&&q.pos.distanceTo(p.pos)<3000);
   const ec=T[enemyOf(p.team)];
   for(const m of missiles){if(m.type!=='strike'||m.team===p.team)continue;const d=m.pos.distanceTo(p.pos);if(d<12000)showT(m.pos,'#ff3a2a','⚠ РАКЕТА '+(d/1000).toFixed(1)+' км',d<1500);}
   if(p.state==='ground'||p.state==='parked'){const thr=new V3();cWorld(p.home.f,0,RW.H+6,RW.L/2-40,thr);if(!(Math.abs(p.tx)<RW.W/2&&Math.abs(p.tz)<RW.L/2))showT(thr,'#ffc94a','▼ ПОЛОСА '+Math.round(thr.distanceTo(p.pos))+' м',true);}
-  for(const z of ZONES){const zp=tB.set(z.cx,250,z.cz),d=zp.distanceTo(p.pos);showT(zp,z.owner?(z.owner==='blue'?'#5aa8ff':'#ff6a5a'):'#ffffff','◆ '+z.short+' '+(d/1000).toFixed(1)+' км');}
-  {const cw2=curW(p),ag=cw2&&W[cw2.id].kind!=='aa';for(const s of [...ec.boats,ec.carrier]){if(!s.alive)continue;const d=s.pos.distanceTo(p.pos);const lk=p.lockT===s&&p.locked;if(!lk&&d>(ag?11000:(s.kind==='carrier'?9000:5000)))continue;showT(s.pos,lk?'#ff9a3c':'#ffb347',(s.kind==='carrier'?'⚓ ':'')+(d/1000).toFixed(1)+' км',lk);}}
+  /* islands: hidden during a dogfight, otherwise only the 2 nearest you do not own */
+  if(!busy)ZONES.filter(z=>z.owner!==p.team).map(z=>[z,Math.hypot(z.cx-p.pos.x,z.cz-p.pos.z)]).sort((a,b)=>a[1]-b[1]).slice(0,2).forEach(([z,d])=>{const zp=tB.set(z.cx,250,z.cz);showT(zp,z.owner?'#ff6a5a':'#ffffff','◆ '+z.short+' '+(d/1000).toFixed(1)+' км',false,'zn');});
+  {const cw2=curW(p),ag=cw2&&W[cw2.id].kind!=='aa';for(const s of [...ec.boats,ec.carrier]){if(!s.alive)continue;const d=s.pos.distanceTo(p.pos);const lk=p.lockT===s&&p.locked;if(!lk&&(busy&&!ag||d>(ag?11000:(s.kind==='carrier'?6000:3000))))continue;showT(s.pos,lk?'#ff9a3c':'#ffb347',(s.kind==='carrier'?'⚓ ':'')+(d/1000).toFixed(1)+' км',lk);}}
   if(cw&&cw.id==='bomb'&&p.state==='fly'){const t=(p.vel.y+Math.sqrt(p.vel.y*p.vel.y+19.6*Math.max(p.pos.y,1)))/9.8;tA.copy(p.pos).addScaledVector(p.vel,t);tA.y=0;showT(tA,'#ffffff','ПАДЕНИЕ');}
   for(let i=n;i<tgPool.length;i++)tgPool[i].style.display='none';
   drawRadar(p);
