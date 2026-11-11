@@ -1859,7 +1859,7 @@ function updateBullets(dt){
     let hit=false;
     if(b.life<=0||b.p.y<0){if(b.p.y<0&&Math.random()<.3)smoke(b.p.x,0,b.p.z,1,4,.6,.5,.5);bullets.splice(i,1);continue;}
     for(const p of planes){if(!p.alive||p.team===b.team||p.state==='cat')continue;
-      if(segDist(prevB,b.p,p.pos)<p.radius*(b.by&&b.by.isPlayer?1.4:1)){dmgPlane(p,b.dmg,b.by,'пушка');hit=true;fire(b.p.x,b.p.y,b.p.z,1.2,.2,.15,3);break;}}
+      if(segDist(prevB,b.p,p.pos)<p.radius*(b.by&&b.by.isPlayer?2.3:1)){dmgPlane(p,b.dmg,b.by,'пушка');hit=true;fire(b.p.x,b.p.y,b.p.z,1.2,.2,.15,3);break;}}
     if(!hit&&b.by){for(const s of shipTargets(enemyOf(b.team))){if(hitShip(s,b.p,2)){dmgShip(s,b.dmg*(s.kind==='carrier'?.35:.6),b.by,'пушка');hit=true;fire(b.p.x,b.p.y,b.p.z,1.5,.2,.2,3);break;}}}
     if(!hit){for(let j=missiles.length-1;j>=0;j--){const m=missiles[j];if(m.team!==b.team&&!m.drop&&m.pos.distanceTo(b.p)<(m.type==='strike'?14:m.type==='ship'?9:6)){m.hp-=1;if(m.hp<=0){explosion(m.pos,m.type==='strike'?22:10,false);if(b.by&&b.by.isPlayer){save.cr+=80;addXp(40);persist();prog('m');toast('💥 Ракета сбита! +80 CR');}removeMissile(j);}hit=true;break;}}}
     if(hit){bullets.splice(i,1);continue;}
@@ -1875,14 +1875,14 @@ function fireGun(p){
   const side=(p.ammo%2?1:-1)*1.3;tB.set(side,-.2,-5).applyQuaternion(p.q).add(p.pos);
   tC.copy(tA).multiplyScalar(p.speed+900);
   const aimLv=p.mods&&p.mods.gunaim?2:(p.isPlayer&&save.opt.aim?1:0);
-  if(aimLv){const vb=p.speed+900;let best=null,ba=aimLv>1?.12:.06;
-    for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;const d=q.pos.distanceTo(p.pos);if(d>(aimLv>1?1600:1100))continue;
+  if(aimLv){const vb=p.speed+900;let best=null,ba=aimLv>1?.2:(p.isPlayer?.13:.06);
+    for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;const d=q.pos.distanceTo(p.pos);if(d>(aimLv>1?2000:p.isPlayer?1500:1100))continue;
       let t=d/vb;tD.copy(q.pos).addScaledVector(q.vel,t);t=tD.distanceTo(p.pos)/vb;tD.copy(q.pos).addScaledVector(q.vel,t);tD.y+=.5*9.8*.6*t*t;tD.sub(p.pos).normalize();
       const a=Math.acos(clamp(tD.dot(tA),-1,1));if(a<ba){ba=a;best=tD.clone();}}
     if(!best)for(const sh of shipTargets(enemyOf(p.team))){const d=sh.pos.distanceTo(p.pos);if(d>1800)continue;tD.copy(sh.pos);tD.y+=sh.kind==='carrier'?14:6;const t=d/vb;tD.y+=.5*9.8*.6*t*t;tD.sub(p.pos).normalize();const a=Math.acos(clamp(tD.dot(tA),-1,1));if(a<ba){ba=a;best=tD.clone();}}
     if(best){tC.copy(best).multiplyScalar(vb);p.aimAssist=.3;}}
-  tC.x+=rnd(-1,1)*5;tC.y+=rnd(-1,1)*5;tC.z+=rnd(-1,1)*5;
-  addBullet(tB.clone(),tC.clone(),p.team,p,4.5*(1+.07*p.up.wpn)*(p.isPlayer?1:.8),1.5);
+  const spr=p.isPlayer?1.5:5;tC.x+=rnd(-1,1)*spr;tC.y+=rnd(-1,1)*spr;tC.z+=rnd(-1,1)*spr;
+  addBullet(tB.clone(),tC.clone(),p.team,p,4.5*(1+.07*p.up.wpn)*(p.isPlayer?1.25:.8),1.5);
   if(p.ammo%2===0){tB.addScaledVector(tA,-1.5);fireP.emit(tB.x,tB.y,tB.z,p.vel.x,p.vel.y,p.vel.z,.05,2.2,.6,[2,1.6,.8,1],[1,.5,.1,0],0);}
   if(p.isPlayer){camShake=Math.max(camShake,.08);if(p.ammo%3===0)sfx('gun');}
 }
@@ -1945,7 +1945,7 @@ function launchMissile(by,target,type,team,pos,wid){
   const mesh=mslMesh(wid||(type==='ship'?'ship':type==='strike'?'strike':'aim9'));scene.add(mesh);
   const m={mesh,pos:pos.clone(),dir:new V3(),speed:0,target,team,by,type,wid,age:0,hp:type==='ship'?3:type==='strike'?4:1,chk:0,turn:w?w.turn:2.4,vmax:w?w.v:640,dmg:w?w.dmg:70,lostT:0,
     ir:w?!!w.ir:true,flareP:w?w.flare:.38,skim:!!(w&&w.skim),burn:w?w.burn:5.5,life:w?w.life:12};
-  if(by){tA.set(0,0,-1).applyQuaternion(by.q);m.dir.copy(tA);m.speed=by.speed*(type==='agm'?.9:1)+40;if(by.vel&&(type==='aa'||type==='agm')){m.drop=.34;m.dropV=by.vel.clone().add(new V3(0,-5,0).applyQuaternion(by.q));m.dq=by.q.clone();}m.turn*=1+.08*by.up.msl;m.vmax*=1+.06*by.up.msl;m.dmg*=1+.07*by.up.wpn;}
+  if(by){if(by.isPlayer){m.flareP*=.4;m.turn*=1.3;m.fuse=42;}tA.set(0,0,-1).applyQuaternion(by.q);m.dir.copy(tA);m.speed=by.speed*(type==='agm'?.9:1)+40;if(by.vel&&(type==='aa'||type==='agm')){m.drop=.34;m.dropV=by.vel.clone().add(new V3(0,-5,0).applyQuaternion(by.q));m.dq=by.q.clone();}m.turn*=1+.08*by.up.msl;m.vmax*=1+.06*by.up.msl;m.dmg*=1+.07*by.up.wpn;}
   else if(type==='strike'){m.dir.set(rnd(-.05,.05),1,rnd(-.05,.05)).normalize();m.speed=60;m.vmax=430;m.dmg=650;m.turn=1.1;m.life=95;m.burn=999;}
   else{tA.copy(target.pos).sub(pos);m.dir.copy(tA).normalize();if(type==='ship'){m.dir.y=.5;m.dir.normalize();m.speed=180;m.vmax=290;m.dmg=450;m.turn=.9;}else{m.speed=200;m.vmax=520;m.turn=1.7;m.dmg=48;m.dir.y+=.6;m.dir.normalize();}}
   missiles.push(m);if(m.drop)sfx('flare',pos);else sfx('missile');return m;
@@ -2029,7 +2029,7 @@ function updateMissiles(dt){
     if(m.pos.y<1)boom=true;
     else if(m.age>m.life)boom=true;
     if(!boom){
-      if(m.type!=='strike')for(const p of planes){if(!p.alive||p.team===m.team||p.state==='cat')continue;if(p.pos.distanceTo(m.pos)<(m.type==='sam'?30:26)){boom=true;break;}}
+      if(m.type!=='strike')for(const p of planes){if(!p.alive||p.team===m.team||p.state==='cat')continue;if(p.pos.distanceTo(m.pos)<(m.fuse||(m.type==='sam'?30:26))){boom=true;break;}}
       if(!boom)for(const s of shipTargets(enemyOf(m.team))){if(hitShip(s,m.pos,4)){boom=true;break;}}
       if(!boom&&m.pos.y<terrainH(m.pos.x,m.pos.z))boom=true;
     }
@@ -2040,7 +2040,7 @@ function updateMissiles(dt){
       if(m.type==='ship'){blast(m.pos,60,0,m.dmg,m.by,m.team,w);}
       else if(m.type==='strike'){blast(m.pos,75,60,m.dmg,m.by,m.team,'РАКЕТНЫЙ УДАР');nuke(m.pos,.7);}
       else if(m.type==='agm'){blast(m.pos,m.skim?55:40,40,m.dmg,m.by,m.team,w);}
-      else blast(m.pos,34,dm,dm*2,m.by,m.team,w);
+      else blast(m.pos,m.fuse?48:34,dm,dm*2,m.by,m.team,w);
       removeMissile(i);
     }
   }
@@ -2635,11 +2635,11 @@ function controlPlayer(p,dt){
   const w=curW(p),wd=w?W[w.id]:null;p.lockNeed=wd&&wd.lock||1;
   if(!wd||wd.kind==='rocket'||wd.kind==='bomb'){p.lockT=null;p.locked=false;if(wepOn&&wd){if(wd.kind==='rocket')fireRocket(p);else dropBomb(p);}}
   else{
-    const irA=p.mods&&p.mods.irauto&&wd.ir;let best=null,ba=wd.cone*(irA?1.8:1);fwdOf(p,tB);
+    const irA=p.mods&&p.mods.irauto&&wd.ir;let best=null,ba=wd.cone*(irA?1.8:1)*1.5;fwdOf(p,tB);
     if(p.state==='fly'){const list=wd.kind==='aa'?planes.filter(q=>q.team!==p.team&&q.alive&&q.state==='fly'):shipTargets(enemyOf(p.team));
       for(const q of list){tA.copy(q.pos).sub(p.pos);const d=tA.length();if(d>wd.range)continue;tA.normalize();const a=Math.acos(clamp(tA.dot(tB),-1,1));if(a<ba){ba=a;best=q;}}}
     if(best===p.lockT){p.lockTime=(p.lockTime||0)+dt;}else{p.lockT=best;p.lockTime=0;}
-    p.locked=!!best&&p.lockTime>wd.lock*(best.def&&best.def.stealth?1.6:1)*(irA?.33:1);p.lockNeed=wd.lock*(irA?.33:1);
+    p.locked=!!best&&p.lockTime>wd.lock*.6*(best.def&&best.def.stealth?1.6:1)*(irA?.33:1);p.lockNeed=wd.lock*.6*(irA?.33:1);
     if(p.locked&&!p.lockSnd){sfx('lock');p.lockSnd=true;}if(!p.locked)p.lockSnd=false;
     if(wepOn&&w.n>0&&p.cd.wep<=0&&p.state==='fly'){p.cd.wep=wd.cd;w.n--;launchMissile(p,p.locked?best:null,wd.kind==='aa'?'aa':'agm',p.team,tC.set(0,-1.2,-4).applyQuaternion(p.q).add(p.pos),w.id);}
   }
