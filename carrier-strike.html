@@ -376,6 +376,7 @@ const SAVE_KEY='carrierstrike.v1';
 const IS_TOUCH=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 let save={cr:1500,pts:0,xp:null,mods:{},owned:['a4'],upg:{},loadout:{},paint:{},sel:'a4',m:{k:0,b:0,l:0,done:[]},opt:{}};
 try{const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');if(s){save=Object.assign(save,s);}}catch(e){}
+if(!save.owned.includes('b2'))save.owned.push('b2');/* the B-2 is free for every pilot */
 const OPT0={sound:true,ctrl:'aim',sens:1,invY:false,assist:true,aim:true,steer:false,q:IS_TOUCH?2:3,view:0,keys:false,minui:false,ver:6};
 if(save.opt&&save.opt.ver!==2&&save.opt.ver!==3){const o=save.opt;save.opt={sound:o.sound!==false,invY:!!o.invY,assist:o.assist!==false,ctrl:o.mouse?'joy':'aim',q:o.q===0?0:OPT0.q};}
 if(save.opt&&save.opt.ver===2){save.opt.q=Math.max(save.opt.q,OPT0.q);save.opt.ver=3;}
@@ -431,9 +432,9 @@ const DEFS=[
  b:{tanks:1,tipMsl:1,L:15.3,R:1,wing:[8.6,1.2,5.4,7,1.4,-.1,0],tail:[2,.8,2.4,1.2,-3.6,.25,.06],fins:[[0,5.4,3,4,1.4,2.2,0]],cz:-4.4,intake:'side',iz:-1.2,eng:2}},
 {id:'f35c',name:'F-35C Лайтнинг II',cls:'СТЕЛС-ИСТРЕБИТЕЛЬ',country:'USA',price:9000,lvl:6,mods:['boost','gunaim','irauto','aps'],trait:'СТЕЛС: ВРАГИ ДОЛЬШЕ ЗАХВАТЫВАЮТ',maxSpd:400,thrust:1.27,turn:1.35,hp:145,stall:55,gun:'GAU-22 25mm',ammo:180,flares:30,color:0x636c76,camo:0x4c545d,stealth:true,base:[7,8,8,9,7],
  b:{lerx:1,L:15.7,R:1.25,wing:[8,2.4,6.5,4.4,1,-.05,0],tail:[3.2,1.2,3.2,1.8,6.3,.05,0],fins:[[1.2,5.4,2.8,3.4,1.4,1.8,.45],[-1.2,5.4,2.8,3.4,1.4,1.8,-.45]],cz:-3.8,intake:'side',iz:-1.1,eng:1}},
-{id:'b2',name:'B-2 Спирит',cls:'СТЕЛС-БОМБАРДИРОВЩИК',country:'USA',price:12000,lvl:7,mods:['boost','aps'],trait:'НЕВИДИМКА: В 3 РАЗА БОЛЬШЕ БОМБ И РАКЕТ',stealth:true,bay:3,
- desc:'Летающее крыло-невидимка. Пушки нет, зато огромный бомбоотсек: берите конфигурацию «БОМБЫ» или «ТОЧНЫЙ УДАР». Медленный и неповоротливый, но враги почти не могут его захватить.',
- maxSpd:300,thrust:.95,turn:.75,hp:280,stall:62,gun:'нет',ammo:0,flares:60,color:0x3b4048,camo:0,base:[4,5,2,6,10],
+{id:'b2',name:'B-2 Спирит',cls:'СТЕЛС-БОМБАРДИРОВЩИК',country:'USA',price:0,lvl:1,mods:['boost','aps'],trait:'САМЫЙ БЫСТРЫЙ · НЕВИДИМКА · В 3 РАЗА БОЛЬШЕ БОМБ',stealth:true,bay:3,
+ desc:'Летающее крыло-невидимка. Пушки нет, зато огромный бомбоотсек: берите конфигурацию «БОМБЫ» или «ТОЧНЫЙ УДАР». Самый быстрый самолёт в игре, а враги почти не могут его захватить. Бесплатно для всех.',
+ maxSpd:480,thrust:1.4,turn:.9,hp:280,stall:62,gun:'нет',ammo:0,flares:60,color:0x3b4048,camo:0,base:[10,8,4,6,10],
  b:{L:21,R:1.7,wing:[17,2.4,25,15.5,1.5,0,0],tail:null,fins:[],cz:-6,intake:'side',iz:-1,eng:2}}
 ];
 const DEF={};DEFS.forEach(d=>DEF[d.id]=d);
@@ -478,7 +479,7 @@ function setupPost(){
   if(save.opt.q<2||!THREE.EffectComposer||!THREE.UnrealBloomPass||!THREE.RenderPass||!THREE.ShaderPass)return;
   try{
     const w=innerWidth,h=innerHeight,pr=renderer.getPixelRatio();let rt;
-    const o={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,type:THREE.HalfFloatType};
+    const o={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,type:THREE.HalfFloatType,stencilBuffer:true};/* stencil forces a 24-bit depth buffer: 16-bit made far islands and the sea flicker */
     if(renderer.capabilities.isWebGL2&&THREE.WebGLMultisampleRenderTarget){rt=new THREE.WebGLMultisampleRenderTarget(w*pr,h*pr,o);rt.samples=4;}
     else rt=new THREE.WebGLRenderTarget(w*pr,h*pr,o);
     composer=new THREE.EffectComposer(renderer,rt);composer.setPixelRatio(pr);composer.setSize(w,h);
@@ -688,7 +689,7 @@ function islandH(k,x,z){const [ix,iz,r,ih]=islands[k];const dx=x-ix,dz=z-iz,d=Ma
       const rdv=rwyDist(k,px,pz);if(rdv<8)c.set(0x6f9452);else if(hh<2.6)c.copy(wet);else if(hh<6)c.copy(sand);else if(ny<.72)c.copy(rock).lerp(lrock,nz);else{c.copy(grass).lerp(dgrass,Math.min(1,t*1.4+nz*.35));if(t>.75)c.lerp(lrock,(t-.75)*2.5);}
       col.push(c.r,c.g,c.b);}
     g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
-    const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,envMapIntensity:.4}));m.position.set(x,0,z);m.receiveShadow=true;m.castShadow=true;scene.add(m);
+    const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,envMapIntensity:.4,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2}));m.position.set(x,0,z);m.receiveShadow=true;m.castShadow=true;scene.add(m);
     /* vegetation and rocks sampled on the terrain */
     for(let i=0;i<900;i++){const a=Math.random()*6.283,d=Math.sqrt(Math.random())*r*.98,px=x+Math.cos(a)*d,pz=z+Math.sin(a)*d,hh=islandH(k,px,pz);if(hh<3||rwyDist(k,px,pz)<40)continue;
       const e=2,sl=Math.hypot(islandH(k,px+e,pz)-islandH(k,px-e,pz),islandH(k,px,pz+e)-islandH(k,px,pz-e))/(2*e);
@@ -1565,7 +1566,7 @@ function flyPlane(p,dt){
   const pr=1.25*d.turn*(1+.05*u.trn)*auth;
   const rr=p.rate||(p.rate={p:0,r:0,y:0});
   const k=Math.min(1,dt*(p.isPlayer?9:12));
-  rr.p+=(sy*pr-rr.p)*k;rr.r+=(-rollIn*2.7*(.5+.5*auth)-rr.r)*k;rr.y+=(-p.inp.yaw*.5*auth-rr.y)*k;
+  rr.p+=(sy*pr-rr.p)*k;rr.r+=(-rollIn*2.7*(.5+.5*auth)-rr.r)*k;rr.y+=(-p.inp.yaw*(p.flatYaw?.85:.5)*auth-rr.y)*k;
   if(p.stunt)p.stunt.acc+=Math.abs(p.stunt.type==='loop'?rr.p:rr.r)*dt;
   tQ.setFromAxisAngle(AX,rr.p*dt);p.q.multiply(tQ);
   tQ.setFromAxisAngle(AZ,rr.r*dt);p.q.multiply(tQ);
@@ -2493,7 +2494,7 @@ pad.addEventListener('pointermove',e=>{if(e.pointerId===stick.id){const R=Math.m
 const endPad=e=>{if(e.pointerType==='mouse'){if(e.button===0)hold.gun=false;if(e.button===2)hold.wep=false;return;}if(e.pointerId===stick.id){stick.id=null;stick.x=stick.y=0;stkEl.style.display='none';}};
 pad.addEventListener('pointerup',endPad);pad.addEventListener('pointercancel',endPad);
 function holdBtn(id,k){const b=$(id);b.addEventListener('pointerdown',e=>{audioInit();hold[k]=true;b.setPointerCapture(e.pointerId);e.stopPropagation();});const u=()=>hold[k]=false;b.addEventListener('pointerup',u);b.addEventListener('pointercancel',u);}
-holdBtn('#fireg','gun');holdBtn('#firew','wep');holdBtn('#yawL','tl');holdBtn('#yawR','tr');holdBtn('#thrUp','tu');holdBtn('#thrDn','td');holdBtn('#turnL','tl');holdBtn('#turnR','tr');
+holdBtn('#fireg','gun');holdBtn('#firew','wep');holdBtn('#yawL','yl');holdBtn('#yawR','yr');holdBtn('#thrUp','tu');holdBtn('#thrDn','td');holdBtn('#turnL','tl');holdBtn('#turnR','tr');
 $('#slots').addEventListener('click',e=>{const sl=e.target.closest('.slot');if(sl&&player&&sl.dataset.i)player.sel=+sl.dataset.i;});
 $('#nextw').onclick=()=>{if(player)nextWep(player);};
 $('#zoomb').onclick=()=>zoom=!zoom;
@@ -2629,6 +2630,9 @@ function controlPlayer(p,dt){
       const fw=fwdOf(p,new V3()),on=Math.acos(clamp(tA.dot(fw),-1,1));p.autoGun=d0<1400&&on<(p.mods.gunaim?.18:.12)&&p.ammo>0;
       p.autoMsl=p.locked&&p.lockT&&p.lockT.alive&&p.lockT.pos.distanceTo(p.pos)>450&&p.cd.wep<=0&&curW(p)&&curW(p).n>0&&W[curW(p).id].kind==='aa';}}
   if(!p.autoT){p.autoGun=false;p.autoMsl=false;}
+  /* turn buttons: flat turn on the rudder, wings stay level, nose stays on the horizon */
+  if((hold.yl||hold.yr)&&p.state==='fly'&&!p.stunt){const dd=(hold.yr?1:0)-(hold.yl?1:0);p.aimCtl=false;sx=0;sy=clamp(-p.vel.y*.04,-.25,.25);yw=dd;p.flatYaw=true;fwdOf(p,tA);aimDir.copy(tA);aimUp.set(0,1,0);orthoAim();}
+  else p.flatYaw=false;
   if(tc&&p.state==='fly'&&!p.stunt){
     if(!p.turnHold)p.turnHold=p.pos.y;p.aimCtl=false;p.assist=true;p.freeRoll=false;
     sx=tc*.85;sy=clamp(.42+(-p.vel.y)*.05+(p.turnHold-p.pos.y)*.006,-.4,1);yw=tc*.25;
@@ -2801,7 +2805,7 @@ let camLean=0;const camQ=new QT();let camFov=62,orbit=0,deathPos=new V3();
 function updateCamera(dt){
   orbit+=dt*.18;
   let fovT=zoom?30:62;
-  if(!(player&&player.alive&&save.opt.view===2&&(state==='hud')))camera.near=1;
+  if(!(player&&player.alive&&save.opt.view===2&&(state==='hud')))camera.near=2;
   if(state==='side'){const c=T[myTeam].carrier;camera.position.set(c.x+Math.cos(orbit)*430,95,c.z+Math.sin(orbit)*430);camera.up.set(0,1,0);camera.lookAt(c.x,20,c.z);fovT=55;}
   else if(state==='menu'&&preview){const b=DEF[save.sel].b,P=preview.position,c=T[myTeam].carrier;
     mmShotT+=dt;const SHOT=9;if(mmShotT>SHOT){mmShotT=0;mmShot=(mmShot+1)%3;}
@@ -2823,7 +2827,7 @@ function updateCamera(dt){
     {const u=p.mesh.userData;if(u.real&&u.inCk!==(v===2)){u.inCk=v===2;u.real.visible=!u.inCk;u.genHidden.forEach(o=>o.visible=u.inCk);}}
     document.body.classList.toggle('ckpt',v===2);
     if(v===2&&!p.cockpit)buildCockpit(p);if(p.cockpit){p.cockpit.visible=v===2;if(v===2)updateCockpit(p,dt);}
-    {const nr=v===2?.08:1;if(camera.near!==nr){camera.near=nr;}}
+    {const nr=v===2?.12:2;if(camera.near!==nr){camera.near=nr;}}
     if(v===2){
       camQ.copy(p.q);tA.set(0,b.R*1.45,b.cz+b.R*.6).applyQuaternion(p.q);camera.position.copy(p.pos).add(tA);
       tC.set(0,1,0).applyQuaternion(p.q);camera.up.copy(tC);
