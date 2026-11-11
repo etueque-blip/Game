@@ -559,7 +559,11 @@ function loadRealModels(){
     const q=(REALCFG.models||[]).filter(id=>DEF[id]).sort((a,b)=>(b===save.sel)-(a===save.sel));
     const next=()=>{const id=q.shift();if(!id)return;const d=DEF[id];ld.load('real/'+id+'.glb',gl=>{try{REAL[id]=fitModel(gl.scene,d.b.L,REALCFG[id],-d.b.R*.92);if(preview&&save.sel===id)buildPreview();}catch(e){}next();},undefined,()=>next());};next();
     /* cockpit: turn it to face -z, size it to a real tub and put the eye where the pilot sits */
-    if(REALCFG.cockpit)ld.load('real/cockpit.glb',gl=>{const c=REALCFG.cockpit||{},o=gl.scene;fixMats(o);o.traverse(x=>{if(x.isLight||x.isCamera)x.visible=false;});
+    if(REALCFG.cockpit)ld.load('real/cockpit.glb',gl=>{const c=REALCFG.cockpit||{},o=gl.scene;fixMats(o);
+      const RC={Dark_Mat:0x343b44,material:0x2b3138,Plain_White:0x58616b,'BakedCycles.004':0x58616b,BakedCycles:0x4f5862,'BakedCycles.003':0x4f5862,'bdr.003':0x3b434c,Mat_lighter:0x6e7781,Buttons_ICP_LGT_DRK:0x22272d,Mat_Seat:0x4a4f45,Milit_Seat:0x5a6340};
+      o.traverse(x=>{if(!x.isMesh||!x.material)return;const m=x.material,col=RC[m.name];if(col!==undefined&&!m.userData.rc){m.userData.rc=1;m.color.setHex(col);m.roughness=.75;m.metalness=.15;}
+        if(/AOA|Buttons_ICP_DRK|AIRSPEED|ALT_Int/.test(m.name)&&!m.userData.rc){m.userData.rc=1;m.emissive=new THREE.Color(0xffffff);m.emissiveMap=m.map;m.emissiveIntensity=.35;}
+        if(m.name==='Red_WARNING'||m.name==='Ochra_Caution'){m.emissive=new THREE.Color(m.name==='Red_WARNING'?0x801010:0x806010);}});o.traverse(x=>{if(x.isLight||x.isCamera)x.visible=false;});
       if(c.rotY)o.rotation.y=c.rotY;o.updateMatrixWorld(true);const bb=new THREE.Box3().setFromObject(o),sz=bb.getSize(new V3()),k=(c.width||1)/Math.max(sz.x,.001);
       const w=new THREE.Group();w.add(o);w.scale.setScalar(k);w.position.set(-(bb.min.x+sz.x/2)*k+(c.x||0),(c.bottom!=null?c.bottom:-1)-bb.min.y*k,(c.front!=null?c.front:-1.1)-bb.min.z*k);REALCK=w;},undefined,()=>{});});
 }
@@ -2700,10 +2704,10 @@ function buildCockpit(p){
   add(new THREE.TorusGeometry(.065,.012,8,24),frame,0,-.6,-.76);
   /* side consoles and cockpit walls */
   for(const sx of[-1,1]){add(new THREE.BoxGeometry(.3,.12,1.1),conM,sx*.5,-.68,-.15,0,0,sx*.15);
-    add(new THREE.BoxGeometry(.06,.75,1.6),wall,sx*.66,-.55,-.2,0,0,-sx*.12);
-    add(new THREE.BoxGeometry(.05,.05,1.7),frame,sx*.6,-.2,-.25);}               // canopy sill
+    add(new THREE.BoxGeometry(.06,.75,1.6),wall,sx*.66,-.55,-.2,0,0,-sx*.12).userData.ck=1;
+    add(new THREE.BoxGeometry(.05,.05,1.7),frame,sx*.6,-.2,-.25).userData.ck=1;}               // canopy sill
   /* canopy bow arcing over the head in front, plus the HUD combiner */
-  const bow=new THREE.Mesh(new THREE.TorusGeometry(.7,.025,8,28,Math.PI),frame);bow.position.set(0,-.24,-1.2);bow.scale.set(1,.85,1);g.add(bow);
+  const bow=new THREE.Mesh(new THREE.TorusGeometry(.7,.025,8,28,Math.PI),frame);bow.position.set(0,-.24,-1.2);bow.scale.set(1,.85,1);g.add(bow);bow.userData.ck=1;
   for(const sx of[-1,1]){add(new THREE.BoxGeometry(.022,.4,.022),frame,sx*.245,-.04,-1.0,-.12);}
   add(new THREE.BoxGeometry(.51,.022,.035),frame,0,.16,-1.02);
   const hc=document.createElement('canvas');hc.width=512;hc.height=420;const hudT=new THREE.CanvasTexture(hc);
@@ -2712,13 +2716,15 @@ function buildCockpit(p){
   /* control stick between the knees */
   /* canopy glass with a soft sky reflection streak, canopy-bow mirrors, quilted side walls */
   {const gc=document.createElement('canvas');gc.width=gc.height=256;const gx=gc.getContext('2d');const gr=gx.createLinearGradient(0,0,256,256);gr.addColorStop(0,'rgba(255,255,255,0)');gr.addColorStop(.45,'rgba(255,255,255,0)');gr.addColorStop(.5,'rgba(255,255,255,.18)');gr.addColorStop(.56,'rgba(255,255,255,0)');gx.fillStyle=gr;gx.fillRect(0,0,256,256);
-   const glass=new THREE.Mesh(new THREE.SphereGeometry(1.15,24,12,0,Math.PI*2,0,Math.PI/2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(gc),transparent:true,depthWrite:false,side:THREE.BackSide,toneMapped:false,color:0xcfe6ff}));glass.scale.set(.75,.7,1.4);glass.position.set(0,-.25,-.3);g.add(glass);
-   for(const sx of[-1,1]){const mr=add(new THREE.BoxGeometry(.16,.06,.02),M(0x9fb6c8,{metalness:1,roughness:.05}),sx*.34,.25,-1.05);mr.rotation.y=sx*.25;}
+   const glass=new THREE.Mesh(new THREE.SphereGeometry(1.15,24,12,0,Math.PI*2,0,Math.PI/2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(gc),transparent:true,depthWrite:false,side:THREE.BackSide,toneMapped:false,color:0xcfe6ff}));glass.scale.set(.75,.7,1.4);glass.position.set(0,-.25,-.3);g.add(glass);glass.userData.ck=1;
+   for(const sx of[-1,1]){const mr=add(new THREE.BoxGeometry(.16,.06,.02),M(0x9fb6c8,{metalness:1,roughness:.05}),sx*.34,.25,-1.05);mr.rotation.y=sx*.25;mr.userData.ck=1;}
    const qt=document.createElement('canvas');qt.width=qt.height=128;const qx=qt.getContext('2d');qx.fillStyle='#3d5676';qx.fillRect(0,0,128,128);qx.strokeStyle='rgba(0,0,0,.16)';qx.lineWidth=2;for(let i=0;i<=128;i+=16){qx.beginPath();qx.moveTo(i,0);qx.lineTo(i,128);qx.moveTo(0,i);qx.lineTo(128,i);qx.stroke();}
    qx.fillStyle='rgba(255,255,255,.12)';for(let i=8;i<128;i+=16)for(let j=8;j<128;j+=16)qx.fillRect(i-1,j-1,2,2);
    const qtex=new THREE.CanvasTexture(qt);qtex.wrapS=qtex.wrapT=THREE.RepeatWrapping;qtex.repeat.set(2,1);
    g.children.forEach(o=>{if(o.isMesh&&o.material===wall){o.material=M(0xffffff,{map:qtex,roughness:.6,metalness:.3});}});}
-  if(REALCK){g.children.slice().forEach(o=>{if(o!==g.children.find(x=>x.material&&x.material.map===hudT))o.visible=false;});const rc=REALCK.clone(true);g.add(rc);}
+  if(REALCK){g.children.slice().forEach(o=>{if(o!==g.children.find(x=>x.material&&x.material.map===hudT)&&!o.userData.ck)o.visible=false;});const rc=REALCK.clone(true);g.add(rc);
+    /* live pictures on the real cockpit's display glass */
+    rc.traverse(o=>{if(!o.isMesh||!o.material)return;const n=o.material.name||'';if(n==='MFD_MONITOR'){o.material=new THREE.MeshBasicMaterial({map:L.t,toneMapped:false});}else if(n==='DEDRWR_MONITOR'){o.material=new THREE.MeshBasicMaterial({map:Rr.t,toneMapped:false});}});}
   const hands=buildHands(p.def);g.add(hands.g);
   g.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=false;o.renderOrder=5;}});
   g.visible=false;p.mesh.add(g);p.cockpit=g;ckMFD={L,R:Rr,G1,G2,H:{c:hc,x:hc.getContext('2d'),t:hudT},ball,t:0,th:0,hands};
