@@ -1740,7 +1740,9 @@ function landed(p){
 function crash(p,why){
   if(p.shield>0&&why==='water'){p.pos.y=3;tA.set(0,0,-1).applyQuaternion(p.q);tQ.setFromAxisAngle(AX,.3);p.q.multiply(tQ);return;}
   explosion(p.pos,why==='water'?16:20,why==='water');sfx('boom');
-  killPlane(p,null,why==='water'?'вода':'столкновение');
+  let lbl='столкновение';if(why==='water')lbl='вода';else if(why==='carrier')lbl='авианосец';else if(why==='ship')lbl='корабль';
+  else if(why==='island'){const ch=cityH(p.pos.x,p.pos.z);lbl=ch>20?'здание':terrainH(p.pos.x,p.pos.z)>35?'гора':'земля';}
+  killPlane(p,null,lbl);
 }
 
 /* ---------- damage ---------- */
@@ -1766,9 +1768,19 @@ function killPlane(p,by,w){
   if(by&&by.team!==p.team){award(by,100,100);if(by.isPlayer){prog('k');if(w==='пушка')prog('g');}}
   if(!match.training)T[p.team].tickets=Math.max(0,T[p.team].tickets-4);
   const wasPlayer=p.isPlayer;
-  if(w==='вода'||w==='столкновение'||p.state!=='fly')removePlane(p);else makeWreck(p);
+  if(!by&&['вода','столкновение','гора','земля','здание','авианосец','корабль'].includes(w)||p.state!=='fly')removePlane(p);else makeWreck(p);
   p.pilot.rt=5;
-  if(wasPlayer){player=null;deadBy=by?pname(by):(w||'');deadT=2.6;state='dead';}
+  if(wasPlayer){player=null;deadT=3.6;state='dead';
+    /* tell the pilot exactly what killed him, and how to avoid it next time */
+    const C={вода:['💦 Ты упал в море','Следи за высотой: при «ВЫСОТА!» сразу тяни вверх'],гора:['⛰ Ты врезался в гору','Над островами держись выше 300 м или облетай горы'],
+      земля:['💥 Ты врезался в землю','При «ВЫСОТА!» тяни джойстик на себя'],здание:['🏙 Ты врезался в здание','Над городом лети выше небоскрёбов — 300 м и выше'],
+      авианосец:['⚓ Ты врезался в авианосец','Садись медленно: шасси (L), скорость меньше 150 уз'],корабль:['🚢 Ты врезался в корабль','Над кораблями держись выше 100 м'],
+      столкновение:['💥 Столкновение','Не подлетай к врагу ближе 100 м']};
+    if(by){const ww=w==='пушка'?'из пушки':w?'ракетой '+w:'';deadBy='☠ Тебя сбил '+pname(by)+' ('+by.def.name+') '+ww;deadTip=w==='пушка'?'Не держи врага у себя на хвосте — резко поворачивай':'При «РАКЕТА!» жми ЛОВУШКИ и резко поворачивай';}
+    else if(C[w]){deadBy=C[w][0];deadTip=C[w][1];}
+    else if(w==='ЗРК'){deadBy='🚀 Тебя сбила зенитная ракета ПВО';deadTip='Над вражескими островами и кораблями жми ЛОВУШКИ заранее';}
+    else if(w==='пушка'){deadBy='🔫 Тебя сбила зенитная пушка ПВО';deadTip='Не подлетай низко к вражеским кораблям и базам';}
+    else{deadBy='☠ Тебя сбили ('+(w||'?')+')';deadTip='';}}
   checkEnd();
 }
 /* shot-down jets spiral down burning; the pilot ejects */
@@ -1810,7 +1822,7 @@ function dmgShip(s,a,by,w){
     sinkers.push({s,t:0});checkEnd();
   }
 }
-let dmgFlash=0,hitFlash=0,deadBy='',deadT=0,state='side';
+let dmgFlash=0,hitFlash=0,deadBy='',deadTip='',deadT=0,state='side';
 function hitMark(){hitFlash=1;sfx('tick');}
 let tgtT=0;function tgtHp(name,hp,max,team){const el=$('#tgtbar');if(!el)return;const k=clamp(hp/max,0,1);tgtT=4;el.style.display='block';
   el.querySelector('b').textContent=name;el.querySelector('em').textContent=k<=0?'УНИЧТОЖЕН!':Math.ceil(k*100)+'%';
@@ -1999,13 +2011,18 @@ function updateAps(dt){
 function removeMissile(i){scene.remove(missiles[i].mesh);missiles.splice(i,1);}
 function dropFlares(p){
   if(p.cd.fl>0||p.flares<=0)return;p.cd.fl=.5;p.flares--;
-  for(let i=0;i<3;i++){tA.set(rnd(-6,6),-3,14).applyQuaternion(p.q).add(p.pos);tB.copy(p.vel).multiplyScalar(.6);tB.x+=rnd(-25,25);tB.y+=rnd(-35,-5);tB.z+=rnd(-25,25);
-    flares.push({pos:tA.clone(),vel:tB.clone(),life:4.5,alive:true,flare:true});}
+  /* belly dispenser: pairs of flares kicked out left and right and down, one salvo after another */
+  const b=p.def.b;
+  for(let i=0;i<6;i++){const sd=i%2?1:-1,salvo=Math.floor(i/2);
+    tA.set(sd*b.R*.5,-b.R*1.05,b.L*.12+salvo*.6).applyQuaternion(p.q).add(p.pos);
+    tB.set(sd*rnd(18,32),-rnd(14,26),rnd(4,12)).applyQuaternion(p.q).addScaledVector(p.vel,.85-salvo*.05);
+    flares.push({pos:tA.clone(),vel:tB.clone(),life:4.2+salvo*.3,alive:true,flare:true,dl:salvo*.09});}
+  tA.set(0,-b.R*1.05,b.L*.12).applyQuaternion(p.q).add(p.pos);fire(tA.x,tA.y,tA.z,3,1,.15,2);
   if(p.isPlayer)sfx('flare');
 }
 function updateFlares(dt){
-  for(let i=flares.length-1;i>=0;i--){const f=flares[i];f.life-=dt;f.pos.addScaledVector(f.vel,dt);f.vel.multiplyScalar(1-.8*dt);f.vel.y-=4*dt;
-    fire(f.pos.x,f.pos.y,f.pos.z,2.6,1,.25,.5);smoke(f.pos.x,f.pos.y,f.pos.z,1.5,4,1.5,.2,.3);
+  for(let i=flares.length-1;i>=0;i--){const f=flares[i];if(f.dl>0){f.dl-=dt;f.pos.addScaledVector(f.vel,dt);continue;}f.life-=dt;f.pos.addScaledVector(f.vel,dt);f.vel.multiplyScalar(1-.8*dt);f.vel.y-=4*dt;
+    fire(f.pos.x,f.pos.y,f.pos.z,3.2,1.2,.22,.4);fire(f.pos.x,f.pos.y,f.pos.z,1.4,.5,.12,0);smoke(f.pos.x,f.pos.y,f.pos.z,1.8,6,2.2,.3,.45);
     if(f.life<=0){f.alive=false;flares.splice(i,1);}}
 }
 function updateMissiles(dt){
@@ -2923,7 +2940,7 @@ function updateHud(dt){
   {const h=BASES.map(z=>'<span style="color:'+(z.owner?(z.owner==='blue'?'var(--blue)':'var(--red)'):'#e8e8e8')+'">◆ '+z.short+(z.owner?' '+Math.round(z.hp/z.maxhp*100)+'%':'')+'</span>').join(' ');if(h!==updateHud.zh){updateHud.zh=h;E('obj').innerHTML=h+' · <span style="color:var(--dim)">захватите все 5</span>';}}
   feedItems.forEach(f=>f.t-=dt);if(feedItems.length&&feedItems[0].t<=0){feedItems.shift();renderFeed();}
   E('dmg').style.opacity=dmgFlash;dmgFlash=Math.max(0,dmgFlash-dt*1.5);E('hitm').style.opacity=hitFlash;hitFlash=Math.max(0,hitFlash-dt*3);
-  if(state==='dead'){setT('big','Вас сбил: '+deadBy);setT('warn','');return;}
+  if(state==='dead'){setT('big',deadBy);setT('warn','');const ce=E('coach');ce.textContent=deadTip?'Совет: '+deadTip:'';ce.style.display=deadTip?'block':'none';ce.className='';return;}
   if(!p)return;
   {const grp={};for(const m of missiles){if(m.type!=='strike'||!m.target||!m.target.short)continue;const k=m.team+'|'+m.target.short;const g=grp[k]||(grp[k]={team:m.team,t:m.target,n:0,eta:1e9});g.n++;
       g.eta=Math.min(g.eta,Math.hypot(m.target.cx-m.pos.x,m.target.cz-m.pos.z)/Math.max(m.speed,150));}
