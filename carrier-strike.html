@@ -434,8 +434,8 @@ const DEFS=[
 {id:'f35c',name:'F-35C Лайтнинг II',cls:'СТЕЛС-ИСТРЕБИТЕЛЬ',country:'USA',price:9000,lvl:6,mods:['boost','gunaim','irauto','aps'],trait:'СТЕЛС: ВРАГИ ДОЛЬШЕ ЗАХВАТЫВАЮТ',maxSpd:400,thrust:1.27,turn:1.35,hp:145,stall:55,gun:'GAU-22 25mm',ammo:180,flares:30,color:0x636c76,camo:0x4c545d,stealth:true,base:[7,8,8,9,7],
  b:{lerx:1,L:15.7,R:1.25,wing:[8,2.4,6.5,4.4,1,-.05,0],tail:[3.2,1.2,3.2,1.8,6.3,.05,0],fins:[[1.2,5.4,2.8,3.4,1.4,1.8,.45],[-1.2,5.4,2.8,3.4,1.4,1.8,-.45]],cz:-3.8,intake:'side',iz:-1.1,eng:1}},
 {id:'b2',name:'B-2 Спирит',cls:'СТЕЛС-БОМБАРДИРОВЩИК',country:'USA',price:0,lvl:1,mods:['boost','aps'],trait:'САМЫЙ БЫСТРЫЙ · НЕВИДИМКА · В 3 РАЗА БОЛЬШЕ БОМБ',stealth:true,bay:3,
- desc:'Летающее крыло-невидимка. Пушки нет, зато огромный бомбоотсек: берите конфигурацию «БОМБЫ» или «ТОЧНЫЙ УДАР». Самый быстрый самолёт в игре, а враги почти не могут его захватить. Бесплатно для всех.',
- maxSpd:480,thrust:1.4,turn:.9,hp:280,stall:62,gun:'нет',ammo:0,flares:60,color:0x3b4048,camo:0,base:[10,8,4,6,10],
+ desc:'Летающее крыло-невидимка с пушкой GAU-8 и огромным бомбоотсеком: берите конфигурацию «БОМБЫ» или «ТОЧНЫЙ УДАР». Самый быстрый самолёт в игре, а враги почти не могут его захватить. Бесплатно для всех.',
+ maxSpd:480,thrust:1.4,turn:.9,hp:280,stall:62,gun:'GAU-8 30mm',ammo:900,flares:60,color:0x3b4048,camo:0,base:[10,8,4,6,10],
  b:{L:21,R:1.7,wing:[17,2.4,25,15.5,1.5,0,0],tail:null,fins:[],cz:-6,intake:'side',iz:-1,eng:2}}
 ];
 const DEF={};DEFS.forEach(d=>DEF[d.id]=d);
@@ -1735,6 +1735,7 @@ function award(by,cr,pts){
 function dmgPlane(p,a,by,w){
   if(!p.alive||p.shield>0||match.over)return;
   if(match.training&&p.isPlayer===false&&by&&by.isPlayer===false)return;
+  if(by&&by.isPlayer&&!p.isPlayer)a*=2;/* enemies go down twice as fast to your fire */
   p.hp-=a;p.lastHit=by;if(by&&by.isPlayer&&!p.isPlayer)tgtHp(p.def.name+' · '+p.pilot.call,p.hp,p.maxhp,p.team);
   if(p.isPlayer){dmgFlash=Math.min(1,dmgFlash+a/40);sfx('hit');}
   if(by&&by.isPlayer)hitMark();
