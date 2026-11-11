@@ -156,6 +156,7 @@ body.ckpt #ckexit{display:block}
 body.minui .topbtns,body.minui #loopb,body.minui #rollb,body.minui #zoomb,body.minui #strikeb,body.minui #autob,body.minui #boostb,body.minui #keys,body.minui #slots,body.minui #obj,body.minui #modst,
 body.minui #turnL,body.minui #turnR,body.minui #nextw,body.minui #ring,body.minui #rdspd,body.minui #rdalt,body.minui #feed,body.minui #hint,body.minui #thrp{display:none!important}
 body.minui #flareb{opacity:.75}
+body.noui #hud>*:not(#hideb):not(#pad):not(#warn):not(#dmg){opacity:0!important}body.noui #hideb{opacity:.45}
 body.ckpt #ring,body.ckpt #rdspd,body.ckpt #rdalt,body.ckpt #aim,body.ckpt .topbtns,body.ckpt #loopb,body.ckpt #rollb,body.ckpt #zoomb,body.ckpt #strikeb,body.ckpt #autob,body.ckpt #boostb,body.ckpt #obj,body.ckpt #slots,body.ckpt #modst,body.ckpt #hint,body.ckpt #keys,body.ckpt #nextw,body.ckpt #feed{display:none!important}
 body.ckpt #hideb{display:none}
 /* polished HUD buttons */
@@ -2456,8 +2457,9 @@ window.addEventListener('wheel',e=>{if(state!=='hud'||!$('#modal').hidden)return
 window.addEventListener('contextmenu',e=>e.preventDefault());
 function stickActive(){return stick.id!==null;}
 const stkEl=$('#stk'),stkKnob=$('#stk i');
-function applyMinUI(){document.body.classList.toggle('minui',!!save.opt.minui);const t=$('#hidet');if(t)t.textContent=save.opt.minui?'ПОКАЗАТЬ':'СКРЫТЬ';}
-function toggleMinUI(){save.opt.minui=!save.opt.minui;persist();applyMinUI();}
+/* 3 steps: everything → minimal buttons → nothing on screen (controls still work where they were) */
+function applyMinUI(){const m=+save.opt.minui||0;document.body.classList.toggle('minui',m>=1);document.body.classList.toggle('noui',m===2);const t=$('#hidet');if(t)t.textContent=m===0?'СКРЫТЬ':m===1?'СКРЫТЬ ВСЁ':'ПОКАЗАТЬ';}
+function toggleMinUI(){save.opt.minui=((+save.opt.minui||0)+1)%3;persist();applyMinUI();toast(save.opt.minui===2?'Всё скрыто. Джойстик и кнопки работают на тех же местах. H / 👁 — показать':save.opt.minui===1?'Лишние кнопки скрыты':'Всё управление показано');}
 $('#ckexit').addEventListener('pointerdown',e=>{e.stopPropagation();cycleView();});
 $('#hideb').addEventListener('pointerdown',e=>{e.stopPropagation();toggleMinUI();});applyMinUI();
 /* any touch on the screen switches to the tablet layout (an iPad with a keyboard still gets the joystick) */
