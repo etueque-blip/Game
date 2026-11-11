@@ -377,14 +377,15 @@ const IS_TOUCH=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 let save={cr:1500,pts:0,xp:null,mods:{},owned:['a4'],upg:{},loadout:{},paint:{},sel:'a4',m:{k:0,b:0,l:0,done:[]},opt:{}};
 try{const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');if(s){save=Object.assign(save,s);}}catch(e){}
 if(!save.owned.includes('b2'))save.owned.push('b2');/* the B-2 is free for every pilot */
-const OPT0={sound:true,ctrl:'aim',sens:1,invY:false,assist:true,aim:true,steer:false,q:IS_TOUCH?2:3,view:0,keys:false,minui:false,ver:6};
-if(save.opt&&save.opt.ver!==2&&save.opt.ver!==3){const o=save.opt;save.opt={sound:o.sound!==false,invY:!!o.invY,assist:o.assist!==false,ctrl:o.mouse?'joy':'aim',q:o.q===0?0:OPT0.q};}
+const OPT0={sound:true,ctrl:'aim',sens:1,invY:false,assist:true,aim:true,steer:false,q:4,view:0,keys:false,minui:false,ver:7};
+if(save.opt&&save.opt.ver==null){const o=save.opt;/* only very old saves without a version are converted */save.opt={sound:o.sound!==false,invY:!!o.invY,assist:o.assist!==false,ctrl:o.mouse?'joy':'aim',q:o.q===0?0:OPT0.q};}
 if(save.opt&&save.opt.ver===2){save.opt.q=Math.max(save.opt.q,OPT0.q);save.opt.ver=3;}
 /* v4: tablets go back to medium graphics (smoother flight); everybody gets the basic aim assist */
 if(save.opt&&save.opt.ver===3){if(IS_TOUCH&&save.opt.q>1)save.opt.q=1;save.opt.aim=true;save.opt.ver=4;}
 if(save.opt&&save.opt.ver===4){save.opt.keys=false;save.opt.ver=5;}
 if(save.opt&&save.opt.ver===5){if(save.opt.q<2)save.opt.q=2;save.opt.ver=6;}
-save.opt=Object.assign({},OPT0,save.opt||{});save.opt.ver=6;
+if(save.opt&&save.opt.ver===6){save.opt.q=4;save.opt.ver=7;}/* everyone starts on FULL HDR; the frame-rate guard steps down if a device cannot keep up */
+save.opt=Object.assign({},OPT0,save.opt||{});save.opt.ver=7;
 save.m=Object.assign({k:0,b:0,l:0,done:[]},save.m||{});
 if(save.xp==null)save.xp=save.pts||0;save.mods=save.mods||{};
 if(!save.owned.includes('f16'))save.owned.push('f16');
@@ -480,17 +481,17 @@ function setupPost(){
   try{
     const w=innerWidth,h=innerHeight,pr=renderer.getPixelRatio();let rt;
     const o={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,type:THREE.HalfFloatType,stencilBuffer:true};/* stencil forces a 24-bit depth buffer: 16-bit made far islands and the sea flicker */
-    if(renderer.capabilities.isWebGL2&&THREE.WebGLMultisampleRenderTarget){rt=new THREE.WebGLMultisampleRenderTarget(w*pr,h*pr,o);rt.samples=4;}
+    if(renderer.capabilities.isWebGL2&&THREE.WebGLMultisampleRenderTarget){rt=new THREE.WebGLMultisampleRenderTarget(w*pr,h*pr,o);rt.samples=save.opt.q>=4?8:4;}
     else rt=new THREE.WebGLRenderTarget(w*pr,h*pr,o);
     composer=new THREE.EffectComposer(renderer,rt);composer.setPixelRatio(pr);composer.setSize(w,h);
     composer.addPass(new THREE.RenderPass(scene,camera));
-    bloom=new THREE.UnrealBloomPass(new THREE.Vector2(w,h),save.opt.q>=3?.58:.48,.6,.84);composer.addPass(bloom);
+    bloom=new THREE.UnrealBloomPass(new THREE.Vector2(w,h),save.opt.q>=4?.7:save.opt.q>=3?.58:.48,save.opt.q>=4?.7:.6,save.opt.q>=4?.8:.84);composer.addPass(bloom);
     composer.addPass(new THREE.ShaderPass(GRADE));
   }catch(e){console.warn('post fx off',e);composer=null;}
 }
 let dynScale=IS_TOUCH?.8:1;
 function resize(){
-  const pr=Math.max(.5,Math.min(window.devicePixelRatio||1,[1,1.5,2,2.5][save.opt.q]||1)*dynScale);
+  const pr=Math.max(.5,Math.min(window.devicePixelRatio||1,[1,1.5,2,2.5,3][save.opt.q]||1)*dynScale);
   renderer.setPixelRatio(pr);renderer.setSize(window.innerWidth,window.innerHeight,false);
   camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
   if(composer){composer.setPixelRatio(pr);composer.setSize(innerWidth,innerHeight);}
@@ -2549,7 +2550,7 @@ function pollPad(dt){
 function openMore(){
   unlockMouse();
   const inGame=state==='hud'||state==='dead';
-  const C={aim:'прицел',joy:'джойстик',kb:'выкл'},S={.6:'низкая',1:'средняя',1.6:'высокая'},Q=['низкая','средняя','высокая','УЛЬТРА'];
+  const C={aim:'прицел',joy:'джойстик',kb:'выкл'},S={.6:'низкая',1:'средняя',1.6:'высокая'},Q=['низкая','средняя','высокая','УЛЬТРА','FULL HDR 4K'];
   const B=(id,t,v)=>'<button class="btn" id="'+id+'">'+t+'<i>'+v+'</i></button>';
   showModal('<h2>'+(inGame?'⏸ ПАУЗА':'⚙ НАСТРОЙКИ')+'</h2>'+
    (inGame?'<div class="stat"><span>Очки: '+(myPilot?myPilot.score:0)+'</span><span>Кредиты: '+save.cr+'</span><span style="color:var(--blue)">Синие '+Math.round(T.blue.tickets)+'</span><span style="color:var(--red)">Красные '+Math.round(T.red.tickets)+'</span></div><button class="btn g" onclick="closeModal()">▶ ПРОДОЛЖИТЬ</button>':'')+
@@ -2566,7 +2567,7 @@ function openMore(){
   $('#mAs').onclick=()=>{save.opt.assist=!save.opt.assist;if(player)player.assist=save.opt.assist;persist();openMore();};
   $('#mView').onclick=()=>{cycleView();openMore();};
   $('#mKeys').onclick=()=>{save.opt.keys=!save.opt.keys;persist();renderKeys();openMore();};
-  $('#mQ').onclick=()=>{save.opt.q=(save.opt.q+1)%4;autoDrop=true;dynScale=IS_TOUCH?.8:1;persist();applyQuality();openMore();};
+  $('#mQ').onclick=()=>{save.opt.q=(save.opt.q+1)%5;autoDrop=true;dynScale=IS_TOUCH?.8:1;persist();applyQuality();openMore();};
   $('#mHelp').onclick=()=>showModal(helpHtml());
 }
 function openMap(){$('#mapOv').hidden=false;drawMap();}
@@ -3032,7 +3033,7 @@ function perfTick(raw){
   if(raw>.25||document.hidden)return;perfAcc+=raw;perfN++;
   if(perfAcc<1.2)return;const avg=perfAcc/perfN;perfAcc=perfN=0;
   if(perfHold>0){perfHold--;return;}
-  if(avg>1/45&&dynScale>.5){dynScale=Math.max(save.opt.q>=3?.7:.5,dynScale*.85);resize();perfHold=1;}
+  if(avg>1/45&&dynScale>.5){dynScale=Math.max(save.opt.q>=4?.85:save.opt.q>=3?.7:.5,dynScale*.85);resize();perfHold=1;}
   else if(avg<1/57&&dynScale<1){dynScale=Math.min(1,dynScale*1.08);resize();perfHold=2;}
   if(avg>1/28&&dynScale<=.51&&save.opt.q>0&&!autoDrop){autoDrop=true;save.opt.q--;persist();applyQuality();toast('Графика снижена для плавности (меню → Графика)');}
 }
