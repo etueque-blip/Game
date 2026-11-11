@@ -2147,7 +2147,7 @@ function helpHtml(){
   '<h3>СИСТЕМЫ</h3><div class="leg">'+L('L','Шасси')+L('K','Закрылки')+L('B','Тормоз')+'</div>'+
   '<h3>КАМЕРА И МЕНЮ</h3><div class="leg">'+L('C','Зум прицела')+L('V','Вид: сзади / близко / кабина')+L('M','Карта')+L('H','Скрыть / показать кнопки на экране')+L('Esc / P','Меню и пауза')+'</div>'+
   '<h3>ОСТРОВА</h3><div style="color:var(--dim)">5 островов-баз с полосами: 2 штаба, 2 острова обороны и центральный. С любого своего острова можно вылететь (ангар → «ВЫЛЕТ С») и сесть на его полосу для перезарядки. Чтобы забрать вражеский остров: разбейте базу до 0% (бомбы, ракеты, пушка), затем летайте в кольце ниже 700 м. Центр нейтральный — кто первый захватит. Кто захватит все 5 островов — победил. За захват +300 CR и +200 XP, за разрушение базы +500 CR.</div>'+
-  '<h3>3D-МОДЕЛИ</h3><div style="color:var(--dim);font-size:.85rem">Модели самолётов с Sketchfab (CC BY / CC BY-NC-SA): F-16 — MrrrBoB; Рафаль, F/A-18, Су-33 — andertan; Мираж 2000, F-35, МиГ-29, F-4 — bohmerang; AV-8B — 42manako. Спасибо авторам!</div>'+
+  '<h3>3D-МОДЕЛИ</h3><div style="color:var(--dim);font-size:.85rem">Модели самолётов с Sketchfab (CC BY / CC BY-NC-SA): F-16 — MrrrBoB; Рафаль, F/A-18, Су-33 — andertan; Мираж 2000, F-35, МиГ-29, F-4, B-2 — bohmerang; AV-8B — 42manako. Спасибо авторам!</div>'+
   '<h3>РАКЕТЫ</h3><div class="leg">'+Object.keys(W).filter(k=>W[k].kind==='aa'||W[k].kind==='ag').map(k=>L(W[k].s,W[k].d+' · захват '+W[k].lock+' с · '+(W[k].range/1000)+' км')).join('')+'</div>'+
   '<div style="color:var(--dim)">Меняйте вооружение в ангаре кнопкой «КОНФИГУРАЦИЯ». Ракете нужен захват: держите цель в прицеле, пока не появится «ЗАХВАТ ЦЕЛИ». Геймпад: левый стик — полёт, RT — пушка, RB — ракета, A — смена оружия, LB — ловушки, Start — меню. На телефоне: тяга слева, перетаскивание по экрану — штурвал.</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
 }
@@ -2706,7 +2706,7 @@ function updateCamera(dt){
     else{const a=c.rot+Math.PI*.3+k*.35,r=150-k*30;
       camera.position.set(P.x+Math.sin(a)*r,P.y+45-k*10,P.z+Math.cos(a)*r);camera.lookAt(P.x,P.y+8,P.z);fovT=40;}
     camera.up.set(0,1,0);camFov=fovT;}
-  else if(state==='hangar'&&preview){const L=DEF[save.sel].b.L;const r=L*1.5+9;camera.position.set(preview.position.x+Math.cos(orbit*1.5)*r,preview.position.y+L*.28,preview.position.z+Math.sin(orbit*1.5)*r);camera.up.set(0,1,0);camera.lookAt(preview.position.x,preview.position.y+1.5,preview.position.z);fovT=50;}
+  else if(state==='hangar'&&preview){const bb=DEF[save.sel].b,L=Math.max(bb.L,bb.wing[2]*1.25);const r=L*1.5+9;camera.position.set(preview.position.x+Math.cos(orbit*1.5)*r,preview.position.y+L*.28,preview.position.z+Math.sin(orbit*1.5)*r);camera.up.set(0,1,0);camera.lookAt(preview.position.x,preview.position.y+1.5,preview.position.z);fovT=50;}
   else if(player&&player.alive){
     const p=player,v=save.opt.view,b=p.def.b,cp=p.mesh.userData.canopy;
     if(!zoom)fovT=62+clamp(p.speed/p.def.maxSpd,0,1.2)*6+(p.ab?4:0);
