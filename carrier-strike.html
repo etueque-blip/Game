@@ -156,6 +156,8 @@ body.ckpt #ckexit{display:block}
 body.minui .topbtns,body.minui #loopb,body.minui #rollb,body.minui #zoomb,body.minui #strikeb,body.minui #autob,body.minui #boostb,body.minui #keys,body.minui #slots,body.minui #obj,body.minui #modst,
 body.minui #turnL,body.minui #turnR,body.minui #nextw,body.minui #ring,body.minui #rdspd,body.minui #rdalt,body.minui #feed,body.minui #hint,body.minui #thrp{display:none!important}
 body.minui #flareb{opacity:.75}
+@media (max-height:520px){.hb{transform:scale(.72);transform-origin:center}#radarw{transform:scale(.72);transform-origin:top left}#mtrack{transform:scale(.8);transform-origin:top left;left:calc(max(16px,env(safe-area-inset-left)) + 10.5rem)}#obj{display:none}#coach{font-size:.85rem;bottom:calc(max(.5rem,env(safe-area-inset-bottom)) + 6.6rem)}#slots{transform:translateX(-50%) scale(.62)!important}}
+@media (max-width:1300px){#obj{display:none}}
 body.noui #hud>*:not(#hideb):not(#pad):not(#warn):not(#dmg){opacity:0!important}body.noui #hideb{opacity:.45}
 body.ckpt #ring,body.ckpt #rdspd,body.ckpt #rdalt,body.ckpt #aim,body.ckpt .topbtns,body.ckpt #loopb,body.ckpt #rollb,body.ckpt #zoomb,body.ckpt #strikeb,body.ckpt #autob,body.ckpt #boostb,body.ckpt #obj,body.ckpt #slots,body.ckpt #modst,body.ckpt #hint,body.ckpt #keys,body.ckpt #nextw,body.ckpt #feed{display:none!important}
 body.ckpt #hideb{display:none}
@@ -484,8 +486,8 @@ function setupPost(){
   if(save.opt.q<2||!THREE.EffectComposer||!THREE.UnrealBloomPass||!THREE.RenderPass||!THREE.ShaderPass)return;
   try{
     const w=innerWidth,h=innerHeight,pr=renderer.getPixelRatio();let rt;
-    const o={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,type:THREE.HalfFloatType,stencilBuffer:true};/* stencil forces a 24-bit depth buffer: 16-bit made far islands and the sea flicker */
-    if(renderer.capabilities.isWebGL2&&THREE.WebGLMultisampleRenderTarget){rt=new THREE.WebGLMultisampleRenderTarget(w*pr,h*pr,o);rt.samples=save.opt.q>=4?8:4;}
+    const o={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,type:THREE.HalfFloatType};
+    if(renderer.capabilities.isWebGL2&&THREE.WebGLMultisampleRenderTarget){rt=new THREE.WebGLMultisampleRenderTarget(w*pr,h*pr,o);/* a 24-bit depth buffer (the default is 16-bit, which made far islands and the sea flicker) */rt.depthTexture=new THREE.DepthTexture(w*pr,h*pr,THREE.UnsignedIntType);rt.samples=save.opt.q>=4?8:4;}
     else rt=new THREE.WebGLRenderTarget(w*pr,h*pr,o);
     composer=new THREE.EffectComposer(renderer,rt);composer.setPixelRatio(pr);composer.setSize(w,h);
     composer.addPass(new THREE.RenderPass(scene,camera));
@@ -532,6 +534,25 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(40000,32,16),skyMat);sky.rende
 let ENVTEX=null,CLOUDMAT=null;
 /* ---- optional real 3D models (put files in the site's real/ folder; see README) ---- */
 const REAL={};let REALCFG={},REALCK=null;
+/* merge meshes that share a material into one: a downloaded jet drops from 10-20 draw calls to a handful */
+function mergeByMat(root){root.updateMatrixWorld(true);const inv=new THREE.Matrix4().copy(root.matrixWorld).invert(),groups=new Map();
+  root.traverse(o=>{if(!o.isMesh||o.isSkinnedMesh||Array.isArray(o.material)||!o.geometry.attributes.position)return;const g=o.geometry;
+    if(Object.keys(g.attributes).some(n=>!['position','normal','uv','uv2'].includes(n))||o.material.vertexTangents)return;/* tangents / vertex colours: leave alone */
+    const names=['position','normal','uv','uv2'].filter(n=>g.attributes[n]);if(names.some(n=>g.attributes[n].normalized||!(g.attributes[n].array instanceof Float32Array)||g.attributes[n].isInterleavedBufferAttribute))return;
+    const k=o.material.uuid+'|'+names.join();if(!groups.has(k))groups.set(k,[]);groups.get(k).push(o);});
+  const v=new V3(),m=new THREE.Matrix4(),nm=new THREE.Matrix3();
+  for(const list of groups.values()){if(list.length<2)continue;const names=['position','normal','uv','uv2'].filter(n=>list[0].geometry.attributes[n]);
+    let vc=0,ic=0;for(const o of list){const g=o.geometry;vc+=g.attributes.position.count;ic+=g.index?g.index.count:g.attributes.position.count;}
+    const out={};for(const n of names)out[n]=new Float32Array(vc*list[0].geometry.attributes[n].itemSize);const idx=new Uint32Array(ic);let vo=0,io=0;
+    for(const o of list){const g=o.geometry,n=g.attributes.position.count;m.multiplyMatrices(inv,o.matrixWorld);nm.getNormalMatrix(m);const flip=m.determinant()<0;
+      for(let i=0;i<n;i++){v.fromBufferAttribute(g.attributes.position,i).applyMatrix4(m);out.position.set([v.x,v.y,v.z],(vo+i)*3);
+        if(out.normal){v.fromBufferAttribute(g.attributes.normal,i).applyMatrix3(nm).normalize();out.normal.set([v.x,v.y,v.z],(vo+i)*3);}
+        for(const u of ['uv','uv2'])if(out[u]){out[u][(vo+i)*2]=g.attributes[u].getX(i);out[u][(vo+i)*2+1]=g.attributes[u].getY(i);}}
+      const tri=g.index?g.index.count:n;for(let j=0;j<tri;j+=3){const a=g.index?g.index.getX(j):j,b=g.index?g.index.getX(j+1):j+1,c=g.index?g.index.getX(j+2):j+2;
+        idx[io++]=a+vo;if(flip){idx[io++]=c+vo;idx[io++]=b+vo;}else{idx[io++]=b+vo;idx[io++]=c+vo;}}vo+=n;}
+    const geo=new THREE.BufferGeometry();if(!out.uv2&&out.uv&&list[0].material.aoMap)out.uv2=out.uv;for(const n of Object.keys(out))geo.setAttribute(n,new THREE.BufferAttribute(out[n],n==='position'||n==='normal'?3:2));geo.setIndex(new THREE.BufferAttribute(idx,1));
+    const mm=new THREE.Mesh(geo,list[0].material);mm.name=list.map(o=>o.name+' '+(o.parent?o.parent.name:'')).join(' ').slice(0,300);
+    for(const o of list)o.parent&&o.parent.remove(o);root.add(mm);}}
 function fixMats(obj){obj.traverse(o=>{if(!o.isMesh)return;(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(!m||m.userData.fixed)return;m.userData.fixed=1;
     const glass=/glass|canopy|hud|light|lamp|window/i.test(m.name+' '+o.name+' '+(o.parent&&o.parent.name));
     if(!glass){if(m.transparent){m.transparent=false;m.depthWrite=true;m.alphaTest=m.map?.4:0;m.opacity=1;}if(m.metalness>.35){m.metalness=.3;m.metalnessMap=null;}if(m.roughness<.35)m.roughness=.45;}
@@ -540,7 +561,7 @@ function fitModel(obj,len,cfg,belly){
   cfg=cfg||{};const hid=cfg.hide||[];
   /* tame downloaded materials: full metal goes black in shadow on tablets, and some bodies are wrongly marked see-through */
   fixMats(obj);obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;
-if(hid.length){const rm=[];obj.traverse(o=>{if(o.isLight||(o.name&&hid.some(h=>o.name.indexOf(h)>=0)))rm.push(o);});rm.forEach(o=>o.parent&&o.parent.remove(o));}obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
+if(hid.length){const rm=[];obj.traverse(o=>{if(o.isLight||(o.name&&hid.some(h=>o.name.indexOf(h)>=0)))rm.push(o);});rm.forEach(o=>o.parent&&o.parent.remove(o));}mergeByMat(obj);obj.updateMatrixWorld(true);if(cfg.rotY)obj.rotation.y=cfg.rotY;if(cfg.rotX)obj.rotation.x=cfg.rotX;obj.updateMatrixWorld(true);
   const bb=new THREE.Box3().setFromObject(obj),sz=bb.getSize(new V3()),c=bb.getCenter(new V3());
   if(!cfg.rotY&&sz.x>sz.z*1.15){obj.rotation.y=Math.PI/2;obj.updateMatrixWorld(true);bb.setFromObject(obj);bb.getSize(sz);bb.getCenter(c);}
   const k=(cfg.scale||1)*len/Math.max(sz.z,.001);const w=new THREE.Group();obj.position.sub(c);w.add(obj);w.scale.setScalar(k);
@@ -569,7 +590,8 @@ function loadRealModels(){
       const RC={Dark_Mat:0x343b44,material:0x2b3138,Plain_White:0x58616b,'BakedCycles.004':0x58616b,BakedCycles:0x4f5862,'BakedCycles.003':0x4f5862,'bdr.003':0x3b434c,Mat_lighter:0x6e7781,Buttons_ICP_LGT_DRK:0x22272d,Mat_Seat:0x4a4f45,Milit_Seat:0x5a6340};
       o.traverse(x=>{if(!x.isMesh||!x.material)return;const m=x.material,col=RC[m.name];if(col!==undefined&&!m.userData.rc){m.userData.rc=1;m.color.setHex(col);m.roughness=.75;m.metalness=.15;}
         if(/AOA|Buttons_ICP_DRK|AIRSPEED|ALT_Int/.test(m.name)&&!m.userData.rc){m.userData.rc=1;m.emissive=new THREE.Color(0xffffff);m.emissiveMap=m.map;m.emissiveIntensity=.35;}
-        if(m.name==='Red_WARNING'||m.name==='Ochra_Caution'){m.emissive=new THREE.Color(m.name==='Red_WARNING'?0x801010:0x806010);}});o.traverse(x=>{if(x.isLight||x.isCamera)x.visible=false;});
+        if(m.name==='Red_WARNING'||m.name==='Ochra_Caution'){m.emissive=new THREE.Color(m.name==='Red_WARNING'?0x801010:0x806010);}});
+      mergeByMat(o);o.traverse(x=>{if(x.isLight||x.isCamera)x.visible=false;});
       if(c.rotY)o.rotation.y=c.rotY;o.updateMatrixWorld(true);const bb=new THREE.Box3().setFromObject(o),sz=bb.getSize(new V3()),k=(c.width||1)/Math.max(sz.x,.001);
       const w=new THREE.Group();w.add(o);w.scale.setScalar(k);w.position.set(-(bb.min.x+sz.x/2)*k+(c.x||0),(c.bottom!=null?c.bottom:-1)-bb.min.y*k,(c.front!=null?c.front:-1.1)-bb.min.z*k);REALCK=w;},undefined,()=>{});});
 }
