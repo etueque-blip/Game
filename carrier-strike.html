@@ -156,6 +156,8 @@ body.ckpt #ckexit{display:block}
 body.minui .topbtns,body.minui #loopb,body.minui #rollb,body.minui #zoomb,body.minui #strikeb,body.minui #autob,body.minui #boostb,body.minui #keys,body.minui #slots,body.minui #obj,body.minui #modst,
 body.minui #turnL,body.minui #turnR,body.minui #nextw,body.minui #ring,body.minui #rdspd,body.minui #rdalt,body.minui #feed,body.minui #hint,body.minui #thrp{display:none!important}
 body.minui #flareb{opacity:.75}
+.gpf{outline:3px solid var(--yellow)!important;outline-offset:2px;box-shadow:0 0 1.2rem #ffc94a88!important}
+#rotate{display:none}@media (orientation:portrait) and (max-width:700px){body.touch #rotate{display:grid;position:fixed;inset:0;z-index:300;background:#06121cf2;color:#fff;place-items:center;text-align:center;font:800 1.3rem var(--ui);padding:2rem}}
 @media (max-height:520px){.hb{transform:scale(.72);transform-origin:center}#radarw{transform:scale(.72);transform-origin:top left}#mtrack{transform:scale(.8);transform-origin:top left;left:calc(max(16px,env(safe-area-inset-left)) + 10.5rem)}#obj{display:none}#coach{font-size:.85rem;bottom:calc(max(.5rem,env(safe-area-inset-bottom)) + 6.6rem)}#slots{transform:translateX(-50%) scale(.62)!important}}
 @media (max-width:1300px){#obj{display:none}}
 body.noui #hud>*:not(#hideb):not(#pad):not(#warn):not(#dmg){opacity:0!important}body.noui #hideb{opacity:.45}
@@ -366,7 +368,7 @@ body.ckpt #mtrack{display:none}
 </section>
 <div id="mapOv" class="ov" hidden><div style="display:flex;flex-direction:column;gap:.6rem;align-items:center"><canvas id="mapc" width="700" height="700"></canvas><button class="btn" id="mapX">ЗАКРЫТЬ</button></div></div>
 <div id="modal" class="ov" hidden><div class="card" id="mcard"></div></div>
-<div id="toast"></div>
+<div id="toast"></div><div id="rotate"><div><div style="font-size:4rem">📱↻</div>Поверни телефон горизонтально<br><small style="font-weight:500;opacity:.7">так управлять самолётом намного удобнее</small></div></div>
 <div id="rot">Поверните телефон горизонтально</div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -2399,7 +2401,7 @@ function helpHtml0(){
   '<h3>ОСТРОВА</h3><div style="color:var(--dim)">5 островов-баз с полосами: 2 штаба, 2 острова обороны и центральный. С любого своего острова можно вылететь (ангар → «ВЫЛЕТ С») и сесть на его полосу для перезарядки. Чтобы забрать вражеский остров: разбейте базу до 0% (бомбы, ракеты, пушка), затем летайте в кольце ниже 700 м. Центр нейтральный — кто первый захватит. Кто захватит все 5 островов — победил. За захват +300 CR и +200 XP, за разрушение базы +500 CR.</div>'+
   '<h3>3D-МОДЕЛИ</h3><div style="color:var(--dim);font-size:.85rem">Модели самолётов с Sketchfab (CC BY / CC BY-NC-SA): F-16 — MrrrBoB; Рафаль, F/A-18, Су-33 — andertan; Мираж 2000, F-35, МиГ-29, F-4, B-2 — bohmerang; AV-8B — 42manako; МиГ-21 (J-7) — NETRUNNER_pl; A-4 — johnnokomis; кабина F-16 — rukh. Спасибо авторам!</div>'+
   '<h3>РАКЕТЫ</h3><div class="leg">'+Object.keys(W).filter(k=>W[k].kind==='aa'||W[k].kind==='ag').map(k=>L(W[k].s,W[k].d+' · захват '+W[k].lock+' с · '+(W[k].range/1000)+' км')).join('')+'</div>'+
-  '<div style="color:var(--dim)">Меняйте вооружение в ангаре кнопкой «КОНФИГУРАЦИЯ». Ракете нужен захват: держите цель в прицеле, пока не появится «ЗАХВАТ ЦЕЛИ». Геймпад: левый стик — полёт, RT — пушка, RB — ракета, A — смена оружия, LB — ловушки, Start — меню. На телефоне: тяга слева, перетаскивание по экрану — штурвал.</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
+  '<div style="color:var(--dim)">Меняйте вооружение в ангаре кнопкой «КОНФИГУРАЦИЯ». Ракете нужен захват: держите цель в прицеле, пока не появится «ЗАХВАТ ЦЕЛИ». Геймпад (PS5 / Xbox): левый стик — полёт, правый стик — рыскание, R2/RT — пушка, R1/RB — ракета, L1/LB — ловушки, L2/LT — тормоз, ✕/A — смена оружия, △/Y — АВТО, ○/B — форсаж, □/X — зум, крестовина ↑↓ — газ, ←→ — шасси/закрылки, L3 — ПРО, R3 — вид, Options/Start — пауза. В меню: крестовина или стик — выбор, ✕/A — нажать, ○/B — назад.</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
 }
 /* ---------- screens ---------- */
 function show(s){state=s;if(s==='hud')setTimeout(renderTrack,0);document.documentElement.classList.toggle('hudmode',s==='hud'||s==='dead');$('#mainMenu').hidden=s!=='menu';if(s!=='hud'){unlockMouse();if(typeof stick!=='undefined'){stick.id=null;$('#stk').style.display='none';}}$('#sideScr').hidden=s!=='side';$('#hangar').hidden=s!=='hangar';$('#hud').hidden=!(s==='hud'||s==='dead');}
@@ -2733,9 +2735,9 @@ function pollPad(dt){
   const P=i=>B(i)&&!gp.prev[i];
   if(gp.x||gp.y||gp.yaw||g.buttons.some(b=>b.pressed)){if(lastDev!=='pad'&&state==='hud')toast('Геймпад подключён');lastDev='pad';gp.on=true;}
   gp.gun=B(7);gp.wep=B(5);
-  if(state==='hangar'&&$('#modal').hidden&&(P(0)||P(9)))$('#launch').click();
+  if(state!=='hud'&&state!=='dead'||!$('#modal').hidden){padMenu(g,B,P,dt);gp.prev=g.buttons.map(b=>b.pressed);return;}
   else if(state==='hud'&&$('#modal').hidden&&player){const p=player;
-    if(P(4))dropFlares(p);if(P(0)||P(3))nextWep(p);if(P(1))p.ab=!p.ab;if(P(2))zoom=!zoom;if(P(10)||P(11))cycleView();
+    if(P(4))dropFlares(p);if(P(0))nextWep(p);if(P(3))toggleSteer();if(P(10))useAps(p);if(P(16))playerStrike();if(P(1))p.ab=!p.ab;if(P(2))zoom=!zoom;if(P(11))cycleView();
     if(B(12))thrTarget=Math.min(1,thrTarget+dt*.6);if(B(13))thrTarget=Math.max(0,thrTarget-dt*.6);
     if(P(14))p.gear=!p.gear;if(P(15))p.flaps=!p.flaps;if(P(8))openMap();
     gp.brk=B(6);
@@ -2743,6 +2745,23 @@ function pollPad(dt){
   if(state==='hud'&&P(9)){if($('#modal').hidden)openMore();else closeModal();}
   gp.prev=g.buttons.map(b=>b.pressed);
 }
+/* menus with a controller (PS5 / Xbox / any standard pad): a highlighted button moves with the D-pad or left stick */
+let gpFocus=null;
+function padTargets(){const root=$('#modal').hidden?document:$('#modal');return [...root.querySelectorAll('button,.btn,[data-sp],.slot')].filter(e=>{if(e.disabled)return false;const r=e.getBoundingClientRect();return r.width>4&&r.height>4&&r.bottom>0&&r.top<innerHeight&&getComputedStyle(e).visibility!=='hidden';});}
+function padMenu(g,B,P,dt){
+  const list=padTargets();if(!list.length)return;
+  if(!gpFocus||!list.includes(gpFocus)){gpFocus=list.find(e=>e.id==='launch')||list.find(e=>/ВЫЛЕТ|ИГРАТЬ|В БОЙ|ПОНЯТНО/.test(e.textContent))||list[0];mark();}
+  const ax=g.axes[0]||0,ay=g.axes[1]||0;let dx=(B(15)?1:0)-(B(14)?1:0)+(Math.abs(ax)>.6?Math.sign(ax):0),dy=(B(13)?1:0)-(B(12)?1:0)+(Math.abs(ay)>.6?Math.sign(ay):0);
+  gp.navT=(gp.navT||0)-(dt||.016);
+  if((dx||dy)&&gp.navT<=0){gp.navT=gp.navHeld?.13:.32;gp.navHeld=true;const a=gpFocus.getBoundingClientRect(),ax0=a.left+a.width/2,ay0=a.top+a.height/2;let best=null,bs=1e9;
+    for(const e of list){if(e===gpFocus)continue;const r=e.getBoundingClientRect(),vx=r.left+r.width/2-ax0,vy=r.top+r.height/2-ay0;const along=vx*dx+vy*dy;if(along<=4)continue;const side=Math.abs(vx*dy)+Math.abs(vy*dx);const sc=along+side*2.5;if(sc<bs){bs=sc;best=e;}}
+    if(best){gpFocus=best;mark();}}
+  if(!dx&&!dy){gp.navT=0;gp.navHeld=false;}
+  if(P(0)){audioInit();gpFocus.click();setTimeout(()=>{gpFocus=null;},50);}
+  if(P(1)){if(!$('#modal').hidden)closeModal();else{const bk=list.find(e=>/МЕНЮ|НАЗАД|←/.test(e.textContent));if(bk)bk.click();}gpFocus=null;}
+  if(P(9)&&state==='hangar'&&$('#modal').hidden)$('#launch').click();
+  if(P(9)&&state==='hud'&&!$('#modal').hidden)closeModal();
+  function mark(){document.querySelectorAll('.gpf').forEach(e=>e.classList.remove('gpf'));gpFocus.classList.add('gpf');gpFocus.scrollIntoView({block:'nearest'});}}
 function openMore(){
   unlockMouse();
   const inGame=state==='hud'||state==='dead';
