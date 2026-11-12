@@ -1913,7 +1913,7 @@ function fireGun(p){
   const aimLv=p.mods&&p.mods.gunaim?2:(p.isPlayer&&save.opt.aim?1:0);
   if(aimLv){const vb=p.speed+900;let best=null,ba=aimLv>1?.3:(p.isPlayer?.22:.06);
     for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;const d=q.pos.distanceTo(p.pos);if(d>(aimLv>1?2400:p.isPlayer?1800:1100))continue;
-      let t=d/vb;tD.copy(q.pos).addScaledVector(q.vel,t);t=tD.distanceTo(p.pos)/vb;tD.copy(q.pos).addScaledVector(q.vel,t);tD.y+=.5*9.8*.6*t*t;tD.sub(p.pos).normalize();
+      leadPoint(q,p.pos,vb,tD);tD.sub(p.pos).normalize();
       const a=Math.acos(clamp(tD.dot(tA),-1,1));if(a<ba){ba=a;best=tD.clone();}}
     if(!best)for(const sh of shipTargets(enemyOf(p.team))){const d=sh.pos.distanceTo(p.pos);if(d>1800)continue;tD.copy(sh.pos);tD.y+=sh.kind==='carrier'?14:6;const t=d/vb;tD.y+=.5*9.8*.6*t*t;tD.sub(p.pos).normalize();const a=Math.acos(clamp(tD.dot(tA),-1,1));if(a<ba){ba=a;best=tD.clone();}}
     if(best){tC.copy(best).multiplyScalar(vb);p.aimAssist=.3;}}
@@ -1963,6 +1963,10 @@ function updateBombs(dt){
   }
 }
 
+/* where to aim so bullets meet a target: its speed AND its turn (acceleration) are extrapolated, plus bullet drop; three refinements */
+function leadPoint(q,from,vb,out){out=out||new V3();let t=q.pos.distanceTo(from)/vb;
+  for(let i=0;i<3;i++){out.copy(q.pos).addScaledVector(q.vel,t);if(q.acc)out.addScaledVector(q.acc,.5*t*t);t=out.distanceTo(from)/vb;}
+  out.y+=.5*9.8*.6*t*t;return out;}
 /* ---------- missiles / flares ---------- */
 const MCACHE={};
 function mslMesh(key){
@@ -2677,7 +2681,8 @@ function controlPlayer(p,dt){
     if(!tq&&p.autoKeep&&p.autoKeep.alive&&p.autoKeep.state==='fly'&&p.autoKeep.pos.distanceTo(p.pos)<9000)tq=p.autoKeep;
     if(!tq){let bs=1e9;for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;tA.copy(q.pos).sub(p.pos);const d=tA.length();if(d>8000)continue;const sc=d*(1+(1-tA.dot(tB)/d)*1.2)*(q.ai&&q.ai.tgt===p?.55:1)*(.5+.5*q.hp/q.maxhp);if(sc<bs){bs=sc;tq=q;}}}
     p.autoKeep=tq;
-    if(tq){const vb=p.speed+900,d0=tq.pos.distanceTo(p.pos);let t=d0/vb;tA.copy(tq.pos).addScaledVector(tq.vel,t);t=tA.distanceTo(p.pos)/vb;tA.copy(tq.pos).addScaledVector(tq.vel,t);tA.y+=.5*9.8*.6*t*t;
+    if(tq){const vb=p.speed+900,d0=tq.pos.distanceTo(p.pos);leadPoint(tq,p.pos,vb,tA);
+      /* far away: fly to where it will be (pursuit), close: put the nose on the gun lead */if(d0>2500){tA.copy(tq.pos).addScaledVector(tq.vel,Math.min(6,d0/Math.max(p.speed,150)*.5));}
       tA.sub(p.pos).normalize();
       /* never chase it into the sea or a mountain */
       const gnd=Math.max(0,terrainH(p.pos.x+p.vel.x*3,p.pos.z+p.vel.z*3));if(p.pos.y+p.vel.y*3<gnd+180&&tA.y<.15){tA.y=.25;tA.normalize();}
@@ -2685,6 +2690,8 @@ function controlPlayer(p,dt){
       /* auto fire: guns when the lead point is on the nose, missile when locked */
       const fw=fwdOf(p,new V3()),on=Math.acos(clamp(tA.dot(fw),-1,1));p.autoGun=d0<1700&&on<(p.mods.gunaim?.28:.2)&&p.ammo>0;
       p.autoMsl=p.locked&&p.lockT&&p.lockT.alive&&p.lockT.pos.distanceTo(p.pos)>450&&p.cd.wep<=0&&curW(p)&&curW(p).n>0&&W[curW(p).id].kind==='aa';}}
+      /* pick the air-to-air missile by itself when the target is in missile range */
+      if(p.autoT){const d0=p.autoT.pos.distanceTo(p.pos);if(d0>900&&d0<5000){const wi=(p.weps||[]).findIndex(w=>w.n>0&&W[w.id].kind==='aa');if(wi>=0&&p.sel!==wi)p.sel=wi;}}
   if(!p.autoT){p.autoGun=false;p.autoMsl=false;}
   else{/* auto throttle: burner to close in, ease off so it does not overshoot */
     const d1=p.autoT.pos.distanceTo(p.pos),wantThr=d1>2200?1:d1<450?.55:.85;if(!(keys.ShiftLeft||keys.ShiftRight||keys.KeyZ||hold.tu||hold.td)){thrTarget+=(wantThr-thrTarget)*Math.min(1,dt*2);p.ab=d1>2600&&p.speed<p.def.maxSpd*.85;}}
@@ -2694,7 +2701,7 @@ function controlPlayer(p,dt){
   /* gentle magnet while you fly by hand: if an enemy's lead point is near the nose, the nose eases onto it */
   if(save.opt.aim&&p.state==='fly'&&!p.autoT&&!p.stunt){fwdOf(p,tB);let best=null,ba=.2;const vb=p.speed+900;
     for(const q of planes){if(!q.alive||q.team===p.team||q.state!=='fly')continue;const d=q.pos.distanceTo(p.pos);if(d>1800)continue;
-      let t=d/vb;tD.copy(q.pos).addScaledVector(q.vel,t);tD.y+=.5*9.8*.6*t*t;tD.sub(p.pos).normalize();const a=Math.acos(clamp(tD.dot(tB),-1,1));if(a<ba){ba=a;best=tD.clone();}}
+      leadPoint(q,p.pos,vb,tD);tD.sub(p.pos).normalize();const a=Math.acos(clamp(tD.dot(tB),-1,1));if(a<ba){ba=a;best=tD.clone();}}
     if(best){tC.copy(tB).cross(best);if(tC.lengthSq()>1e-8){tC.normalize();tQ.setFromAxisAngle(tC,Math.min(ba,dt*(p.mods.gunaim?.35:.22)));p.q.premultiply(tQ);p.vel.applyQuaternion(tQ);}p.magnet=true;}else p.magnet=false;}
   /* turn buttons: flat turn on the rudder, wings stay level, nose stays on the horizon */
   if((hold.yl||hold.yr)&&p.state==='fly'&&!p.stunt){const dd=(hold.yr?1:0)-(hold.yl?1:0);p.aimCtl=false;sx=0;sy=clamp(-p.vel.y*.04,-.25,.25);yw=dd;p.flatYaw=true;fwdOf(p,tA);aimDir.copy(tA);aimUp.set(0,1,0);orthoAim();}
@@ -3104,7 +3111,8 @@ function drawHud(p){
 function step(dt){
   if(!match.over&&!match.training){match.t-=dt;if(match.t<=0){endMatch(T.blue.tickets>=T.red.tickets?'blue':'red');}}
   for(const id of['blue','red'])for(const pl of T[id].pilots){if(pl.isPlayer||pl.plane)continue;pl.rt-=dt;if(pl.rt<=0&&!match.over)spawnBot(pl);}
-  for(const p of planes){if(!p.alive)continue;if(p.isPlayer)controlPlayer(p,dt);else botThink(p,dt);updatePlane(p,dt);}
+  for(const p of planes){if(!p.alive)continue;if(p.isPlayer)controlPlayer(p,dt);else botThink(p,dt);updatePlane(p,dt);
+    if(!p.acc){p.acc=new V3();p.pv=p.vel.clone();}else if(dt>0){tA.copy(p.vel).sub(p.pv).divideScalar(dt);if(tA.lengthSq()<1e6)p.acc.lerp(tA,Math.min(1,dt*6));p.pv.copy(p.vel);}}
   planes=planes.filter(p=>p.alive);
   updateShips(dt);updateWrecks(dt);updateZones(dt);updateStrikes(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateAps(dt);updateShock(dt);if(tgtT>0){tgtT-=dt;if(tgtT<=0)$('#tgtbar').style.display='none';}updateFlares(dt);
   smokeP.update(dt);fireP.update(dt);updateFx(dt);
