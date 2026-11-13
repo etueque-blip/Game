@@ -2494,6 +2494,12 @@ function audioInit(){
     eGain=AC.createGain();eGain.gain.value=0;eOsc.connect(eFilter);
     eNoise=AC.createBufferSource();eNoise.buffer=noiseBuf;eNoise.loop=true;const ng=AC.createGain();ng.gain.value=.5;eNoise.connect(ng);ng.connect(eFilter);
     eFilter.connect(eGain);eGain.connect(master);eOsc.start();eNoise.start();
+    /* extra layers: afterburner rumble, wind rush with speed, helicopter blade slap + turbine whine */
+    const loop=()=>{const n=AC.createBufferSource();n.buffer=noiseBuf;n.loop=true;n.start(0,Math.random()*1.5);return n;};
+    const chain=(src,type,f,q)=>{const fl=AC.createBiquadFilter();fl.type=type;fl.frequency.value=f;if(q)fl.Q.value=q;const g=AC.createGain();g.gain.value=0;src.connect(fl);fl.connect(g);g.connect(master);return {f:fl,g};};
+    SND.ab=chain(loop(),'lowpass',380);SND.crk=chain(loop(),'bandpass',1400,3);SND.wind=chain(loop(),'highpass',900);
+    SND.rotor=chain(loop(),'lowpass',240);SND.lfo=AC.createOscillator();SND.lfo.type='triangle';SND.lfo.frequency.value=5;SND.lfoG=AC.createGain();SND.lfoG.gain.value=0;SND.lfo.connect(SND.lfoG);SND.lfoG.connect(SND.rotor.g.gain);SND.lfo.start();
+    SND.whine=AC.createOscillator();SND.whine.type='sine';SND.whine.frequency.value=1350;SND.whG=AC.createGain();SND.whG.gain.value=0;SND.whine.connect(SND.whG);SND.whG.connect(master);SND.whine.start();
   }catch(e){AC=null;}
 }
 function noiseHit(dur,type,freq,vol,sweepTo){
@@ -2525,11 +2531,16 @@ function sfx(n,pos){
     else if(n==='cat')noiseHit(1.4,'bandpass',300,.6,2000);
   }catch(e){}
 }
+const SND={};
 function engineSound(){
   if(!AC||!eOsc)return;
   const on=state==='hud'&&player&&save.opt.sound;const t=AC.currentTime;
-  const thr=on?player.thr+(player.ab?.3:0):0;
-  eGain.gain.setTargetAtTime(on?.12+thr*.12:0,t,.1);eOsc.frequency.setTargetAtTime(55+thr*70+(on?player.speed*.12:0),t,.1);eFilter.frequency.setTargetAtTime(300+thr*900,t,.1);
+  const heli=on&&player.def.heli,thr=on?player.thr+(player.ab?.3:0):0,ck=save.opt.view===2?.6:1;
+  if(SND.ab){const ab=on&&!heli&&player.ab&&player.state!=='parked';SND.ab.g.gain.setTargetAtTime(ab?.32*ck:0,t,.15);SND.crk.g.gain.setTargetAtTime(ab?.05*ck:0,t,.15);SND.crk.f.frequency.setTargetAtTime(900+Math.random()*1400,t,.03);
+    const w=on?clamp(player.speed/(heli?120:380),0,1.2):0;SND.wind.g.gain.setTargetAtTime(w*w*.09*(save.opt.view===2?.5:1),t,.2);SND.wind.f.frequency.setTargetAtTime(600+w*900,t,.2);
+    const rp=heli?(player.state==='parked'?Math.max(.2,player.thr):1):0;SND.rotor.g.gain.setTargetAtTime(heli?.05+rp*.05:0,t,.2);SND.lfoG.gain.setTargetAtTime(heli?.12*rp:0,t,.2);SND.lfo.frequency.setTargetAtTime(3+rp*2.6+player.thr*.8,t,.3);
+    SND.whG.gain.setTargetAtTime(heli?.012+rp*.01:0,t,.3);SND.whine.frequency.setTargetAtTime(1100+rp*400,t,.3);}
+  eGain.gain.setTargetAtTime(on&&!heli?.12+thr*.12:0,t,.1);eOsc.frequency.setTargetAtTime(55+thr*70+(on?player.speed*.12:0),t,.1);eFilter.frequency.setTargetAtTime(300+thr*900,t,.1);
 }
 /* ---------- helpers: toast, modal, feed ---------- */
 let toastT=0;
