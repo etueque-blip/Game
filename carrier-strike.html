@@ -1157,12 +1157,15 @@ function finDecal(fin,f,team){
 const FLAME_MAT=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false,
   uniforms:{t:{value:0},k:{value:1},core:{value:0}},
   vertexShader:'varying float vZ;varying float vA;varying vec3 vN;varying vec3 vV;uniform float core;void main(){vZ=uv.y;vA=uv.x;vec4 mv=modelViewMatrix*vec4(position,1.);vN=normalize(normalMatrix*normal);vV=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}',
+  /* real-looking exhaust: dry thrust is a faint blue-orange shimmer; afterburner is a white-hot core with shock diamonds inside an orange plume, bluish at the nozzle */
   fragmentShader:'uniform float t,k,core;varying float vZ;varying float vA;varying vec3 vN;varying vec3 vV;void main(){float z=vZ;'+
-    'float fl=.75+.25*sin(z*38.-t*55.+vA*20.)*sin(z*17.-t*31.);float edge=pow(abs(dot(vN,vV)),.8);'+
-    'vec3 hot=vec3(1.,.8,.55)*1.2,mid=vec3(1.,.45,.12)*1.3,cool=vec3(.9,.18,.03)*.9;'+
-    'vec3 c=core>.5?mix(vec3(1.,.9,.75)*1.4,vec3(1.,.5,.15)*1.1,z):mix(mix(hot,mid,smoothstep(.0,.22,z)),cool,smoothstep(.3,.8,z));'+
-    'float ab=smoothstep(1.,1.2,k);c=mix(vec3(.45,.6,1.)*1.6,c,ab+.25);'+
-    'float a=pow(1.-z,1.8)*edge*edge*fl*clamp(k,0.,1.6)*(core>.5?.55:.3)*mix(2.6,1.,ab);gl_FragColor=vec4(c,a);}'});
+    'float ab=smoothstep(1.,1.2,k);float fl=.82+.18*sin(z*30.-t*60.+vA*12.)*sin(z*13.-t*37.+vA*5.);float ed=abs(dot(vN,vV));float edge=pow(ed,core>.5?.6:1.1);'+
+    'vec3 dry=mix(vec3(1.,.55,.25),vec3(.35,.5,1.),smoothstep(.0,.35,z));float aDry=pow(1.-z,3.)*edge*.28*clamp(k,0.,1.)*fl;'+
+    'float dia=core>.5?pow(max(0.,cos(z*28.-t*1.5)),14.)*(1.-z)*(1.-z):0.;'+
+    'vec3 hot=core>.5?mix(vec3(1.,.95,.82)*1.7,vec3(1.,.6,.2)*1.2,smoothstep(.0,.7,z)):mix(vec3(1.,.62,.22)*1.35,vec3(.85,.22,.05),smoothstep(.15,.85,z));'+
+    'hot=mix(vec3(.45,.6,1.)*1.5,hot,smoothstep(.0,.13,z));hot+=vec3(1.,.9,.7)*dia*2.2;'+
+    'float aAb=(pow(1.-z,core>.5?1.6:1.3)*edge*fl*(core>.5?.85:.42)+dia*.9);'+
+    'vec3 c=mix(dry,hot,ab);float a=mix(aDry,aAb,ab);gl_FragColor=vec4(c,a);}'});
 let NOZTEX=null;
 function nozzleTex(){if(NOZTEX)return NOZTEX;const c=document.createElement('canvas');c.width=256;c.height=32;const x=c.getContext('2d');
   x.fillStyle='#5a5f66';x.fillRect(0,0,256,32);for(let i=0;i<18;i++){x.fillStyle=i%2?'#6d737a':'#4b5056';x.fillRect(i*256/18,0,256/18,32);x.fillStyle='#2a2d31';x.fillRect(i*256/18,0,2,32);}
@@ -1824,7 +1827,7 @@ function flyPlane(p,dt){
   if(p.speed>90&&Math.abs(p.g)>3.2){const a=clamp((Math.abs(p.g)-3.2)/3,0,1)*.45;
     for(const tp of ud.tips){tA.copy(tp).applyQuaternion(p.q).add(p.pos);smokeP.emit(tA.x,tA.y,tA.z,0,0,0,.9,.5,2.4,[1,1,1,a],[1,1,1,0],0);}}
   if(p.pos.y>2000&&p.speed>120){tA.set(0,0,1).applyQuaternion(p.q).multiplyScalar(d.b.L/2+4).add(p.pos);smokeP.emit(tA.x,tA.y,tA.z,0,0,0,4,1.4,7,[1,1,1,clamp((p.pos.y-2000)/600,0,.32)],[1,1,1,0],0);}
-  if(p.thr>.7||p.ab){tA.set(0,0,1).applyQuaternion(p.q).multiplyScalar(p.def.b.L/2+1.5).add(p.pos);fire(tA.x,tA.y,tA.z,p.ab?1.8:1,.2,.18,1.5);}
+  /* (old glowing blobs left behind the nozzle removed: the plume shader draws the whole exhaust now) */
 }
 function sonicBoom(p){
   const near=p.isPlayer?0:camera.position.distanceTo(p.pos);if(near>4000)return;
@@ -1835,10 +1838,10 @@ function sonicBoom(p){
 function engineFx(p,k,on){
   const u=p.mesh.userData,f=.88+Math.random()*.24;
   const tt=performance.now()/1000;
-  u.flames.forEach(fl=>{fl.visible=on&&k>.15;const L=k>1.2?k*.95:.25+k*.45;fl.scale.set(1,1,L*f);fl.material.uniforms.k.value=k;fl.material.uniforms.t.value=tt;});
+  u.flames.forEach(fl=>{fl.visible=on&&k>.15;const L=k>1.2?k*1.15:.25+k*.45;fl.scale.set(1,1,L*f);fl.material.uniforms.k.value=k;fl.material.uniforms.t.value=tt;});
   u.cores.forEach(c=>{c.visible=on;c.scale.set(1,1,Math.max(.3,k*.8)*f);c.material.uniforms.k.value=Math.max(k,.6);c.material.uniforms.t.value=tt;});
   u.glows.forEach(g=>{g.material.opacity=on?.25+Math.min(k,1.2)*.55:.05;});
-  if(u.diam)u.diam.forEach((d,i)=>{d.visible=on&&k>1.3;d.material.opacity=.5+.5*Math.random();});
+  if(u.diam)u.diam.forEach(d=>{d.visible=false;});/* shock diamonds are drawn inside the plume shader now */
   const t=performance.now()/1000;u.strobe.visible=(t+p.pos.x*.01)%1.3<.08;
 }
 
