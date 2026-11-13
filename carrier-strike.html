@@ -929,13 +929,21 @@ function bKey(i,j){return i*100003+j;}
     const m=new THREE.Mesh(g,ground);m.position.set(c.x,0,c.z);m.receiveShadow=true;scene.add(m);
     /* streets: a grid of dark strips */
     const blk=110,ext=Math.floor(c.r*.8/blk);
-    const roads=new THREE.InstancedMesh(new THREE.PlaneGeometry(blk+14,14).rotateX(-Math.PI/2),roadM,(2*ext+1)*(2*ext+1)*2);let rn=0;
+    const roads=new THREE.InstancedMesh(new THREE.PlaneGeometry(blk+14,14).rotateX(-Math.PI/2),roadM,(2*ext+1)*(2*ext+1)*2);let rn=0;c.blk=blk;c.segs=[];c.segMap=new Map();
     for(let i=-ext;i<=ext;i++)for(let j=-ext;j<=ext;j++)for(const dir of[0,1]){
       const rx=c.x+i*blk+(dir?0:blk/2),rz=c.z+j*blk+(dir?blk/2:0);
       if(Math.hypot(rx-c.x,rz-c.z)>c.r*.8)continue;
       let ok=true;for(const t of[-.5,0,.5]){const gx=rx+(dir?0:t*blk),gz=rz+(dir?t*blk:0);if(Math.abs(cityGround(c,gx,gz)-9)>.01)ok=false;}if(!ok)continue;
-      q.setFromAxisAngle(new V3(0,1,0),dir?Math.PI/2:0);ps.set(rx,9.12,rz);sc.set(1,1,1);m4.compose(ps,q,sc);roads.setMatrixAt(rn++,m4);}
+      q.setFromAxisAngle(new V3(0,1,0),dir?Math.PI/2:0);ps.set(rx,9.12,rz);sc.set(1,1,1);m4.compose(ps,q,sc);roads.setMatrixAt(rn++,m4);
+      {const sg={i,j,dir,x:rx,z:rz};c.segs.push(sg);c.segMap.set(i+','+j+','+dir,sg);}}
     q.identity();roads.count=rn;roads.receiveShadow=true;scene.add(roads);
+    /* traffic: cars drive along the street grid, turn at crossings (two instanced meshes: painted body + dark cabin) */
+    if(save.opt.q>=1&&c.segs.length){const N=Math.min(save.opt.q>=3?360:170,c.segs.length*2),bs=new THREE.Sphere(new V3(c.x,10,c.z),c.r*1.2);
+      const bg=new THREE.BoxGeometry(4.4,1.2,2).translate(0,.75,0);bg.boundingSphere=bs;const cg=new THREE.BoxGeometry(2.3,.9,1.8).translate(-.3,1.8,0);cg.boundingSphere=bs.clone();
+      c.carB=new THREE.InstancedMesh(bg,new THREE.MeshStandardMaterial({roughness:.35,metalness:.5,envMap:ENVTEX,envMapIntensity:.8}),N);c.carC=new THREE.InstancedMesh(cg,mat(0x1a2630,{metalness:.7,roughness:.15}),N);
+      const cc=[0xd8d8d8,0x202428,0xb02a22,0x2a4f9a,0xe8e8e8,0x6b7178,0xc9a227,0x2f6b3a,0x111111];c.cars=[];
+      for(let n=0;n<N;n++){const sg=c.segs[Math.floor(Math.random()*c.segs.length)];c.cars.push({sg,t:Math.random(),sgn:Math.random()<.5?1:-1,v:rnd(9,16)});c.carB.setColorAt(n,col.setHex(cc[n%cc.length]));}
+      c.carB.instanceColor.needsUpdate=true;scene.add(c.carB,c.carC);}
     /* buildings: tall downtown, low suburbs */
     for(let i=-ext;i<ext;i++)for(let j=-ext;j<ext;j++){
       const bx=c.x+(i+.5)*blk,bz=c.z+(j+.5)*blk,dd=Math.hypot(bx-c.x,bz-c.z)/c.r;
@@ -971,6 +979,18 @@ function bKey(i,j){return i*100003+j;}
   {const rg=new THREE.BoxGeometry(1,1,1);rg.translate(0,.5,0);rg.boundingSphere=new THREE.Sphere(new V3(0,100,0),12000);const rm=new THREE.InstancedMesh(rg,mat(0x8d949b,{roughness:.8}),roofs.length);
    roofs.forEach((r,i)=>{ps.set(r[0],r[1],r[2]);sc.set(r[3],r[4],r[3]*rnd(.7,1.3));m4.compose(ps,q,sc);rm.setMatrixAt(i,m4);});scene.add(rm);}
 })();
+const _cm=new THREE.Matrix4(),_cq=new THREE.Quaternion(),_cp=new V3(),_cs=new V3(1,1,1),_cy=new V3(0,1,0);
+function updateTraffic(dt){
+  for(const c of CITIES){if(!c.cars)continue;const far=camera.position.distanceTo(_cp.set(c.x,0,c.z))>c.r+5000;c.carB.visible=c.carC.visible=!far;if(far)continue;const B=c.blk;
+    c.cars.forEach((k,n)=>{k.t+=k.v*dt/B;
+      if(k.t>=1){const s=k.sg;let gi=s.i,gj=s.j;if(s.dir===0){if(k.sgn>0)gi++;}else{if(k.sgn>0)gj++;}
+        const opts=[[gi,gj,0,1],[gi-1,gj,0,-1],[gi,gj,1,1],[gi,gj-1,1,-1]].map(o=>({sg:c.segMap.get(o[0]+','+o[1]+','+o[2]),sgn:o[3]})).filter(o=>o.sg&&!(o.sg===s));
+        const str=opts.find(o=>o.sg.dir===s.dir&&o.sgn===k.sgn);const pick=str&&Math.random()<.65?str:opts.length?opts[Math.floor(Math.random()*opts.length)]:null;
+        if(pick){k.sg=pick.sg;k.sgn=pick.sgn;}else k.sgn=-k.sgn;k.t-=1;}
+      const s=k.sg,al=(k.t-.5)*B*k.sgn;let x,z,ry;
+      if(s.dir===0){x=s.x+al;z=s.z+k.sgn*3;ry=k.sgn>0?0:Math.PI;}else{x=s.x-k.sgn*3;z=s.z+al;ry=k.sgn>0?-Math.PI/2:Math.PI/2;}
+      _cq.setFromAxisAngle(_cy,ry);_cm.compose(_cp.set(x,9.15,z),_cq,_cs);c.carB.setMatrixAt(n,_cm);c.carC.setMatrixAt(n,_cm);});
+    c.carB.instanceMatrix.needsUpdate=true;c.carC.instanceMatrix.needsUpdate=true;}}
 function cityH(x,z){
   let h=-99;
   for(const c of CITIES){if(Math.abs(x-c.x)>c.r*1.25||Math.abs(z-c.z)>c.r*1.25)continue;h=Math.max(h,cityGround(c,x,z));
@@ -3472,6 +3492,7 @@ function step(dt){
   for(const p of planes){if(!p.alive)continue;if(p.isPlayer)controlPlayer(p,dt);else botThink(p,dt);updatePlane(p,dt);
     if(!p.acc){p.acc=new V3();p.pv=p.vel.clone();}else if(dt>0){tA.copy(p.vel).sub(p.pv).divideScalar(dt);if(tA.lengthSq()<1e6)p.acc.lerp(tA,Math.min(1,dt*6));p.pv.copy(p.vel);}}
   planes=planes.filter(p=>p.alive);
+  updateTraffic(dt);
   updateShips(dt);updateWrecks(dt);updateZones(dt);updateStrikes(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateAps(dt);updateShock(dt);if(tgtT>0){tgtT-=dt;if(tgtT<=0)$('#tgtbar').style.display='none';}updateFlares(dt);
   smokeP.update(dt);fireP.update(dt);updateFx(dt);
   if(state==='dead'){deadT-=dt;if(deadT<=0)toHangar();}
