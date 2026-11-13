@@ -1755,13 +1755,15 @@ function newPlane(pilot,def,team,paint,loadIdx){
 }
 function spawnBot(pilot){
   const t=T[pilot.isPlayer?myTeam:(T.blue.pilots.includes(pilot)?'blue':'red')],id=t.id;
-  const ids=pilot.role==='f'?['f16','f4e','mig29','j7','mir','fa18','su33','rafale','f35c']:['a4','av8b','f4e','fa18'];
+  const ids=pilot.role==='f'?['f16','f4e','mig29','j7','mir','fa18','su33','rafale','f35c']:['a4','av8b','f4e','fa18',id==='red'?'ka52':'ah64',id==='red'?'ka52':'ah64'];
   const def=DEF[ids[Math.floor(Math.random()*ids.length)]];
   const p=newPlane(pilot,def,id,null,pilot.role==='f'?2:0);
   const sps=spawnPoints(id),sp=sps.length>1&&Math.random()<.6?sps[1+Math.floor(Math.random()*(sps.length-1))]:sps[0];
   if(sp&&sp.kind==='base'){const b=sp.ref;cWorld(b,rnd(-100,100),rnd(500,800),rnd(-200,200),p.pos);p.q.setFromAxisAngle(AY,b.rot);}
   else{const c=t.carrier;p.pos.set(c.x+rnd(-300,300),rnd(600,900),c.z+t.dir*rnd(500,900));p.q.setFromAxisAngle(AY,c.rot);}
-  p.speed=210;p.thr=.85;p.assist=false;p.shield=4;return p;
+  p.speed=210;p.thr=.85;p.assist=false;p.shield=4;
+  if(def.heli){p.pos.y=Math.max(terrainH(p.pos.x,p.pos.z),0)+rnd(150,260);p.speed=0;p.vel.set(0,0,0);p.state='fly';p.thr=.5;p.hy=null;}
+  return p;
 }
 let spawnSel=0;
 function playerSpawn(def,paint,loadIdx){
@@ -2371,7 +2373,28 @@ function pickTarget(p){
   if(!best){for(const s of grounds){const d=s.pos.distanceTo(p.pos)*(s.kind==='carrier'?1.6:s.kind==='base'?1.2:1);if(d<bd){bd=d;best=s;}}}
   a.tgt=best;
 }
+/* helicopter pilots: hover-and-strike: fly at the target low, slow down in range, turn the nose onto it and fire guns, rockets, missiles */
+function heliBot(p,dt){
+  const a=p.ai;a.rt-=dt;if(a.rt<=0){a.rt=rnd(2,4);pickTarget(p);}if(a.tgt&&a.tgt.alive===false)a.tgt=null;
+  const tg=a.tgt,passive=match.training&&p.team!==myTeam;let tp=tA;
+  if(tg&&tg.kind==='zone'){tp.set(tg.zone.cx,0,tg.zone.cz);}else if(tg)tp.copy(tg.pos);else tp.set(0,0,T[enemyOf(p.team)].carrier.z*.5);
+  const dx=tp.x-p.pos.x,dz=tp.z-p.pos.z,hd=Math.hypot(dx,dz)||1,isAir=tg&&tg.kind==='plane';
+  let e=Math.atan2(-dx,-dz)-(p.hy||0);while(e>Math.PI)e-=6.2832;while(e<-Math.PI)e+=6.2832;
+  const k=Math.min(1,dt*3);a.sx=(a.sx||0)+(0-(a.sx||0))*k;p.inp.x=0;p.inp.yaw=clamp(-e*2.2,-1,1);
+  /* stand off at ~900 m from ground targets, chase aircraft */
+  const stand=isAir?300:900,fw=Math.abs(e)>.7?-.05:clamp((hd-stand)/600,-.3,1);p.inp.y=-fw;
+  /* altitude: low over the sea, higher over hills, match aircraft height */
+  const gl=Math.max(terrainH(p.pos.x,p.pos.z),terrainH(p.pos.x-Math.sin(p.hy||0)*300,p.pos.z-Math.cos(p.hy||0)*300),0);
+  const want=isAir?clamp(tg.pos.y,gl+60,gl+900):gl+(hd<1500?110:180);p.thr=clamp(.5+(want-p.pos.y)/80,.08,.95);
+  if(passive||!tg||a.egress>0){if(a.egress>0)a.egress-=dt;return;}
+  const dist=p.pos.distanceTo(tg.pos),dir=tB.copy(tg.pos).sub(p.pos).normalize(),f=fwdOf(p,tC),ang=Math.acos(clamp(dir.dot(f),-1,1));
+  if(Math.abs(e)<.12&&dist<1300&&(ang<.25||!isAir))fireGun(p);
+  if(!isAir&&p.ag>0&&p.agType==='rocket'&&Math.abs(e)<.08&&dist>500&&dist<2200)fireRocket(p);
+  if(isAir&&p.aa>0&&p.cd.wep<=0&&dist>500&&dist<3500&&Math.abs(e)<.3){a.lock+=dt;if(a.lock>1.6/a.skill*(tg.def&&tg.def.stealth?1.8:1)){a.lock=0;p.cd.wep=9;p.aa--;launchMissile(p,tg,'aa',p.team,fwdOf(p,tD).multiplyScalar(4).add(p.pos),p.aaId);}}
+  for(const m of missiles){if(m.target===p&&m.pos.distanceTo(p.pos)<1400){if(p.cd.fl<=0&&Math.random()<.5)dropFlares(p);p.inp.x=(a.evd=a.evd||(Math.random()<.5?1:-1));p.thr=.95;break;}}
+}
 function botThink(p,dt){
+  if(p.def.heli){if(p.state==='fly')heliBot(p,dt);return;}
   const a=p.ai;if(p.state!=='fly')return;
   a.rt-=dt;if(a.rt<=0){a.rt=rnd(2,4);pickTarget(p);}
   if(a.tgt&&a.tgt.alive===false)a.tgt=null;
