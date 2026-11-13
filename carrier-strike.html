@@ -1322,6 +1322,43 @@ function deckTexture(){
   const t=new THREE.CanvasTexture(c);t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;
 }
 let DECKTEX=null;
+/* carrier detail: superstructure tiers and windows, radar panels, funnel, radomes, hull numbers, hangar openings, gun sponsons, elevators, deck crew and tractors (all merged by bake) */
+function hullNumTex(t){const c=document.createElement('canvas');c.width=256;c.height=128;const x=c.getContext('2d');x.font='900 104px Arial,sans-serif';x.textAlign='center';x.textBaseline='middle';
+  x.lineWidth=8;x.strokeStyle='rgba(20,24,28,.9)';x.strokeText(t,128,68);x.fillStyle='#f2f2ee';x.fillText(t,128,68);const tx=new THREE.CanvasTexture(c);tx.anisotropy=4;return tx;}
+function carrierDetail(g,isl,team){
+  const grey=mat(0x9aa4ae,{roughness:.7}),dk=mat(0x1b232c,{metalness:.6,roughness:.2}),steel=mat(0x6a737c,{roughness:.6,metalness:.3}),white=mat(0xe8eaec,{roughness:.5}),black=mat(0x222428);
+  const B=(w,h,d,m,x,y,z,par)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);(par||g).add(o);return o;};
+  /* island: extra tier, window bands, bridge wings, slanted radar panels, funnel, radomes, yardarm */
+  B(12.4,1.1,40.4,dk,0,4,0,isl);B(12.4,1.1,40.4,dk,0,9.5,0,isl);B(8,7,16,grey,0,25.5,4,isl);B(8.4,1.3,16.4,dk,0,27,4,isl);
+  for(const sx of[-1,1])B(3,.6,6,grey,sx*6.5,22,10,isl);
+  for(const [sx,sz,ry] of[[1,1,.0],[-1,1,Math.PI],[1,-1,0],[-1,-1,Math.PI]]){const pnl=B(.4,5,5,mat(0x5e6670,{roughness:.5}),sx*5.3,16,sz*9,isl);pnl.rotation.z=-sx*.18;}
+  {const f=new THREE.Mesh(new THREE.CylinderGeometry(2.4,3,8,10),grey);f.position.set(0,26,-12);isl.add(f);B(5,.6,5,black,0,30.3,-12,isl);}
+  for(const [x,y,z,r] of[[3,31,8,1.6],[-3,30,10,1.3],[0,38,-2,1.2]]){const d=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),white);d.position.set(x,y,z);isl.add(d);}
+  B(14,.35,.35,steel,0,40,-2,isl);B(.25,6,.25,steel,5,43,-2,isl);B(.25,6,.25,steel,-5,43,-2,isl);
+  /* hull and island numbers */
+  const num=team==='blue'?'68':'063',nm=new THREE.MeshLambertMaterial({map:hullNumTex(num),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
+  for(const sx of[-1,1]){const pl=new THREE.Mesh(new THREE.PlaneGeometry(16,8),nm);pl.position.set(sx*27.2,10.5,-98);pl.rotation.y=sx*1.77;g.add(pl);}
+  {const pl=new THREE.Mesh(new THREE.PlaneGeometry(10,5),nm);pl.position.set(6.25,12,6);pl.rotation.y=Math.PI/2;isl.add(pl);const p2=pl.clone();p2.position.x=-6.25;p2.rotation.y=-Math.PI/2;isl.add(p2);}
+  /* hangar bay openings and anchor hawse */
+  for(const sx of[-1,1]){for(const z of[25,85])B(.5,6,22,dk,sx*36.9,11,z);const hw=new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.2,.6,10).rotateZ(Math.PI/2),black);hw.position.set(sx*19,15,-136);g.add(hw);}
+  /* corner sponsons: CIWS dome + missile box */
+  for(const [x,z] of[[-31,-118],[31,-118],[-36,128],[36,128]]){B(9,3.5,11,steel,x,DECK_Y-4.5,z);
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.5,1.4,10),white);base.position.set(x,DECK_Y-2.1,z-2);g.add(base);
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(1.2,12,8,0,Math.PI*2,0,Math.PI/2),white);dome.position.set(x,DECK_Y-1.4,z-2);g.add(dome);
+    const gun=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,2.6,6).rotateX(Math.PI/2),black);gun.position.set(x,DECK_Y-1.9,z-3.8);g.add(gun);
+    B(2.6,1.6,3.2,grey,x+(x>0?-2:2),DECK_Y-1.9,z+3);}
+  /* deck elevators (outlined plates) */
+  const elM=mat(0x4b5158,{roughness:.9,polygonOffset:true,polygonOffsetFactor:-3});
+  for(const z of[-60,40])B(14,.15,16,elM,40,DECK_Y+.08,z);
+  if(save.opt.q<1)return;
+  /* deck crew in coloured jerseys, tractors and a fire truck, kept clear of the runway */
+  const vests=[0xf2c230,0xd8392b,0x2f9e44,0x2f6fd6,0xf0f0f0,0x8a4fd0,0x7a5230],skin=mat(0xc89c7a),pants=mat(0x2c3138);
+  let k=0;for(const [x,z] of[[24,12],[25.5,14],[27,11],[31,18],[22,30],[23,33],[29,36],[33,40],[35,24],[21,44],[30,-2],[34,4],[22,-4],[25,50]]){const v=mat(vests[k++%vests.length],{roughness:.8});
+    B(.5,.9,.3,pants,x,DECK_Y+.45,z);B(.62,.7,.38,v,x,DECK_Y+1.25,z);const h=new THREE.Mesh(new THREE.SphereGeometry(.2,8,6),v);h.position.set(x,DECK_Y+1.8,z);g.add(h);}
+  const yel=mat(0xe8c030,{roughness:.7}),red=mat(0xc2302a,{roughness:.6});
+  for(const [x,z,r] of[[27,22,.4],[33,30,-.3]]){const t=B(2.2,1,3.4,yel,x,DECK_Y+.7,z);t.rotation.y=r;const cab=B(1.6,.8,1.2,black,x,DECK_Y+1.6,z+.8);cab.rotation.y=r;}
+  B(2.8,2.2,5.2,red,34,DECK_Y+1.3,48);B(2.4,.5,4,white,34,DECK_Y+2.6,48);
+}
 function buildCarrier(team){
   const g=new THREE.Group(),hull=mat(0x6f7b87,{roughness:.75,metalness:.15,envMapIntensity:.5,side:THREE.FrontSide}),grey=mat(0x9aa4ae,{roughness:.7,metalness:.1,envMapIntensity:.45});
   const sh=new THREE.Shape();sh.moveTo(0,165);sh.lineTo(-18,140);sh.lineTo(-34,60);sh.lineTo(-37,-150);sh.lineTo(37,-150);sh.lineTo(34,60);sh.lineTo(18,140);sh.closePath();
@@ -1354,6 +1391,7 @@ function buildCarrier(team){
   addL(-30,40,2.5,1.6,.2);addL(-30,44,2.5,1.6,.2);
   const lgm=new THREE.BufferGeometry();lgm.setAttribute('position',new THREE.Float32BufferAttribute(lp,3));lgm.setAttribute('color',new THREE.Float32BufferAttribute(lc,3));
   const pts=new THREE.Points(lgm,new THREE.PointsMaterial({size:1.6,vertexColors:true,map:GLOWTEX,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));g.add(pts);
+  carrierDetail(g,isl,team);
   /* parked aircraft near the island */
   if(save.opt.q>0){const ids=team==='blue'?['f4e','a4','f4e']:['mig29','j7','mig29'];
     ids.forEach((id,i)=>{const j=buildJet(DEF[id],null,team,true),u=j.userData;j.position.set(26,DECK_Y+u.gearH,-70+i*24);j.rotation.y=Math.PI*.78;
