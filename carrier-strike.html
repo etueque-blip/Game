@@ -156,6 +156,8 @@ body.ckpt #ckexit{display:block}
 body.minui .topbtns,body.minui #loopb,body.minui #rollb,body.minui #zoomb,body.minui #strikeb,body.minui #autob,body.minui #boostb,body.minui #keys,body.minui #slots,body.minui #obj,body.minui #modst,
 body.minui #turnL,body.minui #turnR,body.minui #nextw,body.minui #ring,body.minui #rdspd,body.minui #rdalt,body.minui #feed,body.minui #hint,body.minui #thrp{display:none!important}
 html{touch-action:manipulation}
+/* home-screen app on iPhone/iPad: the system hides the strip under the home bar from 100%, so size to the real screen */
+#ui,canvas#gl,#flare{bottom:auto!important;height:var(--fh,100%)!important}html,body{height:var(--fh,100%)}
 body.minui #flareb{opacity:.75}
 .gpf{outline:3px solid var(--yellow)!important;outline-offset:2px;box-shadow:0 0 1.2rem #ffc94a88!important}
 #rotate{display:none}@media (orientation:portrait) and (max-width:700px){body.touch #rotate{display:grid;position:fixed;inset:0;z-index:300;background:#06121cf2;color:#fff;place-items:center;text-align:center;font:800 1.3rem var(--ui);padding:2rem}}
@@ -508,12 +510,16 @@ function setupPost(){
   }catch(e){console.warn('post fx off',e);composer=null;}
 }
 let dynScale=IS_TOUCH?.8:1;
+/* real usable screen size; in the iOS home-screen app innerHeight leaves out the home-bar strip */
+let VW=innerWidth,VH=innerHeight;
+function fullSize(){let w=innerWidth,h=innerHeight;if(navigator.standalone||matchMedia('(display-mode: standalone)').matches){const land=w>h,a=Math.max(screen.width,screen.height),b=Math.min(screen.width,screen.height),sw=land?a:b,sh=land?b:a;if(sh>h&&sh-h<140&&Math.abs(sw-w)<4)h=sh;}return [w,h];}
 function resize(){
+  const [FW,FH]=fullSize();VW=FW;VH=FH;document.documentElement.style.setProperty('--fh',FH+'px');
   const pr=Math.max(.5,Math.min(window.devicePixelRatio||1,[1,1.5,2,2.5,3][save.opt.q]||1)*dynScale);
-  renderer.setPixelRatio(pr);renderer.setSize(window.innerWidth,window.innerHeight,false);
-  camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
-  if(composer){composer.setPixelRatio(pr);composer.setSize(innerWidth,innerHeight);}
-  const hc=$('#hudc');if(hc){const r=Math.min(window.devicePixelRatio||1,2);hc.width=innerWidth*r;hc.height=innerHeight*r;hudScale=r;}
+  renderer.setPixelRatio(pr);renderer.setSize(FW,FH,false);
+  camera.aspect=FW/FH;camera.updateProjectionMatrix();
+  if(composer){composer.setPixelRatio(pr);composer.setSize(FW,FH);}
+  const hc=$('#hudc');if(hc){const r=Math.min(window.devicePixelRatio||1,2);hc.width=VW*r;hc.height=VH*r;hudScale=r;}
 }
 let hudScale=1;
 window.addEventListener('resize',()=>{resize();if(composer)setupPost();});resize();setupPost();
@@ -1227,9 +1233,19 @@ function buildJet(d,paint,team,lite){
   const strobe=navLight(0xffffff,2.4);if(finTop)strobe.position.copy(finTop);else strobe.position.set(0,b.R,b.L/2);g.add(strobe);
   /* landing gear */
   const gear=new THREE.Group();const gm=mat(0x9aa0a6,{metalness:.6}),tm=mat(0x161616,{roughness:.9});
-  const legs=[[0,-b.L*.32],[-b.R*1.4,b.L*.05],[b.R*1.4,b.L*.05]];const gh=b.R*1.15+.5;
-  legs.forEach(([x,z],i)=>{const st=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,gh,6),gm);st.position.set(x,-gh/2,z);gear.add(st);
-    const wh=new THREE.Mesh(new THREE.CylinderGeometry(i?.36:.28,i?.36:.28,.24,12).rotateZ(Math.PI/2),tm);wh.position.set(x,-gh,z);gear.add(wh);});
+  /* realistic gear: oleo strut (painted upper cylinder + chrome piston), drag brace, torque link, fat tyres with hubs, gear doors; same height as before */
+  const legs=[[0,-b.L*.25],[-b.R*1.3,b.L*.07],[b.R*1.3,b.L*.07]];const gh=b.R*1.15+.5;
+  const chrome=mat(0xd8dde2,{metalness:1,roughness:.18}),hubM=mat(0xb9bec4,{metalness:.7,roughness:.35}),strM=mat(0xe2e4e6,{metalness:.3,roughness:.5}),doorM=lite?gm:mat(new THREE.Color(col).multiplyScalar(.8),{roughness:.6});
+  legs.forEach(([x,z],i)=>{const main=i>0,wr=main?.46:.34,ww=main?.3:.22,sd=main?Math.sign(x):0,L=gh+.36-wr;
+    const up=new THREE.Mesh(new THREE.CylinderGeometry(main?.15:.12,main?.15:.12,L*.62,lite?6:10),strM);up.position.set(x,-L*.31,z);gear.add(up);
+    const pis=new THREE.Mesh(new THREE.CylinderGeometry(main?.085:.07,main?.085:.07,L*.5,lite?6:10),chrome);pis.position.set(x,-L*.72,z);gear.add(pis);
+    if(!lite){const br=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,L*.85,6),strM);br.position.set(x+sd*.25,-L*.4,z+(main?-.45:.4));br.rotation.x=main?-.55:.55;br.rotation.z=sd*.3;gear.add(br);
+      const tl=new THREE.Mesh(new THREE.BoxGeometry(.06,.3,.18),strM);tl.position.set(x,-L*.78,z+(main?.14:-.12));gear.add(tl);
+      const door=new THREE.Mesh(new THREE.BoxGeometry(.04,L*.55,main?1.2:.8),doorM);door.position.set(x+(main?sd*.32:.3),-L*.3,z);door.rotation.z=main?sd*.12:0;gear.add(door);}
+    const axleX=main?x+sd*.05:x,n=main?1:2;
+    for(let k=0;k<n;k++){const ox=n===2?(k?.13:-.13):0;
+      const tyre=new THREE.Mesh(new THREE.CylinderGeometry(wr,wr,ww,lite?10:20).rotateZ(Math.PI/2),tm);tyre.position.set(axleX+ox,-gh-.36+wr,z);gear.add(tyre);
+      if(!lite){const hub=new THREE.Mesh(new THREE.CylinderGeometry(wr*.55,wr*.55,ww+.02,14).rotateZ(Math.PI/2),hubM);hub.position.copy(tyre.position);gear.add(hub);}}});
   gear.visible=false;g.add(gear);
   let vcone=null;if(!lite){const vc=document.createElement('canvas');vc.width=8;vc.height=128;const vx=vc.getContext('2d');const gr=vx.createLinearGradient(0,0,0,128);gr.addColorStop(0,'rgba(255,255,255,0)');gr.addColorStop(.25,'rgba(255,255,255,.9)');gr.addColorStop(1,'rgba(255,255,255,0)');vx.fillStyle=gr;vx.fillRect(0,0,8,128);
     vcone=new THREE.Mesh(new THREE.ConeGeometry(b.R*2.6,b.L*.42,24,1,true).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(vc),transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));
@@ -3180,7 +3196,7 @@ function updateHud(dt){
   let n=0;
   const showT=(pos,col,text,lock,cls)=>{if(n>=12||!project(pos,tC))return;const el=tgEl(n++);el.style.display='';el.className='tg'+(lock?' lk':'')+(cls?' '+cls:'');
     el.firstChild.style.borderColor=col;el.lastChild.style.color=col;el.lastChild.textContent=text;
-    el.style.transform='translate('+((tC.x*.5+.5)*innerWidth)+'px,'+((-tC.y*.5+.5)*innerHeight-12)+'px) translate(-50%,0)';};
+    el.style.transform='translate('+((tC.x*.5+.5)*VW)+'px,'+((-tC.y*.5+.5)*VH-12)+'px) translate(-50%,0)';};
   /* enemy planes: a small square on each (6 nearest), text only on the nearest / locked one */
   {const en=planes.filter(q=>q.alive&&q.team!==p.team&&q!==p).map(q=>[q,q.pos.distanceTo(p.pos)]).filter(a=>a[1]<7000).sort((a,b)=>a[1]-b[1]).slice(0,6);
    en.forEach(([q,d],i)=>{const lkq=p.lockT===q&&p.locked,main=i===0||lkq||p.autoT===q;showT(q.pos,lkq?'#ff9a3c':'#ff4a3a',main?(d/1000).toFixed(1)+' км':'',lkq,main?'sq big':'sq');});}
@@ -3224,7 +3240,7 @@ function edgeArrow(c,target,cx,cy,R,col,size){
   c.save();c.translate(x,y);c.rotate(a);c.fillStyle=col;c.beginPath();c.moveTo(size,0);c.lineTo(-size*.6,size*.7);c.lineTo(-size*.6,-size*.7);c.closePath();c.fill();c.restore();
 }
 function drawHud(p){
-  const c=hctx,W=innerWidth,H=innerHeight;c.setTransform(hudScale,0,0,hudScale,0,0);c.clearRect(0,0,W,H);
+  const c=hctx,W=VW,H=VH;c.setTransform(hudScale,0,0,hudScale,0,0);c.clearRect(0,0,W,H);
   if(!p||!p.alive||(p.state!=='fly'&&p.state!=='launch'))return;
   const cx=W/2,cy=H/2,RR=Math.min(W,H)*.22,fs=Math.max(11,Math.min(16,H/60));
   c.font='500 '+fs+'px "Roboto Mono",monospace';c.textAlign='center';c.textBaseline='middle';c.lineCap='round';
@@ -3304,7 +3320,7 @@ function perfTick(raw){
 }
 const flc=$('#flare'),flx=flc.getContext('2d'),sunP=new V3();
 function drawFlare(){
-  const W=innerWidth,H=innerHeight;if(flc.width!==W||flc.height!==H){flc.width=W;flc.height=H;}
+  const W=VW,H=VH;if(flc.width!==W||flc.height!==H){flc.width=W;flc.height=H;}
   flx.clearRect(0,0,W,H);if(save.opt.q<2)return;
   sunP.copy(SUN).multiplyScalar(30000).add(camera.position).project(camera);if(sunP.z>1||Math.abs(sunP.x)>1.3||Math.abs(sunP.y)>1.3)return;
   /* hidden behind the jet's nose or terrain? sample the scene depth cheaply: skip when the sun is below the horizon */
