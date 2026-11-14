@@ -421,10 +421,15 @@ const W={
  r77:{n:'Р-77',s:'Р-77',d:'Радар, дальняя, не видит ловушки',kind:'aa',ir:false,range:7000,lock:1.8,cone:.2,v:880,turn:1.9,dmg:85,cd:2.5,flare:0,burn:8,life:20,len:3.6,r:.17,col:0xc8d0c0},
  agm65:{n:'AGM-65 Мэверик',s:'AGM-65',d:'Управляемая по кораблям',kind:'ag',range:6000,lock:1.2,cone:.25,v:380,turn:1.4,dmg:420,cd:1.5,burn:99,life:30,len:2.5,r:.22,col:0xd8d8c0},
  harpoon:{n:'AGM-84 Гарпун',s:'ГАРПУН',d:'Противокорабельная, летит над водой',kind:'ag',skim:true,range:11000,lock:1.6,cone:.35,v:300,turn:.9,dmg:1100,cd:3,burn:99,life:45,len:4.6,r:.27,col:0x9aa3aa},
+ hellfire:{n:'AGM-114 Хеллфайр',s:'ПТУР',d:'Противотанковая: техника, ЗРК, катера',kind:'ag',range:7000,lock:.6,cone:.35,v:420,turn:2.4,dmg:380,cd:.9,burn:99,life:25,len:1.6,r:.1,col:0x3e4a36},
+ vikhr:{n:'9К121 Вихрь',s:'ВИХРЬ',d:'Противотанковая: техника, ЗРК, катера',kind:'ag',range:8000,lock:.6,cone:.35,v:450,turn:2.3,dmg:400,cd:.9,burn:99,life:25,len:2.8,r:.1,col:0x5a6448},
  rocket:{n:'Hydra 70 НАР',s:'НАР',d:'Неуправляемые ракеты',kind:'rocket'},
  bomb:{n:'Mk.82 500lb',s:'БОМБА',d:'Свободнопадающая бомба',kind:'bomb'}};
 const LOADS=[['РАКЕТЫ',[['aim9',2],['rocket',38]]],['БОМБЫ',[['aim9',2],['bomb',4]]],['ПВО',[['aim9',4],['aim120',2]]],['ПРОТИВОКОРАБЕЛЬНАЯ',[['aim9',2],['harpoon',2]]],['ТОЧНЫЙ УДАР',[['aim120',2],['agm65',4]]]];
-function loadWeps(def,idx){const ru=def.country==='RUSSIA'||def.country==='CHINA';return (LOADS[idx||0]||LOADS[0])[1].map(([id,n])=>({id:ru&&id==='aim9'?'r73':ru&&id==='aim120'?'r77':id,n:def.bay&&!/^aim/.test(id)?n*def.bay:n}));}
+/* helicopters carry anti-tank missiles instead of the jets' heavy stores */
+const HLOADS=[['ПТУР',[['aim9',2],['hellfire',8]]],['НАР + ПТУР',[['rocket',38],['hellfire',4]]],['ПВО',[['aim9',4],['hellfire',4]]]];
+function loadsOf(def){return def.heli?HLOADS:LOADS;}
+function loadWeps(def,idx){const ru=def.country==='RUSSIA'||def.country==='CHINA',L=loadsOf(def);return (L[idx||0]||L[0])[1].map(([id,n])=>({id:ru&&id==='aim9'?'r73':ru&&id==='aim120'?'r77':ru&&id==='hellfire'?'vikhr':id,n:def.bay&&!/^aim/.test(id)?n*def.bay:n}));}
 function applyLoad(p,idx){p.loadIdx=idx||0;p.weps=loadWeps(p.def,p.loadIdx);const aaS=p.weps.find(w=>W[w.id].kind==='aa'),agS=p.weps.find(w=>W[w.id].kind==='rocket'||W[w.id].kind==='bomb');
   p.aa=aaS?aaS.n:0;p.aaId=aaS?aaS.id:'aim9';p.ag=agS?agS.n:0;p.agType=agS?agS.id:(p.weps.some(w=>W[w.id].kind==='ag')?'agm':null);if(p.sel>=p.weps.length)p.sel=0;}
 function curW(p){return p.weps&&(p.weps[p.sel]||p.weps[0]);}
@@ -1849,7 +1854,7 @@ function spawnBot(pilot){
   const t=T[pilot.isPlayer?myTeam:(T.blue.pilots.includes(pilot)?'blue':'red')],id=t.id;
   const ids=pilot.role==='f'?['f16','f4e','mig29','j7','mir','fa18','su33','rafale','f35c']:['a4','av8b','f4e','fa18',id==='red'?'ka52':'ah64',id==='red'?'ka52':'ah64'];
   const def=DEF[ids[Math.floor(Math.random()*ids.length)]];
-  const p=newPlane(pilot,def,id,null,pilot.role==='f'?2:0);
+  const p=newPlane(pilot,def,id,null,def.heli?1:pilot.role==='f'?2:0);
   const sps=spawnPoints(id),sp=sps.length>1&&Math.random()<.6?sps[1+Math.floor(Math.random()*(sps.length-1))]:sps[0];
   if(sp&&sp.kind==='base'){const b=sp.ref;cWorld(b,rnd(-100,100),rnd(500,800),rnd(-200,200),p.pos);p.q.setFromAxisAngle(AY,b.rot);}
   else{const c=t.carrier;p.pos.set(c.x+rnd(-300,300),rnd(600,900),c.z+t.dir*rnd(500,900));p.q.setFromAxisAngle(AY,c.rot);}
@@ -2423,7 +2428,8 @@ function updateMissiles(dt){
       if(m.type==='ship')tA.y=Math.max(tA.y,12);
       /* strike missiles: climb out of the silo, cruise high, then dive onto the base */
       if(m.type==='strike'){const hd=Math.hypot(tA.x-m.pos.x,tA.z-m.pos.z);if(m.age<4)tA.set(m.pos.x+m.dir.x*50,m.pos.y+400,m.pos.z+m.dir.z*50);else if(hd>1700)tA.y=1500;}
-      if(m.type==='agm'){const hd=Math.hypot(tA.x-m.pos.x,tA.z-m.pos.z);tA.y=m.skim&&hd>700?10:m.target.pos.y+6;if(!m.skim&&hd>1500)tA.y=Math.max(tA.y,m.pos.y-hd*.25);}
+      if(m.type==='agm'){const hd=Math.hypot(tA.x-m.pos.x,tA.z-m.pos.z);tA.y=m.skim&&hd>700?10:m.target.pos.y+6;if(!m.skim&&hd>1500)tA.y=Math.max(tA.y,m.pos.y-hd*.25);
+        /* anti-tank missiles loft over hills and dive onto the target */if(m.wid==='hellfire'||m.wid==='vikhr')tA.y=m.target.pos.y+4+Math.min(260,Math.max(0,hd-250)*.3);}
       tA.sub(m.pos);const dist=tA.length();tA.normalize();
       const ang=Math.acos(clamp(tA.dot(m.dir),-1,1));
       if(ang>2&&homing&&m.type!=='agm'){m.target=null;}
@@ -2487,6 +2493,7 @@ function heliBot(p,dt){
   const dist=p.pos.distanceTo(tg.pos),dir=tB.copy(tg.pos).sub(p.pos).normalize(),f=fwdOf(p,tC),ang=Math.acos(clamp(dir.dot(f),-1,1));
   if(Math.abs(e)<.12&&dist<1300&&(ang<.25||!isAir))fireGun(p);
   if(!isAir&&p.ag>0&&p.agType==='rocket'&&Math.abs(e)<.08&&dist>500&&dist<2200)fireRocket(p);
+  if(!isAir&&p.cd.wep<=0&&Math.abs(e)<.2&&dist>700&&dist<5500){const w=(p.weps||[]).find(x=>(x.id==='hellfire'||x.id==='vikhr')&&x.n>0);if(w){w.n--;p.cd.wep=4;launchMissile(p,tg,'agm',p.team,fwdOf(p,tD).multiplyScalar(3).add(p.pos),w.id);}}
   if(isAir&&p.aa>0&&p.cd.wep<=0&&dist>500&&dist<3500&&Math.abs(e)<.3){a.lock+=dt;if(a.lock>1.6/a.skill*(tg.def&&tg.def.stealth?1.8:1)){a.lock=0;p.cd.wep=9;p.aa--;launchMissile(p,tg,'aa',p.team,fwdOf(p,tD).multiplyScalar(4).add(p.pos),p.aaId);}}
   for(const m of missiles){if(m.target===p&&m.pos.distanceTo(p.pos)<1400){if(p.cd.fl<=0&&Math.random()<.5)dropFlares(p);p.inp.x=(a.evd=a.evd||(Math.random()<.5?1:-1));p.thr=.95;break;}}
 }
@@ -2769,7 +2776,7 @@ function renderHangar(){
     row('Прочность',d.hp)+row('Пушка',d.gun+(d.ammo?' x'+d.ammo:''))+row('Цена',d.price?fmtN(d.price)+' CR':'БЕСПЛАТНО')+'</div>';}
   $('#vname').textContent=d.name;$('#vcls').textContent=d.cls+' // '+d.country;$('#vtrait').textContent=d.trait;
   const li=save.loadout[d.id]||0,pi=save.paint[d.id]||0;
-  $('#bLoad').textContent='КОНФИГУРАЦИЯ: '+LOADS[li][0]+'  >';$('#bPaint').textContent='ОКРАС: '+PAINTS[pi][0]+'  >';
+  $('#bLoad').textContent='КОНФИГУРАЦИЯ: '+(loadsOf(d)[li]||loadsOf(d)[0])[0]+'  >';$('#bPaint').textContent='ОКРАС: '+PAINTS[pi][0]+'  >';
   const u=upgOf(d.id);
   $('#upgs').innerHTML=UPG.map((r,i)=>{const lv=u[r[1]],b=d.base[i];let s='';for(let k=0;k<10;k++)s+='<i class="'+(k<b?'b':(k<b+lv?'u':''))+'"></i>';
     return '<div class="upg"><span>'+r[0]+'</span><div class="segs">'+s+'</div><button class="btn" data-u="'+r[1]+'">'+(lv>=5?'MAX':'+400 CR')+'</button></div>';}).join('')+
@@ -2785,7 +2792,7 @@ function renderHangar(){
 }
 $('#chips').addEventListener('click',e=>{const c=e.target.dataset.c;if(c){fil=c;renderHangar();}});
 $('#vlist').addEventListener('click',e=>{const b=e.target.closest('.veh');if(b){save.sel=b.dataset.id;persist();renderHangar();buildPreview();}});
-$('#bLoad').onclick=()=>{const d=save.sel;save.loadout[d]=((save.loadout[d]||0)+1)%LOADS.length;persist();renderHangar();};
+$('#bLoad').onclick=()=>{const d=save.sel;save.loadout[d]=((save.loadout[d]||0)+1)%loadsOf(DEF[d]).length;persist();renderHangar();};
 $('#bPaint').onclick=()=>{const d=save.sel;save.paint[d]=((save.paint[d]||0)+1)%PAINTS.length;persist();renderHangar();buildPreview();};
 $('#upgs').addEventListener('click',e=>{
   const mk=e.target.dataset.m;if(mk){const M=MODS[mk],m=modsOf(save.sel);
