@@ -902,7 +902,7 @@ function cityGround(c,x,z){
   if(hd<1&&u>0)h=Math.max(h,Math.pow(1-hd,1.6)*c.hill[2]*(1+.15*Math.sin(x*.03)*Math.sin(z*.027))+6);
   return h;
 }
-const BCELL=80,bGrid=new Map();
+let CITYMAT=null;const BCELL=80,bGrid=new Map();
 function bKey(i,j){return i*100003+j;}
 (function(){
   /* facade texture: one tile = 4x4 windows; uv is scaled per instance in the shader so windows keep a constant size */
@@ -910,7 +910,11 @@ function bKey(i,j){return i*100003+j;}
   x.fillStyle='#d9dde2';x.fillRect(0,0,128,128);
   for(let i=0;i<4;i++)for(let j=0;j<4;j++){const v=rnd(.25,.6);x.fillStyle='rgb('+Math.round(40*v+20)+','+Math.round(70*v+40)+','+Math.round(100*v+60)+')';x.fillRect(i*32+6,j*32+7,20,18);}
   const tex=new THREE.CanvasTexture(c);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.anisotropy=4;
-  const bm=new THREE.MeshStandardMaterial({map:tex,roughness:.55,metalness:.2,envMap:ENVTEX,envMapIntensity:.6});
+  /* lit-windows texture for night: same 4x4 layout, about half the windows glow */
+  const ec=document.createElement('canvas');ec.width=ec.height=128;const ex=ec.getContext('2d');ex.fillStyle='#000';ex.fillRect(0,0,128,128);
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){if(Math.random()<.5)continue;ex.fillStyle=Math.random()<.7?'#ffd98a':'#cfe4ff';ex.fillRect(i*32+6,j*32+7,20,18);}
+  const etex=new THREE.CanvasTexture(ec);etex.wrapS=etex.wrapT=THREE.RepeatWrapping;
+  const bm=CITYMAT=new THREE.MeshStandardMaterial({emissiveMap:etex,emissive:0x000000,map:tex,roughness:.55,metalness:.2,envMap:ENVTEX,envMapIntensity:.6});
   bm.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <uv_vertex>',
     '#ifdef USE_UV\n vec3 isc=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));\n'+
     ' if(abs(normal.y)>.5) vUv=vec2(.02,.02); else { float w=abs(normal.x)>.5?isc.z:isc.x; vUv=vec2(uv.x*w/16.,uv.y*isc.y/16.); }\n#endif');};
@@ -1823,7 +1827,7 @@ function zoneText(z){return z.owner?(z.owner==='blue'?'СИНИЕ':'КРАСНЫ
 function spawnPoints(team){const a=[];if(T[team].carrier.alive)a.push({kind:'carrier',ref:T[team].carrier,name:'Авианосец'});for(const b of BASES)if(b.owner===team&&b.hp>0)a.push({kind:'base',ref:b,name:b.short});return a;}
 function homeOf(sp){return sp.kind==='carrier'?{f:sp.ref,x:-8,y:DECK_Y,z0:70,zEnd:-160,acc:1.5,kind:'carrier'}:{f:sp.ref,x:0,y:RW.H,z0:RW.L/2-40,zEnd:-RW.L/2+90,acc:3.5,kind:'base'};}
 function resetMatch(){
-  WX.rain=Math.random()<.3?rnd(.65,1):0;WX.told=false;
+  WX.rain=Math.random()<.3?rnd(.65,1):0;WX.told=false;{const t=Math.random();WX.dusk=t>.5&&t<.75?.9:0;WX.night=t>=.75?1:0;}
   resetConvoys();
   planes.forEach(removePlane);planes=[];missiles.forEach(m=>scene.remove(m.mesh));missiles=[];rockets=[];bombs.forEach(b=>scene.remove(b.mesh));bombs=[];flares=[];bullets=[];sinkers=[];
   player=null;
@@ -1864,7 +1868,7 @@ function spawnBot(pilot){
 }
 let spawnSel=0;
 function playerSpawn(def,paint,loadIdx){
-  if(WX.rain>0&&!WX.told){WX.told=true;setTimeout(()=>toast('🌧 Погода: дождь — видимость хуже, враги ближе, чем кажутся'),1500);}
+  if(!WX.told){WX.told=true;const m=(WX.night?'🌙 Ночной бой':WX.dusk?'🌅 Бой на закате':'')+(WX.rain>0?(WX.night||WX.dusk?' · ':'')+'🌧 дождь — видимость хуже':'');if(m)setTimeout(()=>toast(m),1500);}
   const sps=spawnPoints(myTeam),sp=sps[spawnSel%Math.max(1,sps.length)]||{kind:'carrier',ref:T[myTeam].carrier};
   const p=newPlane(myPilot,def,myTeam,paint,loadIdx);p.home=homeOf(sp);const h=p.home;
   p.state='cat';p.thr=0;p.assist=save.opt.assist;p.shield=6;
@@ -2688,12 +2692,20 @@ function applyMood(m){
   const r=WX.cur;if(r>0){PAL.hz.lerp(_wv.set(.46,.5,.54),r*.7);PAL.mid.lerp(_wv.set(.4,.44,.5),r*.8);PAL.zn.lerp(_wv.set(.3,.34,.4),r*.8);PAL.cloud.lerp(_wv.set(.56,.58,.62),r*.8);PAL.sunC.multiplyScalar(1-.6*r);
     HORIZON.setRGB(PAL.hz.x,PAL.hz.y,PAL.hz.z);scene.fog.color.copy(HORIZON);scene.background.copy(HORIZON);sunL.intensity*=1-.6*r;renderer.toneMappingExposure*=1-.12*r;}
   scene.fog.near=7000*(1-.75*r);scene.fog.far=34000*(1-.6*r);
+  /* night: dark blue sky, moonlight, lit city windows */
+  const n=WX.ncur;if(n>0){PAL.hz.lerp(_wv.set(.05,.08,.15),n);PAL.mid.lerp(_wv.set(.025,.045,.1),n);PAL.zn.lerp(_wv.set(.008,.015,.045),n);PAL.cloud.lerp(_wv.set(.13,.16,.24),n);PAL.sunC.lerp(_wv.set(.55,.62,.8),n);
+    HORIZON.setRGB(PAL.hz.x,PAL.hz.y,PAL.hz.z);scene.fog.color.copy(HORIZON);scene.background.copy(HORIZON);sunL.color.lerp(_c.setRGB(.6,.7,1),n);sunL.intensity*=1-.72*n;renderer.toneMappingExposure*=1-.1*n;}
+  hemi.intensity=.45*(1-.55*n);if(CITYMAT)CITYMAT.emissive.setRGB(1.6*n,1.5*n,1.2*n);
 }
 /* weather: some matches are rainy; streaks fall around the camera */
-const WX={rain:0,cur:0},_wv=new V3();let rainLines=null;
+const WX={rain:0,cur:0,dusk:0,night:0,ncur:0},_wv=new V3();let rainLines=null,stars=null;
 function initRain(){const N=save.opt.q>=2?1400:600,pos=new Float32Array(N*6),off=new Float32Array(N*3);for(let i=0;i<N*3;i++)off[i]=rnd(-160,160);
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));rainLines=new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0xb8c4d0,transparent:true,opacity:.38,depthWrite:false}));rainLines.frustumCulled=false;rainLines.userData.off=off;rainLines.visible=false;scene.add(rainLines);}
 function updateWeather(dt){
+  {const wn=(state==='hud'||state==='dead')?WX.night:0;if(Math.abs(WX.ncur-wn)>.002){WX.ncur+=(wn-WX.ncur)*Math.min(1,dt*.8);if(Math.abs(WX.ncur-wn)<.003)WX.ncur=wn;applyMood(MOOD.v);}
+   if(WX.ncur>.02&&!stars){const N=700,ps=new Float32Array(N*3);for(let i=0;i<N;i++){const a=Math.random()*6.283,y=Math.random()*.95+.03,r=Math.sqrt(1-y*y);ps[i*3]=Math.cos(a)*r*30000;ps[i*3+1]=y*30000;ps[i*3+2]=Math.sin(a)*r*30000;}
+     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(ps,3));stars=new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:2.2,sizeAttenuation:false,transparent:true,opacity:0,fog:false,depthWrite:false}));stars.frustumCulled=false;stars.renderOrder=-9;scene.add(stars);}
+   if(stars){stars.visible=WX.ncur>.02;stars.position.copy(camera.position);stars.material.opacity=WX.ncur*(1-.8*WX.cur);}}
   const want=(state==='hud'||state==='dead')?WX.rain:0;if(Math.abs(WX.cur-want)>.002){WX.cur+=(want-WX.cur)*Math.min(1,dt*.8);if(Math.abs(WX.cur-want)<.003)WX.cur=want;applyMood(MOOD.v);}
   if(!rainLines){if(WX.cur>.02)initRain();else return;}
   rainLines.visible=WX.cur>.05;if(!rainLines.visible)return;rainLines.material.opacity=.38*WX.cur;
@@ -2716,7 +2728,7 @@ function buildShowcase(){
 }
 function updateShowcase(dt){
   updateWeather(dt);
-  const target=state==='menu'?1:0;
+  const target=state==='menu'?1:(state==='hud'||state==='dead')?WX.dusk:0;
   if(Math.abs(MOOD.v-target)>.001){MOOD.v+=(target-MOOD.v)*Math.min(1,dt*1.2);if(Math.abs(MOOD.v-target)<.002)MOOD.v=target;applyMood(MOOD.v);}
   if(!showJets)return;
   showJets.visible=state==='menu';crew.visible=state==='menu'&&!!preview;
