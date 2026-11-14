@@ -2123,7 +2123,7 @@ function killPlane(p,by,w){
   p.alive=false;explosion(p.pos,18,false);sfx('boom',p.pos);
   const col=T[p.team].color===T.blue.color?'var(--blue)':'var(--red)';
   feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> ['+(w||'?')+'] <span style="color:'+col+'">'+pname(p)+'</span>');
-  if(by&&by.team!==p.team){award(by,100,100);if(by.isPlayer){prog('k');if(w==='пушка')prog('g');}}
+  if(by&&by.team!==p.team){award(by,100,100);if(by.isPlayer){prog('k');if(w==='пушка')prog('g');if(p.def.heli)prog('h');}}
   if(!match.training)T[p.team].tickets=Math.max(0,T[p.team].tickets-4);
   const wasPlayer=p.isPlayer;
   if(!by&&['вода','столкновение','гора','земля','здание','авианосец','корабль'].includes(w)||p.state!=='fly')removePlane(p);else makeWreck(p);
@@ -2174,7 +2174,7 @@ function dmgShip(s,a,by,w){
   if(s.kind==='carrier'&&!match.training)T[s.team].tickets=Math.max(0,T[s.team].tickets-a/CARR_HP*50);
   if(s.hp<=0&&s.kind==='veh'){s.alive=false;s.mesh.visible=false;explosion(s.pos.clone().setY(s.pos.y+2),16,false);sfx('boom',s.pos);smoke(s.pos.x,s.pos.y+2,s.pos.z,6,20,6,2,.7,true);
     feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> ['+(w||'?')+'] <span style="color:'+(s.team==='blue'?'var(--blue)':'var(--red)')+'">'+s.name+'</span>');
-    if(by&&by.team!==s.team){award(by,s.vtype==='sam'?180:120,100);if(by.isPlayer)toast('💥 '+s.name.split(' (')[0]+' уничтожен! +'+(s.vtype==='sam'?180:120)+' CR');}if(!match.training)T[s.team].tickets=Math.max(0,T[s.team].tickets-2);checkEnd();return;}
+    if(by&&by.team!==s.team){award(by,s.vtype==='sam'?180:120,100);if(by.isPlayer){prog('v');if(s.vtype==='sam')prog('a');}if(by.isPlayer)toast('💥 '+s.name.split(' (')[0]+' уничтожен! +'+(s.vtype==='sam'?180:120)+' CR');}if(!match.training)T[s.team].tickets=Math.max(0,T[s.team].tickets-2);checkEnd();return;}
   if(s.hp<=0){
     s.alive=false;if(s.kind==='carrier')nuke(s.pos.clone().setY(15),1.1);else explosion(s.pos.clone().setY(15),34,false);sfx('boom');
     feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> ['+(w||'?')+'] <span style="color:'+(s.team==='blue'?'var(--blue)':'var(--red)')+'">'+s.name+'</span>');
@@ -2528,7 +2528,7 @@ function botThink(p,dt){
 /* ---------- match flow ---------- */
 function endMatch(winner){
   if(match.over)return;match.over=true;
-  const win=winner===myTeam;const bonus=win?500:100;save.cr+=bonus;persist();
+  const win=winner===myTeam;const bonus=win?500:100;save.cr+=bonus;persist();if(win&&!match.training)prog('w');
   state=state==='hud'?'result':state;
   showModal('<h2>'+(winner==='blue'?'ПОБЕДА СИНИХ':'ПОБЕДА КРАСНЫХ')+'</h2><div>'+(win?'Ваша команда победила.':'Ваша команда проиграла.')+' Награда: <b style="color:var(--yellow)">+'+bonus+' CR</b></div><div style="color:var(--dim)">Новый бой начнётся через несколько секунд.</div>');
   setTimeout(()=>{closeModal();if(player){removePlane(player);player=null;}resetMatch();toHangar();},7000);
@@ -2612,7 +2612,8 @@ let msgText='';function say(s){msgText=s;$('#msg').textContent=s;}
 /* missions: always 3 active tasks; each one done gets harder next time and pays more. Progress shows in flight. */
 const MT={k:['Сбить самолёты',[1,3,5,8,12],120],g:['Сбить самолёт из пушки',[1,2,4,6],150],m:['Сбить вражеские ракеты (пушка или ПРО)',[1,2,4,6],150],
   e:['Уйти от ракеты (ловушки или манёвр)',[1,2,4,6],110],b:['Потопить катер',[1,2,3,5],170],d:['Урон авианосцу',[400,1000,2000,3500],180],
-  t:['Урон вражескому острову',[600,1500,3000,5000],160],z:['Захватить остров',[1,2,3],320],l:['Посадка на авианосец или остров',[1,2,4],120],s:['Сделать бочку или петлю',[1,3,5],60]};
+  t:['Урон вражескому острову',[600,1500,3000,5000],160],z:['Захватить остров',[1,2,3],320],l:['Посадка на авианосец или остров',[1,2,4],120],s:['Сделать бочку или петлю',[1,3,5],60],
+  v:['Уничтожить технику в колоннах (дикие острова)',[2,4,6,10],140],a:['Уничтожить мобильный ЗРК',[1,2,3],200],h:['Сбить вертолёт',[1,2,4],170],w:['Победить в бою',[1,2,3],400]};
 function msave(){if(!save.ms||!save.ms.act){save.ms={act:[],done:0,lv:{}};}const M=save.ms;
   while(M.act.length<3){const free=Object.keys(MT).filter(k=>!M.act.some(a=>a.id===k));M.act.push({id:free[Math.floor(Math.random()*free.length)],n:0});}return M;}
 function mgoal(a){const t=MT[a.id],lv=Math.min(save.ms.lv[a.id]||0,t[1].length-1);return t[1][lv];}
@@ -2628,7 +2629,7 @@ function renderTrack(){const el=$('#mtrack');if(!el)return;const M=msave();
 function missionsHtml(){const M=msave();
   return '<h2>Задания</h2><div style="color:var(--dim);margin-bottom:.5rem">Всегда 3 задания. Выполнил — сразу деньги и новое задание, следующий раз сложнее, но дороже. Выполнено всего: <b style="color:var(--yellow)">'+M.done+'</b></div><table>'+
    M.act.map(a=>{const gl=mgoal(a);return '<tr><td>'+MT[a.id][0]+'</td><td>'+Math.min(Math.floor(a.n),gl)+'/'+gl+'</td><td style="color:var(--yellow)">+'+mreward(a)+' CR</td></tr>';}).join('')+
-   '</table><h3>Деньги в бою</h3><div style="color:var(--dim);font-size:.9rem">Самолёт +100 · катер +150 · сбитая ракета +80 (ПРО +100) · уход от ракеты +40 · захват острова +300 · разрушение базы +500 · посадка +25</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
+   '</table><h3>Деньги в бою</h3><div style="color:var(--dim);font-size:.9rem">Самолёт +100 · катер +150 · грузовик/танк +120 · мобильный ЗРК +180 · сбитая ракета +80 (ПРО +100) · уход от ракеты +40 · захват острова +300 · разрушение базы +500 · посадка +25</div><button class="btn" onclick="closeModal()">ЗАКРЫТЬ</button>';
 }
 function boardHtml(){
   const all=[];['blue','red'].forEach(id=>T[id].pilots.forEach(p=>all.push({n:p.isPlayer?'Вы':p.call+' ('+p.name+')',s:p.score,t:id})));
