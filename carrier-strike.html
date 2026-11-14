@@ -1452,6 +1452,38 @@ const NAMES=['Skyrider','Mavrik','Kestrel','Nimbus','Zephyr','Tundra','Jericho',
 function cWorld(c,lx,ly,lz,out){const s=Math.sin(c.rot),k=Math.cos(c.rot);return out.set(c.x+lx*k+lz*s,ly,c.z-lx*s+lz*k);}
 function cLocal(c,p,out){const dx=p.x-c.x,dz=p.z-c.z,s=Math.sin(c.rot),k=Math.cos(c.rot);return out.set(dx*k-dz*s,p.y,dx*s+dz*k);}
 
+/* ---------- ground convoys on the wild islands: trucks, a tank and a mobile SAM that drive a loop around the island ---------- */
+const convoys=[];
+function vehMesh(type,team){const g=new THREE.Group(),cam=mat(team==='blue'?0x5b6448:0x6b6550,{roughness:.8}),dk=mat(0x1c1f22,{roughness:.8}),tyre=mat(0x141414,{roughness:.9});
+  const B=(w,h,d,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);g.add(o);return o;};
+  if(type==='tank'){B(3.6,1.2,7,cam,0,1.1,0);const t=B(2.4,.9,3,cam,0,2.1,.3);const gun=new THREE.Mesh(new THREE.CylinderGeometry(.14,.14,4.5,8).rotateX(Math.PI/2),dk);gun.position.set(0,2.2,-3.2);g.add(gun);for(const sx of[-1,1])B(.7,1,7.2,dk,sx*1.75,.6,0);}
+  else{B(2.5,1.6,2,cam,0,1.6,-2.8);B(2.6,.4,6.2,dk,0,.9,.4);
+    if(type==='sam'){for(const sx of[-.6,.6]){const tb=new THREE.Mesh(new THREE.CylinderGeometry(.35,.35,4.2,8).rotateX(Math.PI/2-.5),mat(0x7a8064));tb.position.set(sx,2.4,1);g.add(tb);}B(.3,1,.3,dk,0,2.6,-1.6);}
+    else{B(2.5,2.2,4.4,mat(team==='blue'?0x4d5640:0x5e5a48,{roughness:.9}),0,2.2,1.2);}
+    for(const z of[-2.6,.4,2.4])for(const sx of[-1,1]){const w=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.45,10).rotateZ(Math.PI/2),tyre);w.position.set(sx*1.25,.55,z);g.add(w);}}
+  g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});return g;}
+function buildConvoys(){
+  for(const id of['blue','red']){const sz=Math.sign(T[id].carrier.z);
+    ISLX.forEach(([ix,iz,r],k)=>{if(Math.sign(iz)!==sz)return;
+      /* a driveable ring: for each angle the farthest point that is still dry, not too steep */
+      const path=[];for(let i=0;i<72;i++){const a=i/72*6.2832;let rr=r*.72;while(rr>r*.2&&terrainH(ix+Math.cos(a)*rr,iz+Math.sin(a)*rr)<5)rr-=r*.03;path.push([ix+Math.cos(a)*rr,iz+Math.sin(a)*rr]);}
+      const cv={team:id,path,isl:k,list:[],respawn:0,a0:Math.random()*6.28};
+      ['truck','sam','tank','truck'].forEach((type,j)=>{const m=vehMesh(type,id);scene.add(m);
+        cv.list.push({kind:'veh',vtype:type,team:id,hp:type==='tank'?320:200,maxhp:type==='tank'?320:200,alive:true,mesh:m,pos:new V3(),u:-j*.045,name:(type==='tank'?'ТАНК':type==='sam'?'МОБИЛЬНЫЙ ЗРК':'ГРУЗОВИК')+' ('+(id==='blue'?'синие':'красные')+')',samCd:rnd(6,12)});});
+      convoys.push(cv);});}}
+function resetConvoys(){for(const cv of convoys){cv.respawn=0;for(const v of cv.list){v.alive=true;v.hp=v.maxhp;v.mesh.visible=true;}}}
+function updateConvoys(dt){
+  for(const cv of convoys){
+    if(cv.list.every(v=>!v.alive)){cv.respawn+=dt;if(cv.respawn>120){cv.respawn=0;for(const v of cv.list){v.alive=true;v.hp=v.maxhp;v.mesh.visible=true;}}continue;}
+    cv.a0+=dt*.004;const N=cv.path.length;
+    for(const v of cv.list){if(!v.alive)continue;const f=((cv.a0+v.u)%1+1)%1*N,i0=Math.floor(f)%N,i1=(i0+1)%N,t=f-Math.floor(f);
+      const x=cv.path[i0][0]+(cv.path[i1][0]-cv.path[i0][0])*t,z=cv.path[i0][1]+(cv.path[i1][1]-cv.path[i0][1])*t;
+      const hx=cv.path[i1][0]-cv.path[i0][0],hz=cv.path[i1][1]-cv.path[i0][1],hl=Math.hypot(hx,hz)||1,fx=hx/hl,fz=hz/hl;
+      const hf=terrainH(x+fx*3,z+fz*3),hb=terrainH(x-fx*3,z-fz*3),hl2=terrainH(x-fz*1.5,z+fx*1.5),hr2=terrainH(x+fz*1.5,z-fx*1.5);
+      v.pos.set(x,Math.max((hf+hb)/2,2),z);v.mesh.position.copy(v.pos);v.mesh.rotation.set(Math.atan2(hf-hb,6),Math.atan2(-hx,-hz),Math.atan2(hl2-hr2,3)*.6,'YXZ');
+      /* the mobile SAM shoots at enemy aircraft inside 3.5 km */
+      if(v.vtype==='sam'&&!match.over&&!match.training){v.samCd-=dt;if(v.samCd<=0){v.samCd=rnd(10,15);const tg=planes.find(q=>q.alive&&q.team!==v.team&&q.state==='fly'&&q.pos.distanceTo(v.pos)<3500);
+        if(tg){launchMissile(null,tg,'sam',v.team,v.pos.clone().setY(v.pos.y+4));smoke(v.pos.x,v.pos.y+3,v.pos.z,4,16,2,3,.5);}}}}}}
 function initWorld(){
   for(const id of ['blue','red']){
     const t=T[id],rot=t.dir<0?0:Math.PI;
@@ -1786,6 +1818,7 @@ function zoneText(z){return z.owner?(z.owner==='blue'?'СИНИЕ':'КРАСНЫ
 function spawnPoints(team){const a=[];if(T[team].carrier.alive)a.push({kind:'carrier',ref:T[team].carrier,name:'Авианосец'});for(const b of BASES)if(b.owner===team&&b.hp>0)a.push({kind:'base',ref:b,name:b.short});return a;}
 function homeOf(sp){return sp.kind==='carrier'?{f:sp.ref,x:-8,y:DECK_Y,z0:70,zEnd:-160,acc:1.5,kind:'carrier'}:{f:sp.ref,x:0,y:RW.H,z0:RW.L/2-40,zEnd:-RW.L/2+90,acc:3.5,kind:'base'};}
 function resetMatch(){
+  resetConvoys();
   planes.forEach(removePlane);planes=[];missiles.forEach(m=>scene.remove(m.mesh));missiles=[];rockets=[];bombs.forEach(b=>scene.remove(b.mesh));bombs=[];flares=[];bullets=[];sinkers=[];
   player=null;
   match.t=1200;match.salvo=180;match.over=false;match.time=0;
@@ -2139,6 +2172,9 @@ function dmgShip(s,a,by,w){
   if(!s.alive||match.over)return;
   s.hp-=a;if(by&&by.isPlayer){hitMark();tgtHp(s.name,s.hp,s.maxhp||900,s.team);if(s.kind==='carrier')prog('d',a);}
   if(s.kind==='carrier'&&!match.training)T[s.team].tickets=Math.max(0,T[s.team].tickets-a/CARR_HP*50);
+  if(s.hp<=0&&s.kind==='veh'){s.alive=false;s.mesh.visible=false;explosion(s.pos.clone().setY(s.pos.y+2),16,false);sfx('boom',s.pos);smoke(s.pos.x,s.pos.y+2,s.pos.z,6,20,6,2,.7,true);
+    feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> ['+(w||'?')+'] <span style="color:'+(s.team==='blue'?'var(--blue)':'var(--red)')+'">'+s.name+'</span>');
+    if(by&&by.team!==s.team){award(by,s.vtype==='sam'?180:120,100);if(by.isPlayer)toast('💥 '+s.name.split(' (')[0]+' уничтожен! +'+(s.vtype==='sam'?180:120)+' CR');}if(!match.training)T[s.team].tickets=Math.max(0,T[s.team].tickets-2);checkEnd();return;}
   if(s.hp<=0){
     s.alive=false;if(s.kind==='carrier')nuke(s.pos.clone().setY(15),1.1);else explosion(s.pos.clone().setY(15),34,false);sfx('boom');
     feed('<span style="color:'+(by?(by.team==='blue'?'var(--blue)':'var(--red)'):'#ccc')+'">'+(by?pname(by):'—')+'</span> ['+(w||'?')+'] <span style="color:'+(s.team==='blue'?'var(--blue)':'var(--red)')+'">'+s.name+'</span>');
@@ -2161,10 +2197,11 @@ function checkEnd(){
 function hitShip(s,pos,m){
   if(s.kind==='base')return hitBase(s,pos,m);
   if(!s.alive)return false;
+  if(s.kind==='veh')return pos.distanceTo(s.pos)<9+m;
   if(s.kind==='carrier'){cLocal(s,pos,tD);return Math.abs(tD.x)<50+m&&Math.abs(tD.z)<172+m&&tD.y>-10&&tD.y<DECK_Y+32+m;}
   return Math.hypot(pos.x-s.pos.x,pos.z-s.pos.z)<24+m&&pos.y<32+m&&pos.y>-6;
 }
-function shipTargets(team){const t=T[team];const a=[];t.boats.forEach(b=>{if(b.alive)a.push(b);});if(t.carrier.alive)a.push(t.carrier);for(const b of BASES)if(b.owner===team&&b.hp>0)a.push(b);return a;}
+function shipTargets(team){const t=T[team];const a=[];t.boats.forEach(b=>{if(b.alive)a.push(b);});for(const cv of convoys)if(cv.team===team)for(const v of cv.list)if(v.alive)a.push(v);if(t.carrier.alive)a.push(t.carrier);for(const b of BASES)if(b.owner===team&&b.hp>0)a.push(b);return a;}
 function updateShips(dt){
   for(const id of['blue','red']){
     const t=T[id],en=T[enemyOf(id)],list=[t.carrier,...t.boats];
@@ -3396,7 +3433,7 @@ function updateHud(dt){
   if(p.state==='ground'||p.state==='parked'){const thr=new V3();cWorld(p.home.f,0,RW.H+6,RW.L/2-40,thr);if(!(Math.abs(p.tx)<RW.W/2&&Math.abs(p.tz)<RW.L/2))showT(thr,'#ffc94a','▼ ПОЛОСА '+Math.round(thr.distanceTo(p.pos))+' м',true);}
   /* islands: hidden during a dogfight, otherwise only the 2 nearest you do not own */
   if(!busy)ZONES.filter(z=>z.owner!==p.team).map(z=>[z,Math.hypot(z.cx-p.pos.x,z.cz-p.pos.z)]).sort((a,b)=>a[1]-b[1]).slice(0,2).forEach(([z,d])=>{const zp=tB.set(z.cx,250,z.cz);showT(zp,z.owner?'#ff6a5a':'#ffffff','◆ '+z.short+' '+(d/1000).toFixed(1)+' км',false,'zn');});
-  {const cw2=curW(p),ag=cw2&&W[cw2.id].kind!=='aa';for(const s of [...ec.boats,ec.carrier]){if(!s.alive)continue;const d=s.pos.distanceTo(p.pos);const lk=p.lockT===s&&p.locked;if(!lk&&(busy&&!ag||d>(ag?11000:(s.kind==='carrier'?6000:3000))))continue;showT(s.pos,lk?'#ff9a3c':'#ffb347',(s.kind==='carrier'?'⚓ ':'')+(d/1000).toFixed(1)+' км',lk);}}
+  {const cw2=curW(p),ag=cw2&&W[cw2.id].kind!=='aa';for(const s of [...ec.boats,ec.carrier,...convoys.filter(c=>c.team===enemyOf(p.team)).flatMap(c=>c.list)]){if(s.kind==='veh'&&(!s.alive||s.pos.distanceTo(p.pos)>(ag?9000:4000)))continue;if(!s.alive)continue;const d=s.pos.distanceTo(p.pos);const lk=p.lockT===s&&p.locked;if(!lk&&(busy&&!ag||d>(ag?11000:(s.kind==='carrier'?6000:3000))))continue;showT(s.pos,lk?'#ff9a3c':'#ffb347',(s.kind==='carrier'?'⚓ ':'')+(d/1000).toFixed(1)+' км',lk);}}
   if(cw&&cw.id==='bomb'&&p.state==='fly'){const t=(p.vel.y+Math.sqrt(p.vel.y*p.vel.y+19.6*Math.max(p.pos.y,1)))/9.8;tA.copy(p.pos).addScaledVector(p.vel,t);tA.y=0;showT(tA,'#ffffff','ПАДЕНИЕ');}
   for(let i=n;i<tgPool.length;i++)tgPool[i].style.display='none';
   drawRadar(p);
@@ -3492,6 +3529,7 @@ function step(dt){
   for(const p of planes){if(!p.alive)continue;if(p.isPlayer)controlPlayer(p,dt);else botThink(p,dt);updatePlane(p,dt);
     if(!p.acc){p.acc=new V3();p.pv=p.vel.clone();}else if(dt>0){tA.copy(p.vel).sub(p.pv).divideScalar(dt);if(tA.lengthSq()<1e6)p.acc.lerp(tA,Math.min(1,dt*6));p.pv.copy(p.vel);}}
   planes=planes.filter(p=>p.alive);
+  updateConvoys(dt);
   updateTraffic(dt);
   updateShips(dt);updateWrecks(dt);updateZones(dt);updateStrikes(dt);updateCivs(dt);updateBullets(dt);updateRockets(dt);updateBombs(dt);updateMissiles(dt);updateAps(dt);updateShock(dt);if(tgtT>0){tgtT-=dt;if(tgtT<=0)$('#tgtbar').style.display='none';}updateFlares(dt);
   smokeP.update(dt);fireP.update(dt);updateFx(dt);
@@ -3549,7 +3587,7 @@ try{if('serviceWorker' in navigator&&location.protocol==='https:'&&window.top===
   b.addEventListener('click',e=>{if(performance.now()-(b._pd||0)<700)return;f.call(b,e);});});})();
 if(CRASHED)setTimeout(()=>toast('Игра закрылась из-за нехватки памяти — графика снижена. Меню → Графика, чтобы вернуть'),3000);
 loadRealModels();
-initWorld();resetMatch();show('menu');buildShowcase();buildPreview();renderMenu();MOOD.v=1;applyMood(1);
+initWorld();buildConvoys();resetMatch();show('menu');buildShowcase();buildPreview();renderMenu();MOOD.v=1;applyMood(1);
 /* warm up: compile every shader once behind the loading screen so the first flight does not stutter */
 (function(){
   const warm=new THREE.Group();const j=buildJet(DEF.mig29,null,'red');j.userData.gear.visible=true;warm.add(j);
