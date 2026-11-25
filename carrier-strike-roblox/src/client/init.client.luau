@@ -17,7 +17,7 @@ local Progress = require(Shared:WaitForChild("Progress"))
 local Config = require(Shared:WaitForChild("Config"))
 local Lang = require(Shared:WaitForChild("Lang"))
 local FlightPhysics = require(Shared:WaitForChild("FlightPhysics"))
-local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
+local JetModel = require(Shared:WaitForChild("JetModel"))
 local R = ReplicatedStorage:WaitForChild("CSRemotes")
 local match = ReplicatedStorage:WaitForChild("CSMatch")
 
@@ -133,6 +133,7 @@ local function paintCfg(c: any, side: string, paintId: string): any
 		out.colors.accent = team
 	end
 	out.colors.tail = team
+	out.paintId = paintId
 	return out
 end
 local previewJet, previewPaint = "F16", "team"
@@ -149,20 +150,21 @@ local function buildPreview()
 	if not c then
 		return
 	end
-	local m = PlaneBuilder.build(paintCfg(c, mySide(), previewPaint), { static = true })
+	local m = JetModel.build(paintCfg(c, mySide(), previewPaint), { static = true })
 	local carrier = World.carrierOf(mySide())
 	m:PivotTo(carrier.cf * CFrame.new(-30, World.DECK_H + c.gearHeight, 40) * CFrame.Angles(0, math.rad(-25), 0))
 	m.Name = "Preview"
 	m.Parent = workspace
 	preview = m
 end
--- карточки ангара: 3D-модели (без земли и меток — static)
+-- карточки ангара: 3D-модели (без земли и меток — static); ждём, пока сервер разложит импортированные модели
+JetModel.wait(6)
 ui.setJets(Jets.ORDER, Jets.JETS, Progress, function(id: string, paint: string): Model?
 	local c = Jets.JETS[id]
 	if not c then
 		return nil
 	end
-	return PlaneBuilder.build(paintCfg(c, mySide(), paint), { static = true })
+	return JetModel.build(paintCfg(c, mySide(), paint), { static = true })
 end)
 ui.on("select", function(jet: string, paint: string)
 	previewJet, previewPaint = jet, paint

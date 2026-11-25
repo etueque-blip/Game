@@ -17,12 +17,15 @@ local Jets = require(Shared:WaitForChild("Jets"))
 local Progress = require(Shared:WaitForChild("Progress"))
 local Config = require(Shared:WaitForChild("Config"))
 local FlightPhysics = require(Shared:WaitForChild("FlightPhysics"))
-local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
+local JetModel = require(Shared:WaitForChild("JetModel"))
 local WorldBuilder = require(script:WaitForChild("WorldBuilder"))
 local Bots = require(script:WaitForChild("Bots"))
 local Data = require(script:WaitForChild("Data"))
 
 local rng = Random.new()
+
+-- настоящие 3D-модели (если импортированы в Workspace) → в ReplicatedStorage/CarrierStrike/JetModels
+JetModel.collect(Jets.ORDER)
 
 -- ===== группы столкновений: самолёты не цепляются за мир (столкновения считает физика игры)
 local FLYING, DEBRIS = "CSFlying", "CSDebris"
@@ -519,11 +522,12 @@ local function paintCfg(cfg: any, side: string, paintId: string?): any
 		c.colors.accent = team
 	end
 	c.colors.tail = team -- киль всегда цвета команды
+	c.paintId = paintId
 	return c
 end
 
 local function makeUnit(cfg: any, side: string, name: string, cf: CFrame, seat: boolean, paintId: string?): Unit
-	local model = PlaneBuilder.build(paintCfg(cfg, side, paintId), { seat = seat, label = name })
+	local model = JetModel.build(paintCfg(cfg, side, paintId), { seat = seat, label = name })
 	model:SetAttribute("Side", side)
 	model:SetAttribute("Pilot", name)
 	model:SetAttribute("Gear", true)

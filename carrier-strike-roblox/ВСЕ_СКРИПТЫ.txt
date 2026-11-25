@@ -1,4 +1,4 @@
-CARRIER STRIKE — ВСЕ СКРИПТЫ (16 шт.)
+CARRIER STRIKE — ВСЕ СКРИПТЫ (17 шт.)
 Куда вставлять — написано перед каждым. Копируй текст между линиями целиком.
 
 ==============================================================================
@@ -24,12 +24,15 @@ local Jets = require(Shared:WaitForChild("Jets"))
 local Progress = require(Shared:WaitForChild("Progress"))
 local Config = require(Shared:WaitForChild("Config"))
 local FlightPhysics = require(Shared:WaitForChild("FlightPhysics"))
-local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
+local JetModel = require(Shared:WaitForChild("JetModel"))
 local WorldBuilder = require(script:WaitForChild("WorldBuilder"))
 local Bots = require(script:WaitForChild("Bots"))
 local Data = require(script:WaitForChild("Data"))
 
 local rng = Random.new()
+
+-- настоящие 3D-модели (если импортированы в Workspace) → в ReplicatedStorage/CarrierStrike/JetModels
+JetModel.collect(Jets.ORDER)
 
 -- ===== группы столкновений: самолёты не цепляются за мир (столкновения считает физика игры)
 local FLYING, DEBRIS = "CSFlying", "CSDebris"
@@ -526,11 +529,12 @@ local function paintCfg(cfg: any, side: string, paintId: string?): any
 		c.colors.accent = team
 	end
 	c.colors.tail = team -- киль всегда цвета команды
+	c.paintId = paintId
 	return c
 end
 
 local function makeUnit(cfg: any, side: string, name: string, cf: CFrame, seat: boolean, paintId: string?): Unit
-	local model = PlaneBuilder.build(paintCfg(cfg, side, paintId), { seat = seat, label = name })
+	local model = JetModel.build(paintCfg(cfg, side, paintId), { seat = seat, label = name })
 	model:SetAttribute("Side", side)
 	model:SetAttribute("Pilot", name)
 	model:SetAttribute("Gear", true)
@@ -1766,6 +1770,250 @@ end
 return FlightPhysics
 
 ==============================================================================
+ReplicatedStorage → папка CarrierStrike → ModuleScript «JetModel»
+(файл src/shared/JetModel.luau)
+==============================================================================
+--!strict
+-- Настоящие 3D-модели самолётов.
+-- Импортируй в Studio файлы F16.glb, FA18.glb, SU33.glb, RAFALE.glb, MIG29.glb, F35.glb
+-- (Home → Import 3D). Модели появятся в Workspace с этими именами — сервер сам перенесёт их
+-- в ReplicatedStorage/CarrierStrike/JetModels и игра будет использовать их вместо простых самолётов.
+-- Если модели нет — самолёт собирается из деталей (PlaneBuilder), как раньше.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local PlaneBuilder = require(script.Parent.PlaneBuilder)
+
+local JetModel = {}
+
+local function folder(): Folder
+	local shared = script.Parent
+	local f = shared:FindFirstChild("JetModels")
+	if not f then
+		f = Instance.new("Folder")
+		f.Name = "JetModels"
+		f.Parent = shared
+	end
+	return f :: Folder
+end
+
+-- сервер: забрать импортированные модели из Workspace в общую папку
+function JetModel.collect(ids: { string })
+	if not RunService:IsServer() then
+		return
+	end
+	local f = folder()
+	for _, id in ids do
+		if not f:FindFirstChild(id) then
+			local m = workspace:FindFirstChild(id)
+			if m and (m:IsA("Model") or m:IsA("BasePart")) then
+				m.Parent = f
+			end
+		end
+	end
+	f:SetAttribute("Ready", true)
+end
+
+-- клиент: подождать, пока сервер разложит модели (не дольше timeout)
+function JetModel.wait(timeout: number)
+	local f = ReplicatedStorage:WaitForChild("CarrierStrike"):FindFirstChild("JetModels")
+	local t = os.clock()
+	while (not f or not f:GetAttribute("Ready")) and os.clock() - t < timeout do
+		task.wait(0.1)
+		f = ReplicatedStorage.CarrierStrike:FindFirstChild("JetModels")
+	end
+end
+
+function JetModel.has(id: string): boolean
+	local f = script.Parent:FindFirstChild("JetModels")
+	return f ~= nil and f:FindFirstChild(id) ~= nil
+end
+
+local function isDetail(p: BasePart): boolean
+	-- стекло фонаря и тёмные детали (сопла, шины) не перекрашиваем
+	if p.Transparency > 0.05 or p.Material == Enum.Material.Glass then
+		return true
+	end
+	local c = p.Color
+	return (c.R + c.G + c.B) / 3 < 0.16
+end
+
+-- Собрать самолёт. opts — как у PlaneBuilder.build: { static, seat, label }
+function JetModel.build(cfg: any, opts: { static: boolean?, seat: boolean?, label: string? }?): Model
+	local f = script.Parent:FindFirstChild("JetModels")
+	local src = f and f:FindFirstChild(cfg.id)
+	if not src then
+		return PlaneBuilder.build(cfg, opts)
+	end
+	local o = opts or {}
+	local static = o.static == true
+
+	local inner: Model
+	if src:IsA("Model") then
+		inner = src:Clone()
+	else
+		inner = Instance.new("Model")
+		src:Clone().Parent = inner
+	end
+	local parts: { BasePart } = {}
+	for _, d in inner:GetDescendants() do
+		if d:IsA("BasePart") then
+			table.insert(parts, d)
+		elseif d:IsA("LuaSourceContainer") then
+			d:Destroy()
+		end
+	end
+	if #parts == 0 then
+		inner:Destroy()
+		return PlaneBuilder.build(cfg, opts)
+	end
+	for _, p in parts do
+		p.Anchored = true
+	end
+
+	-- ориентация: в файлах нос смотрит в −Z. Если модель легла боком (длиннее по X) — повернуть.
+	local bcf, size = inner:GetBoundingBox()
+	inner.WorldPivot = CFrame.new(bcf.Position)
+	local yaw = 0
+	if size.X > size.Z * 1.15 then
+		yaw = math.pi / 2
+	end
+	inner:PivotTo(CFrame.Angles(0, yaw, 0))
+	local len = if yaw == 0 then size.Z else size.X
+	if len > 0.01 then
+		inner:ScaleTo(inner:GetScale() * cfg.length / len)
+	end
+	-- снова по центру
+	local bcf2 = inner:GetBoundingBox()
+	inner:PivotTo(inner:GetPivot() - bcf2.Position)
+
+	local model = Instance.new("Model")
+	model.Name = cfg.name
+	model:SetAttribute("PlaneId", cfg.id)
+	model:SetAttribute("Imported", true)
+	local D, L = cfg.diameter, cfg.length
+	local root = Instance.new("Part")
+	root.Name = "Root"
+	root.Size = Vector3.new(D * 0.5, D * 0.5, L * 0.5)
+	root.Transparency = 1
+	root.CanCollide, root.CanTouch, root.CanQuery = false, false, false
+	root.Anchored = true
+	root.CFrame = CFrame.identity
+	root.Parent = model
+	model.PrimaryPart = root
+	inner.Name = "Body"
+	inner.Parent = model
+
+	-- раскраска: однотонный цвет корпуса вместо текстуры (кроме стекла и тёмных деталей)
+	local col = cfg.colors
+	local painted = cfg.paintId ~= nil and cfg.paintId ~= "team" and col and col.body
+	for _, p in parts do
+		p.CanCollide, p.CanTouch, p.CanQuery = false, false, false
+		p.Massless = true
+		p.CastShadow = true
+		if painted and not isDetail(p) then
+			for _, sa in p:GetChildren() do
+				if sa:IsA("SurfaceAppearance") then
+					sa:Destroy()
+				end
+			end
+			if p:IsA("MeshPart") then
+				p.TextureID = ""
+			end
+			p.Color = col.body
+		end
+		if not static then
+			local w = Instance.new("WeldConstraint")
+			w.Part0 = root
+			w.Part1 = p
+			w.Parent = p
+			p.Anchored = false
+		end
+	end
+
+	-- огни команды на законцовках и форсаж
+	local engines = Instance.new("Folder")
+	engines.Name = "Engines"
+	engines.Parent = model
+	local ab = Instance.new("Part")
+	ab.Name = "Afterburner"
+	ab.Shape = Enum.PartType.Ball
+	ab.Size = Vector3.new(D * 0.6, D * 0.6, D * 0.6)
+	ab.Material = Enum.Material.Neon
+	ab.Color = Color3.fromRGB(255, 150, 60)
+	ab.Transparency = 1
+	ab.CanCollide, ab.CanTouch, ab.CanQuery, ab.CastShadow = false, false, false, false
+	ab.Massless = true
+	ab.CFrame = CFrame.new(0, 0, L * 0.52)
+	ab.Anchored = static
+	ab.Parent = engines
+	if not static then
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = root
+		w.Part1 = ab
+		w.Parent = ab
+	end
+	if col and col.tail then
+		for _, s in { -1, 1 } do
+			local l = Instance.new("Part")
+			l.Name = "TeamLight"
+			l.Shape = Enum.PartType.Ball
+			l.Size = Vector3.new(1.4, 1.4, 1.4)
+			l.Material = Enum.Material.Neon
+			l.Color = col.tail
+			l.CanCollide, l.CanTouch, l.CanQuery, l.CastShadow = false, false, false, false
+			l.Massless = true
+			l.CFrame = CFrame.new(s * cfg.span * 0.48, 0, L * 0.12)
+			l.Anchored = static
+			l.Parent = model
+			if not static then
+				local w = Instance.new("WeldConstraint")
+				w.Part0 = root
+				w.Part1 = l
+				w.Parent = l
+			end
+		end
+	end
+
+	-- кресло пилота и подпись — как у PlaneBuilder
+	if o.seat and not static then
+		local seat = Instance.new("Seat")
+		seat.Name = "PilotSeat"
+		seat.Size = Vector3.new(2, 0.4, 2)
+		seat.Transparency = 1
+		seat.CanCollide, seat.CanTouch = false, false
+		seat.Massless = true
+		seat.CFrame = CFrame.new(0, -D * 0.3, -L * 0.28)
+		seat.Parent = model
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = root
+		w.Part1 = seat
+		w.Parent = seat
+	end
+	if o.label then
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "Tag"
+		bb.Size = UDim2.fromOffset(220, 40)
+		bb.StudsOffsetWorldSpace = Vector3.new(0, D + cfg.finHeight + 6, 0)
+		bb.MaxDistance = 4000
+		bb.LightInfluence = 0
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundTransparency = 1
+		t.Text = o.label
+		t.TextColor3 = Color3.fromRGB(228, 238, 255)
+		t.TextStrokeTransparency = 0.4
+		t.Font = Enum.Font.GothamBold
+		t.TextScaled = true
+		t.Parent = bb
+		bb.Parent = root
+	end
+	return model
+end
+
+return JetModel
+
+==============================================================================
 ReplicatedStorage → папка CarrierStrike → ModuleScript «Jets»
 (файл src/shared/Jets.luau)
 ==============================================================================
@@ -2982,7 +3230,7 @@ local World = {}
 
 World.FT = 1.69 -- футов в одном studs (как в Sky Pilot)
 World.SEA = 0 -- уровень моря
-World.SIZE = 16000 -- половина стороны зоны боя; дальше — предупреждение и урон
+World.SIZE = 9500 -- половина стороны зоны боя; дальше — предупреждение и урон
 World.lastHit = nil :: string?
 
 -- ===== авианосцы
@@ -2991,8 +3239,8 @@ World.DECK_W = 150
 World.DECK_L = 660
 export type Carrier = { id: string, team: string, name: string, cf: CFrame }
 World.CARRIERS = {
-	{ id = "CV_BLUE", team = "Blue", name = "Авианосец «Синих»", cf = CFrame.new(0, 0, 11500) },
-	{ id = "CV_RED", team = "Red", name = "Авианосец «Красных»", cf = CFrame.new(0, 0, -11500) * CFrame.Angles(0, math.pi, 0) },
+	{ id = "CV_BLUE", team = "Blue", name = "Авианосец «Синих»", cf = CFrame.new(0, 0, 7000) },
+	{ id = "CV_RED", team = "Red", name = "Авианосец «Красных»", cf = CFrame.new(0, 0, -7000) * CFrame.Angles(0, math.pi, 0) },
 } :: { Carrier }
 -- надстройка («остров») по правому борту, в координатах авианосца (нос корабля — -Z)
 World.TOWER = { x0 = 52, x1 = 74, z0 = -60, z1 = 40, h = 95 }
@@ -3015,11 +3263,11 @@ World.BEACH = 140
 World.RUNWAY_LEN = 1100
 World.RUNWAY_W = 70
 World.ISLANDS = {
-	{ id = "A", name = "Альфа", x = -5200, z = 5200, r = 760, h = 26, yaw = 20, owner = "Blue", hills = { { -150, -400, 300, 260 }, { 250, 380, 220, 160 } } },
-	{ id = "B", name = "Браво", x = 5600, z = 3000, r = 720, h = 30, yaw = -35, owner = "", hills = { { 100, 400, 280, 300 } } },
+	{ id = "A", name = "Альфа", x = -2600, z = 3000, r = 760, h = 26, yaw = 20, owner = "Blue", hills = { { -150, -400, 300, 260 }, { 250, 380, 220, 160 } } },
+	{ id = "B", name = "Браво", x = 3000, z = 1600, r = 720, h = 30, yaw = -35, owner = "", hills = { { 100, 400, 280, 300 } } },
 	{ id = "C", name = "Центр", x = 0, z = 0, r = 900, h = 34, yaw = 90, owner = "", hills = { { 0, 520, 360, 420 }, { 150, -500, 260, 240 } } },
-	{ id = "D", name = "Дельта", x = -5600, z = -3000, r = 720, h = 28, yaw = 145, owner = "", hills = { { -100, -400, 280, 300 } } },
-	{ id = "E", name = "Эхо", x = 5200, z = -5200, r = 760, h = 26, yaw = 200, owner = "Red", hills = { { 150, 400, 300, 260 }, { -250, -380, 220, 160 } } },
+	{ id = "D", name = "Дельта", x = -3000, z = -1600, r = 720, h = 28, yaw = 145, owner = "", hills = { { -100, -400, 280, 300 } } },
+	{ id = "E", name = "Эхо", x = 2600, z = -3000, r = 760, h = 26, yaw = 200, owner = "Red", hills = { { 150, 400, 300, 260 }, { -250, -380, 220, 160 } } },
 } :: { Island }
 World.CAPTURE_R = 1500 -- радиус зоны захвата
 World.CAPTURE_ALT = 700 -- выше этой высоты над островом базу не захватить
@@ -3509,17 +3757,57 @@ local function disc(parent: Instance, name: string, r: number, h: number, pos: V
 	return part(parent, name, Vector3.new(h, r * 2, r * 2), CFrame.new(pos) * CFrame.Angles(0, 0, math.pi / 2), color, mat, Enum.PartType.Cylinder)
 end
 
+local Terrain = workspace.Terrain
+
 local function ocean(f: Folder)
-	-- ОДНА непрозрачная деталь на весь океан (раньше было 484 «стеклянных» — это и лагало).
-	-- Деталь не больше 2048, а видимый размер растягивает SpecialMesh.
-	local span = (World.SIZE + 8000) * 2
-	local sea = part(f, "Sea", Vector3.new(2048, 2, 2048), CFrame.new(0, World.SEA - 1, 0), Color3.fromRGB(24, 78, 116), Enum.Material.SmoothPlastic)
-	sea.Reflectance = 0.06
+	-- настоящая вода Roblox (волны, отражения) над всей зоной боя, слоем 4 studs (быстрее грузится на телефонах)
+	Terrain.WaterColor = Color3.fromRGB(22, 84, 118)
+	Terrain.WaterTransparency = 0.35
+	Terrain.WaterReflectance = 0.9
+	Terrain.WaterWaveSize = 0.35
+	Terrain.WaterWaveSpeed = 10
+	local half = World.SIZE + 800
+	local chunk = 2048
+	local n = 0
+	local x = -half
+	while x < half do
+		local z = -half
+		while z < half do
+			local sx = math.min(chunk, half - x)
+			local sz = math.min(chunk, half - z)
+			Terrain:FillBlock(CFrame.new(x + sx / 2, World.SEA - 2, z + sz / 2), Vector3.new(sx, 4, sz), Enum.Material.Water)
+			n += 1
+			if n % 8 == 0 then
+				task.wait()
+			end
+			z += chunk
+		end
+		x += chunk
+	end
+	-- дно под водой и море за краем зоны: одна тёмная деталь (видимый размер растягивает SpecialMesh)
+	local span = (World.SIZE + 12000) * 2
+	local sea = part(f, "SeaFloor", Vector3.new(2048, 2, 2048), CFrame.new(0, World.SEA - 5, 0), Color3.fromRGB(16, 52, 80), Enum.Material.SmoothPlastic)
 	sea.CastShadow = false
 	local mesh = Instance.new("SpecialMesh")
 	mesh.MeshType = Enum.MeshType.Brick
 	mesh.Scale = Vector3.new(span / 2048, 1, span / 2048)
 	mesh.Parent = sea
+	-- море за краем зоны воды: 4 полосы вокруг (внутри зоны — настоящая вода)
+	local function plane(cx: number, cz: number, sx: number, sz: number)
+		local pl = part(f, "FarSea", Vector3.new(2048, 2, 2048), CFrame.new(cx, World.SEA - 1.2, cz), Color3.fromRGB(30, 86, 122), Enum.Material.SmoothPlastic)
+		pl.CastShadow = false
+		pl.Reflectance = 0.1
+		local pm = Instance.new("SpecialMesh")
+		pm.MeshType = Enum.MeshType.Brick
+		pm.Scale = Vector3.new(sx / 2048, 1, sz / 2048)
+		pm.Parent = pl
+	end
+	local outer = span / 2
+	local band = outer - half
+	plane(0, half + band / 2, outer * 2, band)
+	plane(0, -half - band / 2, outer * 2, band)
+	plane(half + band / 2, 0, band, half * 2)
+	plane(-half - band / 2, 0, band, half * 2)
 	-- граница зоны боя: светящиеся буи по периметру
 	local s = World.SIZE
 	for i = -4, 4 do
@@ -3538,12 +3826,12 @@ local function carrier(f: Folder, c: any)
 	local deckCol = Color3.fromRGB(58, 62, 68)
 	local teamCol = World.TEAM_COLOR[c.team]
 	-- корпус: прямоугольная часть + клиновидный нос
-	part(m, "Hull", Vector3.new(W * 0.8, H, L * 0.86), cf * CFrame.new(0, H / 2, L * 0.07), hull, Enum.Material.Metal)
+	part(m, "Hull", Vector3.new(W * 0.8, H + 10, L * 0.86), cf * CFrame.new(0, (H - 10) / 2, L * 0.07), hull, Enum.Material.Metal)
 	local bow = Instance.new("WedgePart")
 	bow.Name = "Bow"
 	bow.Anchored, bow.CanCollide, bow.CanTouch, bow.CanQuery = true, false, false, false
-	bow.Size = Vector3.new(W * 0.8, H, L * 0.14)
-	bow.CFrame = cf * CFrame.new(0, H / 2, -L / 2 + L * 0.07) * CFrame.Angles(0, math.pi, 0)
+	bow.Size = Vector3.new(W * 0.8, H + 10, L * 0.14)
+	bow.CFrame = cf * CFrame.new(0, (H - 10) / 2, -L / 2 + L * 0.07) * CFrame.Angles(0, math.pi, 0)
 	bow.Color = hull
 	bow.Material = Enum.Material.Metal
 	bow.Parent = m
@@ -3580,7 +3868,7 @@ local function carrier(f: Folder, c: any)
 	pl.Brightness = 3
 	pl.Parent = beacon
 	-- кильватерный след
-	local wake = part(m, "Wake", Vector3.new(W * 0.9, 0.4, 900), cf * CFrame.new(0, World.SEA + 0.3, L / 2 + 450), Color3.fromRGB(200, 225, 240), Enum.Material.SmoothPlastic)
+	local wake = part(m, "Wake", Vector3.new(W * 0.9, 0.4, 900), cf * CFrame.new(0, World.SEA + 0.6, L / 2 + 450), Color3.fromRGB(200, 225, 240), Enum.Material.SmoothPlastic)
 	wake.Transparency = 0.55
 	-- табличка над кораблём
 	local bb = Instance.new("BillboardGui")
@@ -3607,17 +3895,24 @@ local function island(f: Folder, i: any): BasePart
 	m.Name = "Island_" .. i.id
 	local sand = Color3.fromRGB(214, 196, 148)
 	local grass = Color3.fromRGB(86, 128, 70)
-	-- мелководье, пляж, плато
-	local shallow = disc(m, "Shallow", i.r + World.BEACH + 260, 1, Vector3.new(i.x, World.SEA + 0.1, i.z), Color3.fromRGB(52, 140, 160), Enum.Material.SmoothPlastic)
-	shallow.CastShadow = false
-	disc(m, "Beach", i.r + World.BEACH, 6, Vector3.new(i.x, 0, i.z), sand, Enum.Material.Sand)
-	disc(m, "Plateau", i.r, i.h, Vector3.new(i.x, i.h / 2, i.z), grass, Enum.Material.Grass)
-	-- холмы (та же форма, что в World.groundAt: полуэллипсоид)
+	-- рельеф Roblox: отмель (бирюзовая вода), пляж, плато, холмы со скалами — та же форма, что в World.groundAt
+	Terrain:FillCylinder(CFrame.new(i.x, World.SEA - 3.5, i.z), 3, i.r + World.BEACH + 260, Enum.Material.Sand)
+	Terrain:FillCylinder(CFrame.new(i.x, World.SEA - 2.5, i.z), 11, i.r + World.BEACH, Enum.Material.Sand)
+	Terrain:FillCylinder(CFrame.new(i.x, (i.h - 8) / 2, i.z), i.h + 8, i.r, Enum.Material.Grass)
 	for _, hl in i.hills do
 		local c = World.hillPos(i, hl)
-		ellipsoid(m, "Hill", Vector3.new(hl[3] * 2, hl[4] * 2, hl[3] * 2), CFrame.new(c), Color3.fromRGB(96, 120, 72), Enum.Material.Grass)
-		ellipsoid(m, "Rock", Vector3.new(hl[3] * 0.9, hl[4] * 0.6, hl[3] * 0.9), CFrame.new(c + Vector3.new(0, hl[4] * 0.72, 0)), Color3.fromRGB(128, 124, 116), Enum.Material.Rock)
+		local R, Hh = hl[3], hl[4]
+		local y = 0
+		while y < Hh do
+			local rr = R * math.sqrt(math.max(0, 1 - (y / Hh) ^ 2))
+			if rr > 6 then
+				local mat = if y > Hh * 0.62 then Enum.Material.Rock elseif y > Hh * 0.4 then Enum.Material.LeafyGrass else Enum.Material.Grass
+				Terrain:FillCylinder(CFrame.new(c.X, i.h + y + 3, c.Z), 6, rr, mat)
+			end
+			y += 6
+		end
 	end
+	task.wait()
 	-- полоса
 	local dir = World.runwayDir(i)
 	local rcf = CFrame.lookAt(Vector3.new(i.x, i.h + 0.25, i.z), Vector3.new(i.x, i.h + 0.25, i.z) + dir)
@@ -3709,22 +4004,30 @@ function WorldBuilder.build()
 	end
 	f.Parent = workspace
 
-	-- свет: ясный день над морем, лёгкая дымка у горизонта
-	Lighting.ClockTime = 15.2
-	Lighting.Brightness = 2.4
-	Lighting.Ambient = Color3.fromRGB(70, 78, 90)
-	Lighting.OutdoorAmbient = Color3.fromRGB(120, 130, 145)
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.8
+	-- свет: золотой час над морем (как на обложках), лёгкая дымка — острова видно издалека
+	Lighting.ClockTime = 17.3
+	Lighting.GeographicLatitude = 25
+	Lighting.Brightness = 2.6
+	Lighting.Ambient = Color3.fromRGB(80, 74, 90)
+	Lighting.OutdoorAmbient = Color3.fromRGB(140, 120, 130)
+	Lighting.EnvironmentDiffuseScale = 0.7
+	Lighting.EnvironmentSpecularScale = 1
 	Lighting.GlobalShadows = true
+	local sky = Instance.new("Sky")
+	sky.SunAngularSize = 18
+	sky.Parent = Lighting
 	local atm = Instance.new("Atmosphere")
-	atm.Density = 0.28
-	atm.Offset = 0.1
-	atm.Color = Color3.fromRGB(200, 214, 230)
-	atm.Decay = Color3.fromRGB(110, 130, 160)
-	atm.Glare = 0.4
-	atm.Haze = 1.4
+	atm.Density = 0.1
+	atm.Offset = 0.05
+	atm.Color = Color3.fromRGB(255, 206, 170)
+	atm.Decay = Color3.fromRGB(140, 100, 120)
+	atm.Glare = 0.6
+	atm.Haze = 0.8
 	atm.Parent = Lighting
+	local rays = Instance.new("SunRaysEffect")
+	rays.Intensity = 0.06
+	rays.Spread = 0.6
+	rays.Parent = Lighting
 	local bloom = Instance.new("BloomEffect")
 	bloom.Intensity = 0.4
 	bloom.Size = 30
@@ -5294,7 +5597,7 @@ local Progress = require(Shared:WaitForChild("Progress"))
 local Config = require(Shared:WaitForChild("Config"))
 local Lang = require(Shared:WaitForChild("Lang"))
 local FlightPhysics = require(Shared:WaitForChild("FlightPhysics"))
-local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
+local JetModel = require(Shared:WaitForChild("JetModel"))
 local R = ReplicatedStorage:WaitForChild("CSRemotes")
 local match = ReplicatedStorage:WaitForChild("CSMatch")
 
@@ -5410,6 +5713,7 @@ local function paintCfg(c: any, side: string, paintId: string): any
 		out.colors.accent = team
 	end
 	out.colors.tail = team
+	out.paintId = paintId
 	return out
 end
 local previewJet, previewPaint = "F16", "team"
@@ -5426,20 +5730,21 @@ local function buildPreview()
 	if not c then
 		return
 	end
-	local m = PlaneBuilder.build(paintCfg(c, mySide(), previewPaint), { static = true })
+	local m = JetModel.build(paintCfg(c, mySide(), previewPaint), { static = true })
 	local carrier = World.carrierOf(mySide())
 	m:PivotTo(carrier.cf * CFrame.new(-30, World.DECK_H + c.gearHeight, 40) * CFrame.Angles(0, math.rad(-25), 0))
 	m.Name = "Preview"
 	m.Parent = workspace
 	preview = m
 end
--- карточки ангара: 3D-модели (без земли и меток — static)
+-- карточки ангара: 3D-модели (без земли и меток — static); ждём, пока сервер разложит импортированные модели
+JetModel.wait(6)
 ui.setJets(Jets.ORDER, Jets.JETS, Progress, function(id: string, paint: string): Model?
 	local c = Jets.JETS[id]
 	if not c then
 		return nil
 	end
-	return PlaneBuilder.build(paintCfg(c, mySide(), paint), { static = true })
+	return JetModel.build(paintCfg(c, mySide(), paint), { static = true })
 end)
 ui.on("select", function(jet: string, paint: string)
 	previewJet, previewPaint = jet, paint

@@ -43,17 +43,57 @@ local function disc(parent: Instance, name: string, r: number, h: number, pos: V
 	return part(parent, name, Vector3.new(h, r * 2, r * 2), CFrame.new(pos) * CFrame.Angles(0, 0, math.pi / 2), color, mat, Enum.PartType.Cylinder)
 end
 
+local Terrain = workspace.Terrain
+
 local function ocean(f: Folder)
-	-- ОДНА непрозрачная деталь на весь океан (раньше было 484 «стеклянных» — это и лагало).
-	-- Деталь не больше 2048, а видимый размер растягивает SpecialMesh.
-	local span = (World.SIZE + 8000) * 2
-	local sea = part(f, "Sea", Vector3.new(2048, 2, 2048), CFrame.new(0, World.SEA - 1, 0), Color3.fromRGB(24, 78, 116), Enum.Material.SmoothPlastic)
-	sea.Reflectance = 0.06
+	-- настоящая вода Roblox (волны, отражения) над всей зоной боя, слоем 4 studs (быстрее грузится на телефонах)
+	Terrain.WaterColor = Color3.fromRGB(22, 84, 118)
+	Terrain.WaterTransparency = 0.35
+	Terrain.WaterReflectance = 0.9
+	Terrain.WaterWaveSize = 0.35
+	Terrain.WaterWaveSpeed = 10
+	local half = World.SIZE + 800
+	local chunk = 2048
+	local n = 0
+	local x = -half
+	while x < half do
+		local z = -half
+		while z < half do
+			local sx = math.min(chunk, half - x)
+			local sz = math.min(chunk, half - z)
+			Terrain:FillBlock(CFrame.new(x + sx / 2, World.SEA - 2, z + sz / 2), Vector3.new(sx, 4, sz), Enum.Material.Water)
+			n += 1
+			if n % 8 == 0 then
+				task.wait()
+			end
+			z += chunk
+		end
+		x += chunk
+	end
+	-- дно под водой и море за краем зоны: одна тёмная деталь (видимый размер растягивает SpecialMesh)
+	local span = (World.SIZE + 12000) * 2
+	local sea = part(f, "SeaFloor", Vector3.new(2048, 2, 2048), CFrame.new(0, World.SEA - 5, 0), Color3.fromRGB(16, 52, 80), Enum.Material.SmoothPlastic)
 	sea.CastShadow = false
 	local mesh = Instance.new("SpecialMesh")
 	mesh.MeshType = Enum.MeshType.Brick
 	mesh.Scale = Vector3.new(span / 2048, 1, span / 2048)
 	mesh.Parent = sea
+	-- море за краем зоны воды: 4 полосы вокруг (внутри зоны — настоящая вода)
+	local function plane(cx: number, cz: number, sx: number, sz: number)
+		local pl = part(f, "FarSea", Vector3.new(2048, 2, 2048), CFrame.new(cx, World.SEA - 1.2, cz), Color3.fromRGB(30, 86, 122), Enum.Material.SmoothPlastic)
+		pl.CastShadow = false
+		pl.Reflectance = 0.1
+		local pm = Instance.new("SpecialMesh")
+		pm.MeshType = Enum.MeshType.Brick
+		pm.Scale = Vector3.new(sx / 2048, 1, sz / 2048)
+		pm.Parent = pl
+	end
+	local outer = span / 2
+	local band = outer - half
+	plane(0, half + band / 2, outer * 2, band)
+	plane(0, -half - band / 2, outer * 2, band)
+	plane(half + band / 2, 0, band, half * 2)
+	plane(-half - band / 2, 0, band, half * 2)
 	-- граница зоны боя: светящиеся буи по периметру
 	local s = World.SIZE
 	for i = -4, 4 do
@@ -72,12 +112,12 @@ local function carrier(f: Folder, c: any)
 	local deckCol = Color3.fromRGB(58, 62, 68)
 	local teamCol = World.TEAM_COLOR[c.team]
 	-- корпус: прямоугольная часть + клиновидный нос
-	part(m, "Hull", Vector3.new(W * 0.8, H, L * 0.86), cf * CFrame.new(0, H / 2, L * 0.07), hull, Enum.Material.Metal)
+	part(m, "Hull", Vector3.new(W * 0.8, H + 10, L * 0.86), cf * CFrame.new(0, (H - 10) / 2, L * 0.07), hull, Enum.Material.Metal)
 	local bow = Instance.new("WedgePart")
 	bow.Name = "Bow"
 	bow.Anchored, bow.CanCollide, bow.CanTouch, bow.CanQuery = true, false, false, false
-	bow.Size = Vector3.new(W * 0.8, H, L * 0.14)
-	bow.CFrame = cf * CFrame.new(0, H / 2, -L / 2 + L * 0.07) * CFrame.Angles(0, math.pi, 0)
+	bow.Size = Vector3.new(W * 0.8, H + 10, L * 0.14)
+	bow.CFrame = cf * CFrame.new(0, (H - 10) / 2, -L / 2 + L * 0.07) * CFrame.Angles(0, math.pi, 0)
 	bow.Color = hull
 	bow.Material = Enum.Material.Metal
 	bow.Parent = m
@@ -114,7 +154,7 @@ local function carrier(f: Folder, c: any)
 	pl.Brightness = 3
 	pl.Parent = beacon
 	-- кильватерный след
-	local wake = part(m, "Wake", Vector3.new(W * 0.9, 0.4, 900), cf * CFrame.new(0, World.SEA + 0.3, L / 2 + 450), Color3.fromRGB(200, 225, 240), Enum.Material.SmoothPlastic)
+	local wake = part(m, "Wake", Vector3.new(W * 0.9, 0.4, 900), cf * CFrame.new(0, World.SEA + 0.6, L / 2 + 450), Color3.fromRGB(200, 225, 240), Enum.Material.SmoothPlastic)
 	wake.Transparency = 0.55
 	-- табличка над кораблём
 	local bb = Instance.new("BillboardGui")
@@ -141,17 +181,24 @@ local function island(f: Folder, i: any): BasePart
 	m.Name = "Island_" .. i.id
 	local sand = Color3.fromRGB(214, 196, 148)
 	local grass = Color3.fromRGB(86, 128, 70)
-	-- мелководье, пляж, плато
-	local shallow = disc(m, "Shallow", i.r + World.BEACH + 260, 1, Vector3.new(i.x, World.SEA + 0.1, i.z), Color3.fromRGB(52, 140, 160), Enum.Material.SmoothPlastic)
-	shallow.CastShadow = false
-	disc(m, "Beach", i.r + World.BEACH, 6, Vector3.new(i.x, 0, i.z), sand, Enum.Material.Sand)
-	disc(m, "Plateau", i.r, i.h, Vector3.new(i.x, i.h / 2, i.z), grass, Enum.Material.Grass)
-	-- холмы (та же форма, что в World.groundAt: полуэллипсоид)
+	-- рельеф Roblox: отмель (бирюзовая вода), пляж, плато, холмы со скалами — та же форма, что в World.groundAt
+	Terrain:FillCylinder(CFrame.new(i.x, World.SEA - 3.5, i.z), 3, i.r + World.BEACH + 260, Enum.Material.Sand)
+	Terrain:FillCylinder(CFrame.new(i.x, World.SEA - 2.5, i.z), 11, i.r + World.BEACH, Enum.Material.Sand)
+	Terrain:FillCylinder(CFrame.new(i.x, (i.h - 8) / 2, i.z), i.h + 8, i.r, Enum.Material.Grass)
 	for _, hl in i.hills do
 		local c = World.hillPos(i, hl)
-		ellipsoid(m, "Hill", Vector3.new(hl[3] * 2, hl[4] * 2, hl[3] * 2), CFrame.new(c), Color3.fromRGB(96, 120, 72), Enum.Material.Grass)
-		ellipsoid(m, "Rock", Vector3.new(hl[3] * 0.9, hl[4] * 0.6, hl[3] * 0.9), CFrame.new(c + Vector3.new(0, hl[4] * 0.72, 0)), Color3.fromRGB(128, 124, 116), Enum.Material.Rock)
+		local R, Hh = hl[3], hl[4]
+		local y = 0
+		while y < Hh do
+			local rr = R * math.sqrt(math.max(0, 1 - (y / Hh) ^ 2))
+			if rr > 6 then
+				local mat = if y > Hh * 0.62 then Enum.Material.Rock elseif y > Hh * 0.4 then Enum.Material.LeafyGrass else Enum.Material.Grass
+				Terrain:FillCylinder(CFrame.new(c.X, i.h + y + 3, c.Z), 6, rr, mat)
+			end
+			y += 6
+		end
 	end
+	task.wait()
 	-- полоса
 	local dir = World.runwayDir(i)
 	local rcf = CFrame.lookAt(Vector3.new(i.x, i.h + 0.25, i.z), Vector3.new(i.x, i.h + 0.25, i.z) + dir)
@@ -243,22 +290,30 @@ function WorldBuilder.build()
 	end
 	f.Parent = workspace
 
-	-- свет: ясный день над морем, лёгкая дымка у горизонта
-	Lighting.ClockTime = 15.2
-	Lighting.Brightness = 2.4
-	Lighting.Ambient = Color3.fromRGB(70, 78, 90)
-	Lighting.OutdoorAmbient = Color3.fromRGB(120, 130, 145)
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.8
+	-- свет: золотой час над морем (как на обложках), лёгкая дымка — острова видно издалека
+	Lighting.ClockTime = 17.3
+	Lighting.GeographicLatitude = 25
+	Lighting.Brightness = 2.6
+	Lighting.Ambient = Color3.fromRGB(80, 74, 90)
+	Lighting.OutdoorAmbient = Color3.fromRGB(140, 120, 130)
+	Lighting.EnvironmentDiffuseScale = 0.7
+	Lighting.EnvironmentSpecularScale = 1
 	Lighting.GlobalShadows = true
+	local sky = Instance.new("Sky")
+	sky.SunAngularSize = 18
+	sky.Parent = Lighting
 	local atm = Instance.new("Atmosphere")
-	atm.Density = 0.28
-	atm.Offset = 0.1
-	atm.Color = Color3.fromRGB(200, 214, 230)
-	atm.Decay = Color3.fromRGB(110, 130, 160)
-	atm.Glare = 0.4
-	atm.Haze = 1.4
+	atm.Density = 0.1
+	atm.Offset = 0.05
+	atm.Color = Color3.fromRGB(255, 206, 170)
+	atm.Decay = Color3.fromRGB(140, 100, 120)
+	atm.Glare = 0.6
+	atm.Haze = 0.8
 	atm.Parent = Lighting
+	local rays = Instance.new("SunRaysEffect")
+	rays.Intensity = 0.06
+	rays.Spread = 0.6
+	rays.Parent = Lighting
 	local bloom = Instance.new("BloomEffect")
 	bloom.Intensity = 0.4
 	bloom.Size = 30

@@ -6,7 +6,7 @@ local World = {}
 
 World.FT = 1.69 -- футов в одном studs (как в Sky Pilot)
 World.SEA = 0 -- уровень моря
-World.SIZE = 16000 -- половина стороны зоны боя; дальше — предупреждение и урон
+World.SIZE = 9500 -- половина стороны зоны боя; дальше — предупреждение и урон
 World.lastHit = nil :: string?
 
 -- ===== авианосцы
@@ -15,8 +15,8 @@ World.DECK_W = 150
 World.DECK_L = 660
 export type Carrier = { id: string, team: string, name: string, cf: CFrame }
 World.CARRIERS = {
-	{ id = "CV_BLUE", team = "Blue", name = "Авианосец «Синих»", cf = CFrame.new(0, 0, 11500) },
-	{ id = "CV_RED", team = "Red", name = "Авианосец «Красных»", cf = CFrame.new(0, 0, -11500) * CFrame.Angles(0, math.pi, 0) },
+	{ id = "CV_BLUE", team = "Blue", name = "Авианосец «Синих»", cf = CFrame.new(0, 0, 7000) },
+	{ id = "CV_RED", team = "Red", name = "Авианосец «Красных»", cf = CFrame.new(0, 0, -7000) * CFrame.Angles(0, math.pi, 0) },
 } :: { Carrier }
 -- надстройка («остров») по правому борту, в координатах авианосца (нос корабля — -Z)
 World.TOWER = { x0 = 52, x1 = 74, z0 = -60, z1 = 40, h = 95 }
@@ -39,11 +39,11 @@ World.BEACH = 140
 World.RUNWAY_LEN = 1100
 World.RUNWAY_W = 70
 World.ISLANDS = {
-	{ id = "A", name = "Альфа", x = -5200, z = 5200, r = 760, h = 26, yaw = 20, owner = "Blue", hills = { { -150, -400, 300, 260 }, { 250, 380, 220, 160 } } },
-	{ id = "B", name = "Браво", x = 5600, z = 3000, r = 720, h = 30, yaw = -35, owner = "", hills = { { 100, 400, 280, 300 } } },
+	{ id = "A", name = "Альфа", x = -2600, z = 3000, r = 760, h = 26, yaw = 20, owner = "Blue", hills = { { -150, -400, 300, 260 }, { 250, 380, 220, 160 } } },
+	{ id = "B", name = "Браво", x = 3000, z = 1600, r = 720, h = 30, yaw = -35, owner = "", hills = { { 100, 400, 280, 300 } } },
 	{ id = "C", name = "Центр", x = 0, z = 0, r = 900, h = 34, yaw = 90, owner = "", hills = { { 0, 520, 360, 420 }, { 150, -500, 260, 240 } } },
-	{ id = "D", name = "Дельта", x = -5600, z = -3000, r = 720, h = 28, yaw = 145, owner = "", hills = { { -100, -400, 280, 300 } } },
-	{ id = "E", name = "Эхо", x = 5200, z = -5200, r = 760, h = 26, yaw = 200, owner = "Red", hills = { { 150, 400, 300, 260 }, { -250, -380, 220, 160 } } },
+	{ id = "D", name = "Дельта", x = -3000, z = -1600, r = 720, h = 28, yaw = 145, owner = "", hills = { { -100, -400, 280, 300 } } },
+	{ id = "E", name = "Эхо", x = 2600, z = -3000, r = 760, h = 26, yaw = 200, owner = "Red", hills = { { 150, 400, 300, 260 }, { -250, -380, 220, 160 } } },
 } :: { Island }
 World.CAPTURE_R = 1500 -- радиус зоны захвата
 World.CAPTURE_ALT = 700 -- выше этой высоты над островом базу не захватить
