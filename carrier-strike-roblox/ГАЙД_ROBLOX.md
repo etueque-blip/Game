@@ -66,8 +66,8 @@ Roblox продвигает игры, в которые люди **возвра�
 Страница игры — это реклама. Решают иконка и первая обложка.
 
 1. Открой **create.roblox.com → Creations**, выбери игру, затем **Configure** (или Places / Basic Settings).
-2. **Иконка:** загрузи `promo/icon_512.png`.
-3. **Обложки (Thumbnails):** загрузи `promo/thumb_dogfight.png` и `promo/thumb_islands.png`. Добавь 2–3 настоящих кадра из игры:
+2. **Иконка:** загрузи `promo/icon_512_3d.png` (3D). Есть и плоская версия `promo/icon_512.png`.
+3. **Обложки (Thumbnails):** загрузи 3D-обложки `promo/thumb_dogfight_3d.png` и `promo/thumb_islands_3d.png` (плоские версии тоже лежат в promo/). Добавь 2–3 настоящих кадра из игры:
    - в Studio запусти Play, нажми **K**: интерфейс скроется и включится кинокамера;
    - повторное **K** переключает ракурсы (самолёт сбоку, сзади, авианосец, остров);
    - снимок экрана: клавиша Print Screen (или Win+Shift+S на Windows, Cmd+Shift+4 на Mac);
@@ -86,7 +86,11 @@ Roblox продвигает игры, в которые люди **возвра�
 📱 Plays great on phone, PC, tablet and console
 
 🇷🇺 Взлетай с авианосца, захватывай острова и сбивай врагов! Синие против красных.
+
+Art credits: F/A-18E, Su-33, Rafale 3D models by andertan (Sketchfab, CC BY 4.0).
 ```
+
+**Важно:** последняя строка про авторов моделей обязательна. 3D-обложки нарисованы по моделям с лицензией CC BY, а она требует указать автора.
 
 6. **Max Players** (Places → Configure Place): **16**.
 7. **Playability → Public.** Ответь на вопросы **Experience Questionnaire** (возрастной рейтинг): в игре стрельба по самолётам, без крови.

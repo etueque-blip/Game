@@ -42,7 +42,6 @@ local function L(key: string, ...: any): string
 end
 
 local ui = Hud.new(L)
-ui.setJets(Jets.ORDER, Jets.JETS, Progress)
 local cameraRig = CameraRig.new(ui)
 
 local function mySide(): string
@@ -157,6 +156,14 @@ local function buildPreview()
 	m.Parent = workspace
 	preview = m
 end
+-- карточки ангара: 3D-модели (без земли и меток — static)
+ui.setJets(Jets.ORDER, Jets.JETS, Progress, function(id: string, paint: string): Model?
+	local c = Jets.JETS[id]
+	if not c then
+		return nil
+	end
+	return PlaneBuilder.build(paintCfg(c, mySide(), paint), { static = true })
+end)
 ui.on("select", function(jet: string, paint: string)
 	previewJet, previewPaint = jet, paint
 	if inMenu then

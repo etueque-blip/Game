@@ -3744,7 +3744,6 @@ local function L(key: string, ...: any): string
 end
 
 local ui = Hud.new(L)
-ui.setJets(Jets.ORDER, Jets.JETS, Progress)
 local cameraRig = CameraRig.new(ui)
 
 local function mySide(): string
@@ -3859,6 +3858,14 @@ local function buildPreview()
 	m.Parent = workspace
 	preview = m
 end
+-- карточки ангара: 3D-модели (без земли и меток — static)
+ui.setJets(Jets.ORDER, Jets.JETS, Progress, function(id: string, paint: string): Model?
+	local c = Jets.JETS[id]
+	if not c then
+		return nil
+	end
+	return PlaneBuilder.build(paintCfg(c, mySide(), paint), { static = true })
+end)
 ui.on("select", function(jet: string, paint: string)
 	previewJet, previewPaint = jet, paint
 	if inMenu then
@@ -5043,6 +5050,7 @@ return Controls
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local Hud = {}
 
@@ -5218,7 +5226,7 @@ function Hud.new(L: (string, ...any) -> string): any
 	-- ---------- АНГАР: самолёты, раскраски, точка вылета, кнопка «В бой»
 	section(hangar, L("sec_jet"), 1)
 	local jetGrid = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 2 }, hangar)
-	new("UIGridLayout", { CellSize = UDim2.new(0.5, -5, 0, 58), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, jetGrid)
+	new("UIGridLayout", { CellSize = UDim2.new(0.5, -5, 0, 112), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, jetGrid)
 	section(hangar, L("sec_paint"), 3)
 	local paintRow = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 74), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X, LayoutOrder = 4 }, hangar)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, paintRow)
@@ -5277,6 +5285,40 @@ function Hud.new(L: (string, ...any) -> string): any
 		return profile.paints[pt.id] == true
 	end
 
+	-- 3D-превью в карточках: настоящая модель самолёта в ViewportFrame
+	local builder: ((string, string) -> Model?)? = nil
+	local views: { [string]: { vp: ViewportFrame, cam: Camera, model: Model?, dist: number, paint: string } } = {}
+	local function setView(id: string, paint: string)
+		local v = views[id]
+		if not v or not builder or v.paint == paint then
+			return
+		end
+		v.paint = paint
+		if v.model then
+			v.model:Destroy()
+		end
+		local m = builder(id, paint)
+		if not m then
+			return
+		end
+		m:PivotTo(CFrame.identity)
+		m.Parent = v.vp
+		v.model = m
+		local size = m:GetExtentsSize()
+		v.dist = math.max(size.X, size.Z) * 0.5 / math.tan(math.rad(v.cam.FieldOfView * 0.5)) * 1.12
+	end
+	local spin = 0
+	RunService.RenderStepped:Connect(function(dt)
+		if not menu.Visible or not pages.hangar.Visible then
+			return
+		end
+		spin += dt * 0.6
+		for id, v in views do
+			local yaw = if id == selJet then spin else 2.4
+			v.cam.CFrame = CFrame.fromOrientation(-0.38, yaw, 0) * CFrame.new(0, 0, v.dist)
+		end
+	end)
+
 	local function refreshCard()
 		local j = jetsDef[selJet]
 		if not j then
@@ -5326,19 +5368,33 @@ function Hud.new(L: (string, ...any) -> string): any
 		go.Text = if owned(selJet) then L("launch") else L("launch_locked")
 		go.BackgroundColor3 = if owned(selJet) then C.green else C.panel2
 		refreshCard()
+		for id in views do
+			setView(id, if id == selJet then selPaint else "team")
+		end
 		if cbs.select then
 			cbs.select(selJet, selPaint)
 		end
 	end
 
-	function ui.setJets(order: { string }, jets: { [string]: any }, prog: any)
+	function ui.setJets(order: { string }, jets: { [string]: any }, prog: any, build: ((string, string) -> Model?)?)
 		jetsOrder, jetsDef, progDef = order, jets, prog
+		builder = build
 		for i, id in order do
 			local j = jets[id]
 			local b = button(jetGrid, "", UDim2.new(), UDim2.new())
 			b.LayoutOrder = i
-			label(b, j.name, 14, C.text, true, { Position = UDim2.fromOffset(10, 7), Size = UDim2.new(1, -16, 0, 18), TextTruncate = Enum.TextTruncate.AtEnd })
-			label(b, "", 12, C.dim, false, { Name = "Sub", Position = UDim2.fromOffset(10, 30), Size = UDim2.new(1, -16, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd })
+			b.ClipsDescendants = true
+			local vp = new("ViewportFrame", {
+				Size = UDim2.new(1, -8, 0, 66), Position = UDim2.fromOffset(4, 4), BackgroundTransparency = 1,
+				Ambient = Color3.fromRGB(150, 158, 176), LightColor = Color3.fromRGB(255, 236, 214), LightDirection = Vector3.new(-0.5, -1, -0.4),
+			}, b)
+			local vcam = Instance.new("Camera")
+			vcam.FieldOfView = 30
+			vcam.Parent = vp
+			vp.CurrentCamera = vcam
+			views[id] = { vp = vp, cam = vcam, model = nil, dist = 60, paint = "" }
+			label(b, j.name, 14, C.text, true, { Position = UDim2.fromOffset(10, 70), Size = UDim2.new(1, -16, 0, 18), TextTruncate = Enum.TextTruncate.AtEnd })
+			label(b, "", 12, C.dim, false, { Name = "Sub", Position = UDim2.fromOffset(10, 90), Size = UDim2.new(1, -16, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd })
 			b.MouseButton1Click:Connect(function()
 				selJet = id
 				paintSel()
