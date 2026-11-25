@@ -6,7 +6,7 @@ local Controls = {}
 
 local ONCE: { [Enum.KeyCode]: string } = {
 	[Enum.KeyCode.F] = "missile", [Enum.KeyCode.X] = "flare", [Enum.KeyCode.G] = "gear", [Enum.KeyCode.V] = "cam",
-	[Enum.KeyCode.C] = "mouse", [Enum.KeyCode.M] = "menu", [Enum.KeyCode.Z] = "idle",
+	[Enum.KeyCode.C] = "mouse", [Enum.KeyCode.M] = "menu", [Enum.KeyCode.Z] = "idle", [Enum.KeyCode.K] = "cine",
 	-- геймпад
 	[Enum.KeyCode.ButtonX] = "missile", [Enum.KeyCode.ButtonB] = "flare", [Enum.KeyCode.ButtonY] = "gear",
 	[Enum.KeyCode.ButtonSelect] = "cam", [Enum.KeyCode.ButtonStart] = "menu",

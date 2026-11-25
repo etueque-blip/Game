@@ -1,6 +1,44 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
-<Item class="Workspace" referent="RBX0000000E"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
-<Item class="ReplicatedStorage" referent="RBX0000000F"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000005"><Properties><string name="Name">CarrierStrike</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="Workspace" referent="RBX00000012"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX00000013"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000008"><Properties><string name="Name">CarrierStrike</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Настройки, которые вписываешь сам после публикации игры (см. ГАЙД). 0 или "" = выключено.
+return {
+	-- название хранилища сохранений; поменяешь — у всех начнётся новый прогресс
+	DATASTORE = "CarrierStrike_v1",
+
+	-- Game Pass «VIP»: ×2 монеты, золотая раскраска, значок VIP. Создай пропуск и впиши его ID.
+	VIP_PASS_ID = 0,
+	-- Developer Products: пакеты монет. Создай продукты и впиши ID.
+	COIN_PRODUCTS = {
+		{ id = 0, coins = 1000 },
+		{ id = 0, coins = 3000 },
+		{ id = 0, coins = 10000 },
+	},
+
+	-- Значки (Badges): создай в Creator Dashboard и впиши ID
+	BADGES = {
+		welcome = 0, -- первый вход
+		first_kill = 0, -- первое сбитие
+		first_capture = 0, -- первый захват базы
+		first_win = 0, -- первая победа команды
+		ace = 0, -- 5 сбитий за один вылет
+		level10 = 0, -- 10 уровень
+	},
+
+	-- Звуки: Toolbox → Audio → правой кнопкой → Copy Asset ID → "rbxassetid://ЧИСЛО"
+	SOUNDS = {
+		engine = "", -- гул двигателя (зациклен)
+		gun = "", -- выстрел пушки (короткий)
+		missile = "", -- пуск ракеты
+		lock = "", -- сигнал захвата цели
+		warn = "", -- тревога «ракета»
+		hit = "", -- попадание
+		reward = "", -- монеты / задание
+		music = "", -- музыка в меню (зациклена)
+	},
+}
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000002"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Физика полёта из Sky Pilot (без изменений, кроме текста столкновения из World.lastHit).
 -- Единицы: 1 stud/s = 1 kt, высота в футах = Y * FT, G = 19 stud/s².
 local World = require(script.Parent.World)
@@ -367,7 +405,7 @@ end
 
 return FlightPhysics
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000002"><Properties><string name="Name">Jets</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">Jets</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Палубные истребители и параметры оружия.
 -- Формат самолёта — как PlaneConfigs из Sky Pilot (1 stud/s = 1 kt), плюс боевые поля:
 -- hp (прочность), missiles (ракет на вылет), lockMul (насколько дольше по нему захват).
@@ -411,6 +449,7 @@ return {
 	-- оружие
 	GUN_RANGE = 2400, -- studs
 	GUN_CONE = 3.2, -- градусов: попадание, если цель в этом конусе по курсу
+	GUN_CONE_TOUCH = 5.5, -- на телефоне конус шире (помощь прицеливания)
 	GUN_DMG = 6,
 	GUN_RATE = 0.09, -- секунд между выстрелами
 	MSL_RANGE = 7000,
@@ -429,7 +468,217 @@ return {
 	BLEED_EVERY = 6, -- раз в N секунд команда с меньшим числом баз теряет очки
 }
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">Lang</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Тексты игры на двух языках. Язык выбирается по языку Roblox у игрока:
+-- русский (и близкие) → ru, все остальные → en. Добавить язык: новый столбец и ветка в Lang.pick.
+local Lang = {}
+
+local S: { [string]: { string } } = {
+	-- { русский, английский }
+	play = { "ИГРАТЬ", "PLAY" },
+	play_sub = { "Сразу в бой — в воздухе у авианосца", "Straight into the fight, airborne" },
+	play_sub_new = { "Первый вылет с подсказками — жми!", "First flight with tips. Tap!" },
+	tab_hangar = { "АНГАР", "HANGAR" },
+	tab_missions = { "ЗАДАНИЯ", "MISSIONS" },
+	tab_top = { "ТОП", "TOP" },
+	tab_shop = { "МАГАЗИН", "SHOP" },
+	sec_jet = { "САМОЛЁТ", "JET" },
+	sec_paint = { "РАСКРАСКА", "PAINT" },
+	sec_spawn = { "ТОЧКА ВЫЛЕТА", "SPAWN" },
+	sec_daily = { "НАГРАДА ЗА ВХОД", "DAILY REWARD" },
+	sec_quests = { "ЗАДАНИЯ ДНЯ", "DAILY MISSIONS" },
+	sec_stats = { "СТАТИСТИКА", "STATS" },
+	sec_top = { "ЛУЧШИЕ ПИЛОТЫ НЕДЕЛИ (сбито)", "TOP PILOTS THIS WEEK (kills)" },
+	sec_vip = { "VIP", "VIP" },
+	sec_coins = { "МОНЕТЫ", "COINS" },
+	launch = { "В БОЙ  ▶", "LAUNCH  ▶" },
+	launch_locked = { "КУПИТЬ САМОЛЁТ", "BUY THIS JET" },
+	help_pc = {
+		"W/S — нос вниз/вверх · A/D — крен · Q/E — рули · Shift/Ctrl — тяга\nЛКМ или Пробел — пушка · F или ПКМ — ракета (держи врага в рамке) · X — ловушки\nG — шасси · V — камера · C — мышь-штурвал · B — тормоз · M — меню (на земле)",
+		"W/S pitch · A/D roll · Q/E rudder · Shift/Ctrl throttle\nLMB or Space: gun · F or RMB: missile (keep the enemy in the box) · X: flares\nG gear · V camera · C mouse yoke · B brake · M menu (on the ground)",
+	},
+	help_touch = {
+		"Левый стик — штурвал (к себе = вверх). ОГОНЬ — держать. РАКЕТА — когда рамка красная. Ползунок справа — тяга.",
+		"Left stick steers (pull back to climb). Hold FIRE. MISSILE when the box turns red. Right slider is throttle.",
+	},
+	st_speed = { "Скорость", "Speed" },
+	st_agility = { "Манёвр", "Agility" },
+	st_armor = { "Прочность", "Armor" },
+	st_missiles = { "Ракеты", "Missiles" },
+	need_lvl = { "Нужен уровень %d", "Needs level %d" },
+	buy_for = { "КУПИТЬ · %s 💰", "BUY · %s 💰" },
+	invite = { "Позвать друзей", "Invite friends" },
+	invite_fail = { "Приглашения сейчас недоступны", "Invites are not available right now" },
+	level_xp = { "УРОВЕНЬ %d · %s / %s XP", "LEVEL %d · %s / %s XP" },
+	team_Blue = { "Команда СИНИХ", "BLUE team" },
+	team_Red = { "Команда КРАСНЫХ", "RED team" },
+	base_A = { "Альфа", "Alpha" },
+	base_B = { "Браво", "Bravo" },
+	base_C = { "Центр", "Center" },
+	base_D = { "Дельта", "Delta" },
+	base_E = { "Эхо", "Echo" },
+	role_F16 = { "Быстрый и вёрткий", "Fast and nimble" },
+	role_MIG29 = { "Быстрый набор высоты", "Fast climber" },
+	role_FA18 = { "Прочный, 6 ракет", "Tough, 6 missiles" },
+	role_RAFALE = { "Самый вёрткий", "Most agile" },
+	role_SU33 = { "Тяжёлый и мощный", "Heavy hitter" },
+	role_F35 = { "Малозаметный", "Stealth" },
+	sp_deck = { "Палуба авианосца", "Carrier deck" },
+	sp_deck_sub = { "Катапульта: тяга 100% — и в небо", "Catapult: full throttle and go" },
+	sp_air = { "В воздухе у авианосца", "Airborne near the carrier" },
+	sp_air_sub = { "Сразу в бой", "Straight into action" },
+	sp_base = { "База «%s»", "Base %s" },
+	sp_base_ok = { "Своя полоса на острове", "Your island runway" },
+	sp_base_neutral = { "Нейтральная — захвати, чтобы взлетать отсюда", "Neutral: capture it to spawn here" },
+	sp_base_enemy = { "У противника — отбей", "Held by the enemy: take it back" },
+	claim_daily = { "ЗАБРАТЬ  %s 💰", "CLAIM  %s 💰" },
+	daily_title = { "Награда за вход!", "Daily reward!" },
+	daily_sub = { "День %d подряд. Заходи каждый день — награда растёт!", "Day %d in a row. Come back daily, the reward grows!" },
+	daily_back = { "Заходи завтра — следующая награда больше. 7-й день — 🎁 750!", "Come back tomorrow for more. Day 7 is a 🎁 750!" },
+	day_n = { "День %d", "Day %d" },
+	quests_reset = { "Новые задания каждый день.", "New missions every day." },
+	q_kills = { "Сбей %d врагов", "Shoot down %d enemies" },
+	q_caps = { "Захвати %d базы", "Capture %d bases" },
+	q_sorties = { "Сделай %d вылета", "Fly %d sorties" },
+	q_msl = { "Сбей %d ракетами", "Get %d missile kills" },
+	q_gun = { "Сбей %d из пушки", "Get %d gun kills" },
+	q_wins = { "Выиграй %d раунд", "Win %d round" },
+	q_deck = { "Сядь на палубу %d раза", "Land on your carrier %d times" },
+	q_assists = { "Помоги сбить %d врагов", "Get %d assists" },
+	stats_line = { "Сбито: %d · Потери: %d · Победы: %d · Захваты: %d · Вылеты: %d", "Kills: %d · Deaths: %d · Wins: %d · Captures: %d · Sorties: %d" },
+	top_empty = { "Пока пусто — стань первым!", "Empty so far. Be the first!" },
+	top_mine = { "Твои сбития на этой неделе: %d", "Your kills this week: %d" },
+	top_hint = { "Топ обнуляется каждый понедельник.", "The board resets every Monday." },
+	vip_desc = { "×2 монеты, золотая раскраска, ★ у имени", "×2 coins, gold paint, ★ next to your name" },
+	vip_buy = { "КУПИТЬ VIP", "GET VIP" },
+	vip_have = { "У тебя VIP ★", "You have VIP ★" },
+	soon = { "скоро", "soon" },
+	shop_hint = { "Монеты также даются за бой, задания и вход каждый день.", "You also earn coins in battle, from missions and daily rewards." },
+	victory = { "ПОБЕДА!", "VICTORY!" },
+	defeat = { "ПОРАЖЕНИЕ", "DEFEAT" },
+	winner_is = { "Победила %s", "%s wins" },
+	no_mvp = { "В этом раунде не было игроков", "No players this round" },
+	mvp_line = { "Сбито %d · Базы %d", "Kills %d · Bases %d" },
+	next_round = { "Новый раунд через %d с", "Next round in %d s" },
+	round_new = { "Новый раунд!", "New round!" },
+	score_sub = { "очки команд · базы", "team tickets · bases" },
+	spd = { "СКОР kt", "SPD kt" },
+	alt = { "ВЫС ft", "ALT ft" },
+	thr = { "ТЯГА", "THR" },
+	hull = { "КОРПУС", "HULL" },
+	ammo = { "РАКЕТЫ %d   ЛОВУШКИ %d", "MISSILES %d   FLARES %d" },
+	gear_down = { "ШАССИ ▼", "GEAR ▼" },
+	gear_up = { "Шасси убрано", "Gear up" },
+	gear_ground = { "Нельзя убрать шасси на земле", "Can't raise the gear on the ground" },
+	locked = { "ЗАХВАТ — ПУСК!", "LOCKED: FIRE!" },
+	locking = { "захват %d%%", "locking %d%%" },
+	downed = { "СБИТ!", "KILL!" },
+	hit = { "попадание", "hit" },
+	b_fire = { "ОГОНЬ", "FIRE" },
+	b_msl = { "РАКЕТА", "MISSILE" },
+	b_flare = { "ЛОВУШ.", "FLARES" },
+	b_cam = { "КАМЕРА", "CAMERA" },
+	b_gear = { "ШАССИ", "GEAR" },
+	b_brake = { "ТОРМОЗ", "BRAKE" },
+	b_menu = { "МЕНЮ", "MENU" },
+	back_to_carrier = { "Возврат на авианосец…", "Returning to the carrier…" },
+	destroyed = { "Самолёт уничтожен", "Jet destroyed" },
+	killed_by = { "Сбит: %s (%s)", "Shot down by %s (%s)" },
+	killed_zone = { "Улетел из зоны боя", "Left the battle zone" },
+	killed_gun = { "Сбит", "Shot down" },
+	killed_msl = { "Сбит ракетой", "Hit by a missile" },
+	w_gun = { "пушка", "gun" },
+	w_msl = { "ракета", "missile" },
+	w_zone = { "ВНЕ ЗОНЫ БОЯ — РАЗВОРАЧИВАЙСЯ!", "OUT OF BOUNDS: TURN BACK!" },
+	w_missile = { "⚠ РАКЕТА %s — ЛОВУШКИ И ВИРАЖ!", "⚠ MISSILE %s: FLARES AND BREAK!" },
+	w_hp = { "КОРПУС ПОВРЕЖДЁН — НА РЕМОНТ (палуба / своя база)", "HULL DAMAGED: LAND TO REPAIR (carrier / your base)" },
+	crash_water = { "Упал в океан!", "Crashed into the ocean!" },
+	crash_carrier = { "Врезался в авианосец!", "Hit the carrier!" },
+	crash_ground = { "Разбился о землю!", "Crashed into the ground!" },
+	f_cap = { "%s: база «%s» захвачена", "%s captured %s" },
+	f_neutral = { "База «%s» стала нейтральной", "%s is now neutral" },
+	f_streak = { "%s — серия %d сбитий!", "%s is on a %d kill streak!" },
+	streak_n = { "🔥 СЕРИЯ %d!", "🔥 %d KILL STREAK!" },
+	i_throttle = { "Тяга на 100% (Shift / ползунок) — старт", "Full throttle (Shift / slider) to launch" },
+	i_rearm = { "Ремонт и перезарядка… · M — в меню", "Repairing and rearming… · M for menu" },
+	i_capture = { "Захват «%s»: %s %d%%", "Capturing %s: %s %d%%" },
+	i_capture_low = { "База «%s»: снизься ниже %d ft для захвата", "%s: fly below %d ft to capture" },
+	t_air = { "В воздухе! Враги — в красных рамках", "Airborne! Enemies are in red boxes" },
+	t_catapult = { "Катапульта: тяга на 100% (Shift / ползунок) — разгонит сама", "Catapult: full throttle (Shift / slider), it launches you" },
+	t_runway = { "Полоса базы: тяга на 100% — ускоритель разгонит", "Island runway: full throttle, the booster does the rest" },
+	t_go = { "СТАРТ!", "LAUNCH!" },
+	t_fired = { "Пуск!", "Fox two!" },
+	t_no_msl = { "Ракеты кончились — сядь на палубу или свою базу", "Out of missiles: land on your carrier or base" },
+	t_no_lock = { "Нет захвата: держи врага в рамке ~1.5 с", "No lock: keep the enemy in the box ~1.5 s" },
+	menu_ground = { "В меню — только на земле (палуба или своя база)", "Menu only on the ground (carrier or your base)" },
+	mouse_on = { "Мышь-штурвал включён (C)", "Mouse yoke on (C)" },
+	mouse_off = { "Мышь-штурвал выключен", "Mouse yoke off" },
+	brake_on = { "Тормоз включён", "Brake on" },
+	brake_off = { "Тормоз выключен", "Brake off" },
+	cam_1 = { "Камера: сзади", "Camera: chase" },
+	cam_2 = { "Камера: кабина", "Camera: cockpit" },
+	cam_3 = { "Камера: орбита", "Camera: orbit" },
+	tut1 = { "1/4 · Управление: W/S — нос, A/D — крен. Попробуй!", "1/4 · Steer: W/S pitch, A/D roll. Try it!" },
+	tut1_t = { "1/4 · Двигай левый стик — самолёт поворачивает", "1/4 · Move the left stick to steer" },
+	tut2 = { "2/4 · Наведи круг на красную рамку и стреляй: ЛКМ или Пробел", "2/4 · Put the circle on a red box and shoot: LMB or Space" },
+	tut2_t = { "2/4 · Наведи круг на красную рамку и держи ОГОНЬ", "2/4 · Put the circle on a red box and hold FIRE" },
+	tut3 = { "3/4 · Держи врага в рамке — когда она покраснеет, жми F (ракета)", "3/4 · Keep the enemy in the box. When it turns red, press F (missile)" },
+	tut3_t = { "3/4 · Держи врага в рамке — когда она покраснеет, жми РАКЕТА", "3/4 · Keep the enemy in the box. When it turns red, tap MISSILE" },
+	tut4 = { "4/4 · Пролети низко над островом — захватишь базу и получишь монеты", "4/4 · Fly low over an island to capture it and earn coins" },
+	tut4_t = { "4/4 · Пролети низко над островом — захватишь базу и получишь монеты", "4/4 · Fly low over an island to capture it and earn coins" },
+	tut_done = { "Обучение пройдено! Удачи, пилот!", "Training done! Good luck, pilot!" },
+	-- награды
+	r_kill = { "Сбит!", "Kill!" },
+	r_assist = { "Помощь", "Assist" },
+	r_capture = { "Захват базы", "Base captured" },
+	r_win = { "Победа", "Victory" },
+	r_loss = { "За бой", "Battle reward" },
+	r_mvp = { "MVP раунда", "Round MVP" },
+	r_landing = { "Посадка на палубу", "Carrier landing" },
+	r_streak = { "Серия сбитий", "Kill streak" },
+	r_daily = { "Награда за вход", "Daily reward" },
+	r_purchase = { "Покупка", "Purchase" },
+	r_quest = { "Задание", "Mission" },
+	-- сообщения сервера
+	n_levelup = { "⬆ НОВЫЙ УРОВЕНЬ %d!", "⬆ LEVEL %d!" },
+	n_quest_done = { "✓ ЗАДАНИЕ ВЫПОЛНЕНО!", "✓ MISSION COMPLETE!" },
+	n_rearm = { "Ремонт и перезарядка…", "Repairing and rearming…" },
+	n_need_level = { "Нужен уровень %d", "You need level %d" },
+	n_need_coins = { "Не хватает %d монет", "You need %d more coins" },
+	n_bought = { "Куплен %s!", "%s unlocked!" },
+	n_bought_paint = { "Раскраска куплена!", "Paint unlocked!" },
+	n_vip_thanks = { "Спасибо! VIP включён ★", "Thanks! VIP is active ★" },
+}
+
+function Lang.pick(localeId: string?): string
+	local l = string.lower(localeId or "")
+	local p = string.sub(l, 1, 2)
+	if p == "ru" or p == "uk" or p == "be" or p == "kk" or p == "uz" or p == "ky" then
+		return "ru"
+	end
+	return "en"
+end
+
+function Lang.t(lang: string, key: string, ...: any): string
+	local row = S[key]
+	if not row then
+		return key
+	end
+	local s = if lang == "ru" then row[1] else row[2]
+	if select("#", ...) > 0 then
+		local ok, out = pcall(string.format, s, ...)
+		if ok then
+			return out
+		end
+	end
+	return s
+end
+
+Lang.KEYS = S
+
+return Lang
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит модель самолёта из обычных деталей Roblox по PlaneConfigs.
 -- Оси модели: нос -Z, верх +Y, правое крыло +X. Корень (Root) — центр фюзеляжа,
 -- он стоит на высоте gearHeight над землёй, когда шасси касается полосы.
@@ -1238,7 +1487,114 @@ end
 
 return PlaneBuilder
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">Progress</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Прогресс игрока: цены самолётов, раскраски, уровни, награды, ежедневные награды и задания.
+-- Общий для сервера (начисляет) и клиента (показывает). Все цифры можно менять здесь.
+local Progress = {}
+
+-- самолёт: цена в монетах и нужный уровень
+Progress.JETS = {
+	F16 = { cost = 0, level = 1 },
+	MIG29 = { cost = 0, level = 1 },
+	FA18 = { cost = 600, level = 2 },
+	RAFALE = { cost = 1200, level = 4 },
+	SU33 = { cost = 2000, level = 6 },
+	F35 = { cost = 3500, level = 8 },
+} :: { [string]: { cost: number, level: number } }
+
+-- раскраски: корпус и второй цвет; киль всегда цвета команды, чтобы своих было видно
+Progress.PAINTS = {
+	{ id = "team", cost = 0, level = 1 },
+	{ id = "camo", cost = 300, level = 2, body = Color3.fromRGB(96, 110, 82), accent = Color3.fromRGB(70, 80, 60) },
+	{ id = "desert", cost = 500, level = 3, body = Color3.fromRGB(196, 174, 128), accent = Color3.fromRGB(150, 128, 90) },
+	{ id = "arctic", cost = 700, level = 4, body = Color3.fromRGB(232, 238, 244), accent = Color3.fromRGB(150, 170, 190) },
+	{ id = "night", cost = 900, level = 5, body = Color3.fromRGB(34, 38, 46), accent = Color3.fromRGB(20, 22, 28) },
+	{ id = "shark", cost = 1500, level = 7, body = Color3.fromRGB(120, 132, 146), accent = Color3.fromRGB(200, 40, 40) },
+	{ id = "neon", cost = 2500, level = 10, body = Color3.fromRGB(30, 30, 40), accent = Color3.fromRGB(0, 230, 255) },
+	{ id = "gold", cost = 0, level = 1, vip = true, body = Color3.fromRGB(214, 172, 60), accent = Color3.fromRGB(150, 110, 30) },
+}
+function Progress.paint(id: string): any?
+	for _, p in Progress.PAINTS do
+		if p.id == id then
+			return p
+		end
+	end
+	return nil
+end
+
+-- уровень: чтобы дойти до уровня L, нужно 250·(L−1)·L/2 опыта (250, 750, 1500, 2500 …)
+function Progress.xpFor(level: number): number
+	return 125 * (level - 1) * level
+end
+function Progress.levelOf(xp: number): (number, number, number)
+	local l = 1
+	while Progress.xpFor(l + 1) <= xp and l < 100 do
+		l += 1
+	end
+	local base = Progress.xpFor(l)
+	return l, xp - base, Progress.xpFor(l + 1) - base
+end
+
+-- награды {монеты, опыт}
+Progress.REWARD = {
+	kill = { 50, 100 },
+	assist = { 20, 40 },
+	capture = { 40, 80 },
+	win = { 150, 250 },
+	loss = { 50, 80 },
+	mvp = { 100, 100 },
+	landing = { 15, 20 }, -- посадка на свою палубу
+} :: { [string]: { number } }
+-- серия сбитий без смерти → бонус
+Progress.STREAK = { [3] = 50, [5] = 100, [8] = 200, [12] = 400 } :: { [number]: number }
+
+-- ежедневная награда за вход (7 дней подряд, потом по кругу)
+Progress.DAILY = { 100, 150, 200, 250, 300, 400, 750 }
+
+-- ежедневные задания: каждый день 3 из списка
+Progress.QUESTS = {
+	{ id = "kills", n = 5, reward = 200 },
+	{ id = "caps", n = 2, reward = 200 },
+	{ id = "sorties", n = 4, reward = 150 },
+	{ id = "msl", n = 3, reward = 200 },
+	{ id = "gun", n = 3, reward = 200 },
+	{ id = "wins", n = 1, reward = 250 },
+	{ id = "deck", n = 2, reward = 150 },
+	{ id = "assists", n = 3, reward = 150 },
+}
+function Progress.quest(id: string): any?
+	for _, q in Progress.QUESTS do
+		if q.id == id then
+			return q
+		end
+	end
+	return nil
+end
+function Progress.day(): number
+	return os.time() // 86400
+end
+function Progress.week(): number
+	return (os.time() + 3 * 86400) // (7 * 86400) -- неделя с понедельника
+end
+-- одинаковый набор заданий на день для игрока (без случайности, чтобы не «перекручивать»)
+function Progress.questsFor(day: number, userId: number): { string }
+	local rng = Random.new(day * 7919 + userId % 100003)
+	local pool = {}
+	for _, q in Progress.QUESTS do
+		table.insert(pool, q.id)
+	end
+	local out = {}
+	for _ = 1, 3 do
+		local i = rng:NextInteger(1, #pool)
+		table.insert(out, pool[i])
+		table.remove(pool, i)
+	end
+	return out
+end
+
+return Progress
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Carrier Strike: карта — океан, два авианосца и пять островов-баз.
 -- Это же описание использует физика полёта (groundAt / hitsObstacle / runwayAt),
 -- сервер (строит мир по этим данным) и клиент (карта, точки появления).
@@ -1443,23 +1799,29 @@ return World
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX00000010"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000008"><Properties><string name="Name">CarrierStrikeServer</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ServerScriptService" referent="RBX00000014"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000000C"><Properties><string name="Name">CarrierStrikeServer</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Carrier Strike — сервер: команды, вылеты, бой (пушка и ракеты проверяются здесь),
--- захват островов, очки команд, боты.
+-- захват островов, очки команд, боты, прогресс (монеты, опыт, самолёты, раскраски),
+-- ежедневные награды и задания, серии сбитий, MVP раунда, недельный топ, VIP и покупки.
 local Players = game:GetService("Players")
 local Teams = game:GetService("Teams")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PhysicsService = game:GetService("PhysicsService")
 local Debris = game:GetService("Debris")
+local MarketplaceService = game:GetService("MarketplaceService")
+local BadgeService = game:GetService("BadgeService")
 
 local Shared = ReplicatedStorage:WaitForChild("CarrierStrike")
 local World = require(Shared:WaitForChild("World"))
 local Jets = require(Shared:WaitForChild("Jets"))
+local Progress = require(Shared:WaitForChild("Progress"))
+local Config = require(Shared:WaitForChild("Config"))
 local FlightPhysics = require(Shared:WaitForChild("FlightPhysics"))
 local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
 local WorldBuilder = require(script:WaitForChild("WorldBuilder"))
 local Bots = require(script:WaitForChild("Bots"))
+local Data = require(script:WaitForChild("Data"))
 
 local rng = Random.new()
 
@@ -1491,21 +1853,27 @@ local function remote(name: string): RemoteEvent
 	r.Parent = remotes
 	return r
 end
-local SpawnR = remote("Spawn") -- клиент → сервер: (jetId, spawnId)
+local SpawnR = remote("Spawn") -- клиент → сервер: (jetId, spawnId, paintId)
 local StartedR = remote("Started") -- сервер → клиент: (model, jetId, spawnCF, air)
 local ReadyR = remote("Ready")
 local StateR = remote("State") -- (gear, throttle)
-local GunR = remote("Gun") -- (target|nil): выстрел; target — модель, в которую клиент попал
+local GunR = remote("Gun") -- (target|nil)
 local MissileR = remote("Missile") -- (target)
 local FlareR = remote("Flare")
-local CrashR = remote("Crash") -- (reason)
+local CrashR = remote("Crash") -- (kind: "water" | "carrier" | "ground")
 local RearmR = remote("Rearm")
 local LeaveR = remote("Leave")
-local KilledR = remote("Killed") -- сервер → клиент: (text)
-local NotifyR = remote("Notify") -- (text, color)
-local FeedR = remote("Feed") -- всем: строка ленты
+local KilledR = remote("Killed") -- сервер → клиент: (killerName | "", weapon)
+local NotifyR = remote("Notify") -- (key, color, ...)
+local FeedR = remote("Feed") -- всем: (kind, data)
 local WarnR = remote("Warn") -- цели: ракета летит (missile part)
-local HitR = remote("Hit") -- стрелку: попадание (для маркера)
+local HitR = remote("Hit") -- стрелку: попадание (model, kill)
+local ProfileR = remote("Profile") -- сервер → клиент: снимок прогресса
+local RewardR = remote("Reward") -- сервер → клиент: (coins, xp, key)
+local BuyR = remote("Buy") -- клиент → сервер: (kind "jet"|"paint", id)
+local DailyR = remote("ClaimDaily")
+local TutR = remote("TutorialDone")
+local RoundR = remote("RoundEnd") -- всем: (winner, mvp list)
 remotes.Parent = ReplicatedStorage
 
 -- ===== мир и команды
@@ -1518,7 +1886,7 @@ missilesFolder.Name = "Missiles"
 missilesFolder.Parent = workspace
 
 local TEAM: { [string]: Team } = {}
-for _, t in { { "Blue", "Синие", BrickColor.new("Bright blue") }, { "Red", "Красные", BrickColor.new("Bright red") } } do
+for _, t in { { "Blue", "Blue", BrickColor.new("Bright blue") }, { "Red", "Red", BrickColor.new("Bright red") } } do
 	local team = Instance.new("Team")
 	team.Name = t[2]
 	team.TeamColor = t[3]
@@ -1526,7 +1894,7 @@ for _, t in { { "Blue", "Синие", BrickColor.new("Bright blue") }, { "Red", 
 	team:SetAttribute("Side", t[1])
 	team.Parent = Teams
 	TEAM[t[1]] = team
-	-- точка появления персонажа — на палубе своего авианосца (сам персонаж в бою не нужен)
+	-- персонаж появляется на палубе своего авианосца (в бою он сидит в кабине)
 	local c = World.carrierOf(t[1])
 	local sp = Instance.new("SpawnLocation")
 	sp.Name = "Deck_" .. t[1]
@@ -1539,7 +1907,6 @@ for _, t in { { "Blue", "Синие", BrickColor.new("Bright blue") }, { "Red", 
 	sp.CanCollide = true
 	sp.Duration = 0
 	sp.Parent = workspace
-	-- невидимый пол палубы для персонажа
 	local floor = Instance.new("Part")
 	floor.Name = "DeckFloor_" .. t[1]
 	floor.Anchored = true
@@ -1578,32 +1945,181 @@ end
 resetBases()
 publish()
 
--- ===== счёт игроков
-local function stats(p: Player)
+-- =====================================================================
+-- ПРОГРЕСС ИГРОКА
+-- =====================================================================
+local vip: { [Player]: boolean } = {}
+local friendBonus: { [Player]: boolean } = {}
+type RoundStat = { kills: number, caps: number, assists: number, score: number }
+local roundStats: { [Player]: RoundStat } = {}
+
+local function rs(p: Player): RoundStat
+	local s = roundStats[p]
+	if not s then
+		s = { kills = 0, caps = 0, assists = 0, score = 0 }
+		roundStats[p] = s
+	end
+	return s
+end
+
+local function badge(p: Player, name: string)
+	local id = (Config.BADGES :: any)[name]
+	if type(id) == "number" and id > 0 then
+		task.spawn(function()
+			pcall(function()
+				if not BadgeService:UserHasBadgeAsync(p.UserId, id) then
+					BadgeService:AwardBadge(p.UserId, id)
+				end
+			end)
+		end)
+	end
+end
+
+local function todayQuests(p: Player, d: any)
+	local day = Progress.day()
+	if d.quests.day ~= day then
+		d.quests.day = day
+		d.quests.list = {}
+		for _, id in Progress.questsFor(day, p.UserId) do
+			table.insert(d.quests.list, { id = id, p = 0, done = false })
+		end
+	end
+end
+
+local function snapshot(p: Player): any
+	local d = Data.get(p)
+	if not d then
+		return nil
+	end
+	todayQuests(p, d)
+	local day = Progress.day()
+	local can = d.daily.last ~= day
+	local streak = if d.daily.last == day - 1 or d.daily.last == day then d.daily.streak else 0
+	local nextIdx = if can then (streak % #Progress.DAILY) + 1 else ((streak - 1) % #Progress.DAILY) + 1
+	local qs = {}
+	for _, q in d.quests.list do
+		local def = Progress.quest(q.id)
+		if def then
+			table.insert(qs, { id = q.id, n = def.n, p = math.min(q.p, def.n), done = q.done, reward = def.reward })
+		end
+	end
+	return {
+		coins = d.coins, xp = d.xp, owned = d.owned, paints = d.paints, jet = d.jet, paint = d.paint,
+		vip = vip[p] == true, tut = d.tut, stats = d.stats,
+		daily = { can = can, streak = streak, idx = nextIdx },
+		quests = qs, week = if d.week.id == Progress.week() then d.week.kills else 0,
+		shop = { vip = Config.VIP_PASS_ID, coins = Config.COIN_PRODUCTS },
+	}
+end
+local function sendProfile(p: Player)
+	local s = snapshot(p)
+	if s then
+		ProfileR:FireClient(p, s)
+	end
+end
+
+-- начислить монеты и опыт; key — за что (для всплывающей подписи)
+local function give(p: Player?, coins: number, xp: number, key: string)
+	if not p then
+		return
+	end
+	local d = Data.get(p)
+	if not d then
+		return
+	end
+	local mul = (if vip[p] then 2 else 1) * (if friendBonus[p] then 1.2 else 1)
+	local c = math.floor(coins * mul + 0.5)
+	local before = Progress.levelOf(d.xp)
+	d.coins += c
+	d.xp += xp
+	Data.mark(p)
+	RewardR:FireClient(p, c, xp, key)
+	local after = Progress.levelOf(d.xp)
+	if after > before then
+		NotifyR:FireClient(p, "levelup", "amber", after)
+		if after >= 10 then
+			badge(p, "level10")
+		end
+	end
+	sendProfile(p)
+end
+local function reward(p: Player?, kind: string)
+	local r = Progress.REWARD[kind]
+	if r then
+		give(p, r[1], r[2], kind)
+	end
+end
+
+-- продвинуть ежедневное задание
+local function quest(p: Player?, id: string, n: number)
+	if not p then
+		return
+	end
+	local d = Data.get(p)
+	if not d then
+		return
+	end
+	todayQuests(p, d)
+	for _, q in d.quests.list do
+		if q.id == id and not q.done then
+			local def = Progress.quest(id)
+			q.p += n
+			if def and q.p >= def.n then
+				q.done = true
+				give(p, def.reward, 100, "quest_" .. id)
+				NotifyR:FireClient(p, "quest_done", "green")
+			end
+			Data.mark(p)
+		end
+	end
+end
+
+local function stat(p: Player?, name: string, n: number)
+	local d = p and Data.get(p)
+	if d then
+		d.stats[name] = (d.stats[name] or 0) + n
+		if name == "kills" then
+			local wk = Progress.week()
+			if d.week.id ~= wk then
+				d.week.id = wk
+				d.week.kills = 0
+			end
+			d.week.kills += n
+		end
+		Data.mark(p :: Player)
+	end
+end
+
+-- ===== счёт в списке игроков (Tab)
+local function leaderstats(p: Player)
 	local ls = Instance.new("Folder")
 	ls.Name = "leaderstats"
-	for _, n in { "Сбито", "Потери", "Базы" } do
+	for _, n in { "Kills", "Level" } do
 		local v = Instance.new("IntValue")
 		v.Name = n
 		v.Parent = ls
 	end
 	ls.Parent = p
 end
-local function addStat(p: Player?, name: string, d: number)
-	local ls = p and p:FindFirstChild("leaderstats")
-	local v = ls and ls:FindFirstChild(name) :: IntValue?
-	if v then
-		v.Value += d
+local function setLS(p: Player)
+	local d = Data.get(p)
+	local ls = p:FindFirstChild("leaderstats")
+	if d and ls then
+		(ls:FindFirstChild("Kills") :: IntValue).Value = (roundStats[p] and roundStats[p].kills) or 0;
+		(ls:FindFirstChild("Level") :: IntValue).Value = (Progress.levelOf(d.xp))
 	end
 end
 
--- ===== боевые единицы (игроки и боты)
+-- =====================================================================
+-- БОЕВЫЕ ЕДИНИЦЫ (игроки и боты)
+-- =====================================================================
 type Unit = {
 	model: Model, root: BasePart, side: string, cfg: any, name: string,
 	player: Player?, bot: any?, flight: any?,
 	hp: number, maxHp: number, missiles: number, flares: number,
 	flareUntil: number, lastShot: number, lastMsl: number, lastRearm: number,
 	alive: boolean, ready: boolean, born: number, conns: { RBXScriptConnection },
+	dmgBy: { [any]: number }, streak: number, kills: number, airborne: boolean,
 }
 local units: { [Model]: Unit } = {}
 local byPlayer: { [Player]: Unit } = {}
@@ -1700,12 +2216,15 @@ local function loseTickets(side: string, n: number)
 	publish()
 end
 
--- урон; attacker = кто стрелял (для счёта)
+-- урон; attacker = кто стрелял
 local function damage(victim: Unit, dmg: number, attacker: Unit?, weapon: string)
 	if not victim.alive or victim.born + 3 > os.clock() then
 		return -- 3 с неуязвимости после появления
 	end
 	victim.hp -= dmg
+	if attacker then
+		victim.dmgBy[attacker] = (victim.dmgBy[attacker] or 0) + dmg
+	end
 	setAttrs(victim)
 	if attacker and attacker.player then
 		HitR:FireClient(attacker.player, victim.model, victim.hp <= 0)
@@ -1713,15 +2232,47 @@ local function damage(victim: Unit, dmg: number, attacker: Unit?, weapon: string
 	if victim.hp > 0 then
 		return
 	end
-	local by = if attacker then attacker.name else "ПВО"
-	FeedR:FireAllClients(string.format("%s  [%s]  %s", by, weapon, victim.name), if attacker then attacker.side else "", victim.side)
+	FeedR:FireAllClients("kill", { k = if attacker then attacker.name else "", ks = if attacker then attacker.side else "", w = weapon, v = victim.name, vs = victim.side })
 	if attacker then
-		addStat(attacker.player, "Сбито", 1)
+		attacker.kills += 1
+		attacker.streak += 1
+		local ap = attacker.player
+		if ap then
+			reward(ap, "kill")
+			stat(ap, "kills", 1)
+			quest(ap, "kills", 1)
+			quest(ap, if weapon == "msl" then "msl" else "gun", 1)
+			local r = rs(ap)
+			r.kills += 1
+			r.score += 100
+			setLS(ap)
+			badge(ap, "first_kill")
+			if attacker.kills == 5 then
+				badge(ap, "ace")
+			end
+			local bonus = Progress.STREAK[attacker.streak]
+			if bonus then
+				give(ap, bonus, bonus, "streak")
+				FeedR:FireAllClients("streak", { n = attacker.streak, k = attacker.name, ks = attacker.side })
+			end
+		end
 	end
-	addStat(victim.player, "Потери", 1)
+	-- помощь: игроки, нанёсшие ≥25 урона, но не добившие
+	for who, d in victim.dmgBy do
+		local wu = who :: Unit
+		if wu ~= attacker and d >= 25 and wu.player then
+			reward(wu.player, "assist")
+			stat(wu.player, "assists", 1)
+			quest(wu.player, "assists", 1)
+			local r = rs(wu.player)
+			r.assists += 1
+			r.score += 40
+		end
+	end
+	stat(victim.player, "deaths", 1)
 	loseTickets(victim.side, 3)
 	if victim.player then
-		KilledR:FireClient(victim.player, "Сбит: " .. by .. " (" .. weapon .. ")")
+		KilledR:FireClient(victim.player, if attacker then attacker.name else "", weapon)
 	end
 	removeUnit(victim, true)
 end
@@ -1757,16 +2308,23 @@ local function slotFor(spawnId: string, cfg: any): (CFrame?, boolean)
 	return World.spawnCFrame(spawnId, cfg, 1)
 end
 
-local function teamTint(cfg: any, side: string): any
+local function paintCfg(cfg: any, side: string, paintId: string?): any
 	local c = table.clone(cfg)
 	c.colors = table.clone(cfg.colors)
-	c.colors.tail = if side == "Blue" then Color3.fromRGB(46, 104, 170) else Color3.fromRGB(170, 52, 46)
-	c.colors.accent = c.colors.tail
+	local team = if side == "Blue" then Color3.fromRGB(46, 104, 170) else Color3.fromRGB(170, 52, 46)
+	local pt = paintId and Progress.paint(paintId)
+	if pt and pt.body then
+		c.colors.body = pt.body
+		c.colors.accent = pt.accent
+	else
+		c.colors.accent = team
+	end
+	c.colors.tail = team -- киль всегда цвета команды
 	return c
 end
 
-local function makeUnit(cfg: any, side: string, name: string, cf: CFrame, seat: boolean): Unit
-	local model = PlaneBuilder.build(teamTint(cfg, side), { seat = seat, label = name })
+local function makeUnit(cfg: any, side: string, name: string, cf: CFrame, seat: boolean, paintId: string?): Unit
+	local model = PlaneBuilder.build(paintCfg(cfg, side, paintId), { seat = seat, label = name })
 	model:SetAttribute("Side", side)
 	model:SetAttribute("Pilot", name)
 	model:SetAttribute("Gear", true)
@@ -1785,6 +2343,7 @@ local function makeUnit(cfg: any, side: string, name: string, cf: CFrame, seat: 
 		hp = cfg.hp, maxHp = cfg.hp, missiles = cfg.missiles, flares = Jets.FLARES,
 		flareUntil = 0, lastShot = 0, lastMsl = 0, lastRearm = 0,
 		alive = true, ready = false, born = os.clock(), conns = {},
+		dmgBy = {}, streak = 0, kills = 0, airborne = false,
 	}
 	setAttrs(u)
 	model.Parent = planes
@@ -1792,16 +2351,33 @@ local function makeUnit(cfg: any, side: string, name: string, cf: CFrame, seat: 
 	return u
 end
 
+local function ownsJet(p: Player, jetId: string): boolean
+	local d = Data.get(p)
+	return d ~= nil and d.owned[jetId] == true
+end
+local function ownsPaint(p: Player, paintId: string): boolean
+	local d = Data.get(p)
+	local pt = Progress.paint(paintId)
+	if not d or not pt then
+		return false
+	end
+	if pt.vip then
+		return vip[p] == true
+	end
+	return d.paints[paintId] == true
+end
+
 local lastSpawn: { [Player]: number } = {}
-SpawnR.OnServerEvent:Connect(function(p, jetId, spawnId)
+SpawnR.OnServerEvent:Connect(function(p, jetId, spawnId, paintId)
 	if type(jetId) ~= "string" or type(spawnId) ~= "string" then
 		return
 	end
 	local cfg = Jets.JETS[jetId]
 	local side = sideOf(p)
-	if not cfg or not spawnAllowed(side, spawnId) or byPlayer[p] then
+	if not cfg or not spawnAllowed(side, spawnId) or byPlayer[p] or not ownsJet(p, jetId) then
 		return
 	end
+	local paint = if type(paintId) == "string" and ownsPaint(p, paintId) then paintId else "team"
 	local now = os.clock()
 	if lastSpawn[p] and now - lastSpawn[p] < 2 then
 		return
@@ -1821,7 +2397,8 @@ SpawnR.OnServerEvent:Connect(function(p, jetId, spawnId)
 	if not hum or not p.Parent or byPlayer[p] then
 		return
 	end
-	local u = makeUnit(cfg, side, p.DisplayName, cf, true)
+	local label = if vip[p] then "★ " .. p.DisplayName else p.DisplayName
+	local u = makeUnit(cfg, side, label, cf, true, paint)
 	u.player = p
 	u.model.Name = p.Name .. "_Jet"
 	u.model:SetAttribute("Owner", p.UserId)
@@ -1837,6 +2414,13 @@ SpawnR.OnServerEvent:Connect(function(p, jetId, spawnId)
 	table.insert(u.conns, hum.Died:Connect(function()
 		removeUnit(u, true)
 	end))
+	local d = Data.get(p)
+	if d then
+		d.jet = jetId
+		d.paint = paint
+	end
+	stat(p, "sorties", 1)
+	quest(p, "sorties", 1)
 	StartedR:FireClient(p, u.model, jetId, cf, air)
 end)
 
@@ -1877,9 +2461,9 @@ local function shoot(u: Unit, target: Unit?)
 	end
 	u.lastShot = now
 	u.model:SetAttribute("FiringUntil", workspace:GetServerTimeNow() + 0.2)
-	-- запас по углу и дальности на сетевую задержку
-	if target and target.alive and target.side ~= u.side and inCone(u, target.root.Position, Jets.GUN_CONE * 2.2, Jets.GUN_RANGE * 1.15) then
-		damage(target, Jets.GUN_DMG, u, "пушка")
+	-- запас по углу (помощь прицеливания на телефоне) и по дальности (сетевая задержка)
+	if target and target.alive and target.side ~= u.side and inCone(u, target.root.Position, math.max(Jets.GUN_CONE, Jets.GUN_CONE_TOUCH) * 2, Jets.GUN_RANGE * 1.15) then
+		damage(target, Jets.GUN_DMG, u, "gun")
 	end
 end
 
@@ -1974,7 +2558,6 @@ local function stepMissiles(dt: number)
 		local pos = m.part.Position
 		local done = m.t > Jets.MSL_LIFE or not tg.alive
 		if not done then
-			-- ловушки: ракета проверяет каждую новую порцию ловушек один раз
 			if tg.flareUntil > os.clock() and m.flareChecked ~= tg.flareUntil and not m.decoy then
 				m.flareChecked = tg.flareUntil
 				if rng:NextNumber() < Jets.FLARE_CHANCE then
@@ -1988,14 +2571,13 @@ local function stepMissiles(dt: number)
 				local ang = math.acos(math.clamp(m.dir:Dot(want), -1, 1))
 				local maxA = Jets.MSL_TURN * dt
 				if ang > 1e-4 then
-					local k = math.min(1, maxA / ang)
-					m.dir = m.dir:Lerp(want, k).Unit
+					m.dir = m.dir:Lerp(want, math.min(1, maxA / ang)).Unit
 				end
 			end
 			local np = pos + m.dir * Jets.MSL_SPEED * dt
 			m.part.CFrame = CFrame.lookAt(np, np + m.dir)
 			if not m.decoy and (tg.root.Position - np).Magnitude < 55 then
-				damage(tg, Jets.MSL_DMG, m.owner, "ракета")
+				damage(tg, Jets.MSL_DMG, m.owner, "msl")
 				done = true
 			elseif m.decoy and (m.decoy - np).Magnitude < 40 then
 				done = true
@@ -2009,7 +2591,6 @@ local function stepMissiles(dt: number)
 			ex.BlastRadius = 0
 			ex.BlastPressure = 0
 			ex.Parent = workspace
-			m.part.Anchored = true
 			m.part.Transparency = 1
 			Debris:AddItem(m.part, 1.7)
 			table.remove(missiles, i)
@@ -2018,14 +2599,14 @@ local function stepMissiles(dt: number)
 end
 
 -- ===== крушение, перевооружение, выход
-CrashR.OnServerEvent:Connect(function(p, reason)
+CrashR.OnServerEvent:Connect(function(p, kind)
 	local u = byPlayer[p]
 	if not u then
 		return
 	end
-	local r = if type(reason) == "string" then reason:sub(1, 80) else "Крушение"
-	FeedR:FireAllClients(string.format("%s  [%s]", u.name, r), "", u.side)
-	addStat(p, "Потери", 1)
+	local why = if kind == "water" or kind == "carrier" or kind == "ground" then kind else "ground"
+	FeedR:FireAllClients("crash", { v = u.name, vs = u.side, why = why })
+	stat(p, "deaths", 1)
 	loseTickets(u.side, 2)
 	removeUnit(u, true)
 end)
@@ -2035,21 +2616,27 @@ RearmR.OnServerEvent:Connect(function(p)
 	if not u or not u.ready or os.clock() - u.lastRearm < 2 then
 		return
 	end
-	-- только на своей палубе / своей полосе и почти без скорости
 	local pos = u.root.Position
 	local where = World.runwayAt(pos.X, pos.Z, 10)
-	local mine = where == World.carrierOf(u.side).id or (where ~= nil and bases[where] ~= nil and bases[where].owner == u.side)
+	local onCarrier = where == World.carrierOf(u.side).id
+	local mine = onCarrier or (where ~= nil and bases[where] ~= nil and bases[where].owner == u.side)
 	if not mine or u.root.AssemblyLinearVelocity.Magnitude > 25 then
 		return
 	end
 	u.lastRearm = os.clock()
+	-- посадка на палубу после вылета: награда и задание
+	if onCarrier and u.airborne then
+		u.airborne = false
+		reward(p, "landing")
+		quest(p, "deck", 1)
+	end
 	local before = u.hp + u.missiles + u.flares
 	u.hp = math.min(u.maxHp, u.hp + 30)
 	u.missiles = u.cfg.missiles
 	u.flares = Jets.FLARES
 	setAttrs(u)
 	if u.hp + u.missiles + u.flares > before then
-		NotifyR:FireClient(p, "Ремонт и перезарядка…", "cyan")
+		NotifyR:FireClient(p, "rearm", "cyan")
 	end
 end)
 
@@ -2060,11 +2647,168 @@ LeaveR.OnServerEvent:Connect(function(p)
 	end
 end)
 
-Players.PlayerAdded:Connect(function(p)
-	stats(p)
+-- ===== магазин: самолёты и раскраски за монеты
+BuyR.OnServerEvent:Connect(function(p, kind, id)
+	local d = Data.get(p)
+	if not d or type(id) ~= "string" then
+		return
+	end
+	local level = Progress.levelOf(d.xp)
+	if kind == "jet" then
+		local j = Progress.JETS[id]
+		if not j or d.owned[id] then
+			return
+		end
+		if level < j.level then
+			NotifyR:FireClient(p, "need_level", "amber", j.level)
+		elseif d.coins < j.cost then
+			NotifyR:FireClient(p, "need_coins", "amber", j.cost - d.coins)
+		else
+			d.coins -= j.cost
+			d.owned[id] = true
+			d.jet = id
+			Data.mark(p)
+			task.spawn(Data.save, p)
+			NotifyR:FireClient(p, "bought", "green", id)
+		end
+	elseif kind == "paint" then
+		local pt = Progress.paint(id)
+		if not pt or pt.vip or d.paints[id] then
+			return
+		end
+		if level < pt.level then
+			NotifyR:FireClient(p, "need_level", "amber", pt.level)
+		elseif d.coins < pt.cost then
+			NotifyR:FireClient(p, "need_coins", "amber", pt.cost - d.coins)
+		else
+			d.coins -= pt.cost
+			d.paints[id] = true
+			d.paint = id
+			Data.mark(p)
+			task.spawn(Data.save, p)
+			NotifyR:FireClient(p, "bought_paint", "green")
+		end
+	end
+	sendProfile(p)
 end)
+
+-- ===== ежедневная награда
+DailyR.OnServerEvent:Connect(function(p)
+	local d = Data.get(p)
+	if not d then
+		return
+	end
+	local day = Progress.day()
+	if d.daily.last == day then
+		return
+	end
+	d.daily.streak = if d.daily.last == day - 1 then d.daily.streak + 1 else 1
+	d.daily.last = day
+	local idx = ((d.daily.streak - 1) % #Progress.DAILY) + 1
+	give(p, Progress.DAILY[idx], 50, "daily")
+	Data.mark(p)
+	task.spawn(Data.save, p)
+end)
+
+TutR.OnServerEvent:Connect(function(p)
+	local d = Data.get(p)
+	if d and not d.tut then
+		d.tut = true
+		Data.mark(p)
+		sendProfile(p)
+	end
+end)
+
+-- ===== VIP и покупки за Robux
+local function checkVip(p: Player)
+	if Config.VIP_PASS_ID and Config.VIP_PASS_ID > 0 then
+		local ok, has = pcall(function()
+			return MarketplaceService:UserOwnsGamePassAsync(p.UserId, Config.VIP_PASS_ID)
+		end)
+		vip[p] = ok and has == true
+	end
+end
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(p, passId, bought)
+	if bought and passId == Config.VIP_PASS_ID then
+		vip[p] = true
+		NotifyR:FireClient(p, "vip_thanks", "amber")
+		sendProfile(p)
+	end
+end)
+MarketplaceService.ProcessReceipt = function(info: any)
+	local p = Players:GetPlayerByUserId(info.PlayerId)
+	local d = p and Data.get(p)
+	if not p or not d then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	for _, id in d.purchases do
+		if id == info.PurchaseId then
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+	end
+	local coins = 0
+	for _, pr in Config.COIN_PRODUCTS do
+		if pr.id == info.ProductId then
+			coins = pr.coins
+		end
+	end
+	if coins == 0 then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	d.coins += coins
+	table.insert(d.purchases, info.PurchaseId)
+	while #d.purchases > 50 do
+		table.remove(d.purchases, 1)
+	end
+	if not Data.save(p) then
+		-- не сохранилось — откатываем и попросим Roblox повторить позже
+		d.coins -= coins
+		table.remove(d.purchases)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	RewardR:FireClient(p, coins, 0, "purchase")
+	sendProfile(p)
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
+-- ===== вход и выход игроков
+local function updateFriends()
+	local list = Players:GetPlayers()
+	for _, p in list do
+		task.spawn(function()
+			local has = false
+			for _, q in list do
+				if q ~= p then
+					local ok, f = pcall(function()
+						return p:IsFriendsWith(q.UserId)
+					end)
+					if ok and f then
+						has = true
+						break
+					end
+				end
+			end
+			friendBonus[p] = has
+		end)
+	end
+end
+
+local function onJoin(p: Player)
+	leaderstats(p)
+	Data.load(p)
+	checkVip(p)
+	if not p.Parent then
+		Data.release(p)
+		return
+	end
+	setLS(p)
+	sendProfile(p)
+	badge(p, "welcome")
+	updateFriends()
+end
+Players.PlayerAdded:Connect(onJoin)
 for _, p in Players:GetPlayers() do
-	stats(p)
+	task.spawn(onJoin, p)
 end
 Players.PlayerRemoving:Connect(function(p)
 	local u = byPlayer[p]
@@ -2072,10 +2816,28 @@ Players.PlayerRemoving:Connect(function(p)
 		removeUnit(u, false)
 	end
 	lastSpawn[p] = nil
+	roundStats[p] = nil
+	vip[p] = nil
+	friendBonus[p] = nil
+	Data.release(p)
+	updateFriends()
 end)
 
--- ===== боты
-local BOT_NAMES = { "Сокол", "Гроза", "Вихрь", "Беркут", "Кобра", "Тайфун", "Ястреб", "Шторм", "Молния", "Стриж" }
+-- недельный топ: раз в 2 минуты в атрибут Top (JSON)
+task.spawn(function()
+	while true do
+		local ok, list = pcall(Data.fetchTop)
+		if ok then
+			match:SetAttribute("Top", Data.encode(list))
+		end
+		task.wait(120)
+	end
+end)
+
+-- =====================================================================
+-- БОТЫ
+-- =====================================================================
+local BOT_NAMES = { "Falcon", "Viper", "Ghost", "Maverick", "Cobra", "Typhoon", "Hawk", "Storm", "Blaze", "Raven", "Phantom", "Sabre" }
 local botSeq = 0
 local function spawnBot(side: string)
 	botSeq += 1
@@ -2083,9 +2845,10 @@ local function spawnBot(side: string)
 	local cfg = Jets.JETS[id]
 	local cf = World.spawnCFrame("air:" .. side, cfg, rng:NextInteger(1, 4)) :: CFrame
 	cf = cf + Vector3.new(rng:NextNumber(-300, 300), rng:NextNumber(0, 400), rng:NextNumber(-300, 300))
-	local u = makeUnit(cfg, side, "[ИИ] " .. BOT_NAMES[(botSeq - 1) % #BOT_NAMES + 1], cf, false)
+	local paints = { "team", "camo", "desert", "arctic", "night" }
+	local u = makeUnit(cfg, side, "[BOT] " .. BOT_NAMES[(botSeq - 1) % #BOT_NAMES + 1], cf, false, paints[rng:NextInteger(1, #paints)])
 	u.flight = FlightPhysics.new(cfg, cf, true)
-	u.bot = { skill = rng:NextNumber(0.3, 0.9), target = nil :: Unit?, goal = nil :: string?, retarget = 0, lastMsl = os.clock() + 6, aimErr = rng:NextNumber(0.5, 1.5), stuck = 0 }
+	u.bot = { skill = rng:NextNumber(0.3, 0.9), target = nil :: Unit?, retarget = 0, lastMsl = os.clock() + 6, aimErr = rng:NextNumber(0.5, 1.5) }
 	u.ready = true
 	u.model:SetAttribute("Gear", false)
 	u.model:SetAttribute("Throttle", 0.85)
@@ -2125,7 +2888,6 @@ local function nearestEnemy(u: Unit, maxDist: number): Unit?
 end
 
 local function botGoal(u: Unit): Vector3
-	-- ближайшая чужая или нейтральная база; если все наши — к авианосцу врага
 	local best, bd = nil, math.huge
 	for _, i in World.ISLANDS do
 		if bases[i.id].owner ~= u.side then
@@ -2159,7 +2921,6 @@ local function stepBot(u: Unit, dt: number)
 	if tg then
 		local aim = Bots.lead(f.pos, tg.root.Position, vel(tg), math.max(f.speed, 300) + 900)
 		dir = (aim - f.pos).Unit
-		-- огонь
 		local d = (tg.root.Position - f.pos).Magnitude
 		local cosA = f.att.LookVector:Dot(dir)
 		if d < Jets.GUN_RANGE * 0.85 and cosA > math.cos(math.rad(Jets.GUN_CONE * b.aimErr)) then
@@ -2178,7 +2939,6 @@ local function stepBot(u: Unit, dt: number)
 		dir = (botGoal(u) - f.pos)
 		dir = if dir.Magnitude > 1 then dir.Unit else f.att.LookVector
 	end
-	-- уклонение: ракета летит в бота — ловушки и резкий вираж
 	for _, m in missiles do
 		if m.target == u and not m.decoy and (m.part.Position - f.pos).Magnitude < 2500 then
 			if rng:NextNumber() < 0.04 + b.skill * 0.04 then
@@ -2191,7 +2951,7 @@ local function stepBot(u: Unit, dt: number)
 	local input = Bots.steer(f, dir, b.skill)
 	FlightPhysics.step(f, input, dt)
 	if f.crashed then
-		FeedR:FireAllClients(string.format("%s  [%s]", u.name, f.crashReason or "крушение"), "", u.side)
+		FeedR:FireAllClients("crash", { v = u.name, vs = u.side, why = if f.pos.Y < 5 then "water" else "ground" })
 		loseTickets(u.side, 2)
 		removeUnit(u, true)
 		return
@@ -2199,18 +2959,50 @@ local function stepBot(u: Unit, dt: number)
 	u.root.CFrame = FlightPhysics.pose(f)
 end
 
--- ===== главный цикл
+-- =====================================================================
+-- РАУНД
+-- =====================================================================
 local capAcc, bleedAcc, botAcc = 0, 0, 0
 local roundOver = false
 
 local function endRound(winner: string)
 	roundOver = true
-	FeedR:FireAllClients("ПОБЕДА: " .. World.TEAM_NAME[winner] .. "! Новый раунд через 15 с", winner, "")
-	NotifyR:FireAllClients("Раунд окончен — победили " .. World.TEAM_NAME[winner], if winner == "Blue" then "cyan" else "red")
+	-- MVP: трое лучших игроков раунда
+	local list = {}
+	for p, s in roundStats do
+		if p.Parent then
+			table.insert(list, { p = p, s = s })
+		end
+	end
+	table.sort(list, function(a, b)
+		return a.s.score > b.s.score
+	end)
+	local mvp = {}
+	for i = 1, math.min(3, #list) do
+		local e = list[i]
+		table.insert(mvp, { name = e.p.DisplayName, side = sideOf(e.p), kills = e.s.kills, caps = e.s.caps, score = e.s.score, userId = e.p.UserId })
+	end
+	RoundR:FireAllClients(winner, mvp)
+	for _, p in Players:GetPlayers() do
+		if sideOf(p) == winner then
+			reward(p, "win")
+			stat(p, "wins", 1)
+			quest(p, "wins", 1)
+			badge(p, "first_win")
+		else
+			reward(p, "loss")
+		end
+	end
+	if list[1] and list[1].s.score > 0 then
+		reward(list[1].p, "mvp")
+	end
+	for _, p in Players:GetPlayers() do
+		task.spawn(Data.save, p)
+	end
 	task.delay(15, function()
 		for _, u in units do
 			if u.player then
-				KilledR:FireClient(u.player, "Новый раунд")
+				KilledR:FireClient(u.player, "", "round")
 			end
 			removeUnit(u, false)
 		end
@@ -2218,9 +3010,13 @@ local function endRound(winner: string)
 			m.part:Destroy()
 		end
 		table.clear(missiles)
+		table.clear(roundStats)
 		tickets.Blue, tickets.Red = Jets.TICKETS, Jets.TICKETS
 		resetBases()
 		publish()
+		for _, p in Players:GetPlayers() do
+			setLS(p)
+		end
 		roundOver = false
 	end)
 end
@@ -2238,26 +3034,30 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 	stepMissiles(dt)
 
-	-- вне зоны боя — урон; ниже палубы игрок проверяется на клиенте
 	capAcc += dt
 	if capAcc >= 0.5 then
 		local step = capAcc
 		capAcc = 0
 		for _, u in units do
 			local p = u.root.Position
+			if u.alive and p.Y > World.DECK_H + 80 then
+				u.airborne = true
+			end
 			if u.alive and (math.abs(p.X) > World.SIZE or math.abs(p.Z) > World.SIZE) then
 				u.born = 0
-				damage(u, 6 * step, nil, "вне зоны")
+				damage(u, 6 * step, nil, "zone")
 			end
 		end
-		-- захват баз: кто держит самолёты низко над островом
+		-- захват баз: самолёты низко над островом
 		for _, i in World.ISLANDS do
 			local nb, nr = 0, 0
+			local inZone: { Unit } = {}
 			for _, u in units do
 				if u.alive and u.ready then
 					local p = u.root.Position
 					local dx, dz = p.X - i.x, p.Z - i.z
 					if dx * dx + dz * dz < World.CAPTURE_R * World.CAPTURE_R and p.Y < i.h + World.CAPTURE_ALT then
+						table.insert(inZone, u)
 						if u.side == "Blue" then
 							nb += 1
 						else
@@ -2280,17 +3080,20 @@ RunService.Heartbeat:Connect(function(dt)
 				if b.owner ~= was then
 					WorldBuilder.setOwner(i.id, b.owner)
 					if b.owner ~= "" then
-						FeedR:FireAllClients(string.format("%s захватили базу «%s»", World.TEAM_NAME[b.owner], i.name), b.owner, "")
-						for _, u in units do
+						FeedR:FireAllClients("cap", { side = b.owner, base = i.id })
+						for _, u in inZone do
 							if u.player and u.side == b.owner then
-								local p = u.root.Position
-								if (Vector3.new(p.X - i.x, 0, p.Z - i.z)).Magnitude < World.CAPTURE_R then
-									addStat(u.player, "Базы", 1)
-								end
+								reward(u.player, "capture")
+								stat(u.player, "caps", 1)
+								quest(u.player, "caps", 1)
+								badge(u.player, "first_capture")
+								local r = rs(u.player)
+								r.caps += 1
+								r.score += 75
 							end
 						end
 					else
-						FeedR:FireAllClients(string.format("База «%s» стала нейтральной", i.name), "", "")
+						FeedR:FireAllClients("neutral", { base = i.id })
 					end
 				end
 			end
@@ -2298,7 +3101,6 @@ RunService.Heartbeat:Connect(function(dt)
 		publish()
 	end
 
-	-- у кого меньше баз — теряет очки
 	bleedAcc += dt
 	if bleedAcc >= Jets.BLEED_EVERY and not roundOver then
 		bleedAcc = 0
@@ -2324,7 +3126,6 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 
-	-- держим нужное число ботов
 	botAcc += dt
 	if botAcc >= 3 and not roundOver then
 		botAcc = 0
@@ -2344,7 +3145,7 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 end)
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">Bots</string><ProtectedString name="Source"><![CDATA[--!strict
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">Bots</string><ProtectedString name="Source"><![CDATA[--!strict
 -- «Мозг» бота: по положению своего самолёта и цели выдаёт ввод для FlightPhysics
 -- (тот же ввод, что у игрока: p — на себя, r — крен вправо, y — педали, throttle).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -2413,7 +3214,213 @@ end
 
 return Bots
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">Data</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Сохранения игроков (DataStore). Если хранилище недоступно (в Studio не включён доступ к API),
+-- игра работает с временным профилем и НЕ перезаписывает настоящие сохранения.
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("CarrierStrike")
+local Config = require(Shared:WaitForChild("Config"))
+local Progress = require(Shared:WaitForChild("Progress"))
+
+local Data = {}
+
+local store: DataStore? = nil
+local top: OrderedDataStore? = nil
+local topWeek = -1
+pcall(function()
+	store = DataStoreService:GetDataStore(Config.DATASTORE)
+end)
+
+local function default(): any
+	return {
+		v = 1,
+		coins = 300,
+		xp = 0,
+		owned = { F16 = true, MIG29 = true },
+		paints = { team = true },
+		paint = "team",
+		jet = "F16",
+		daily = { last = 0, streak = 0 },
+		quests = { day = 0, list = {} },
+		week = { id = 0, kills = 0 },
+		stats = { kills = 0, deaths = 0, wins = 0, caps = 0, sorties = 0, assists = 0 },
+		purchases = {},
+		tut = false,
+		lang = "",
+	}
+end
+
+-- дописать новые поля в старое сохранение
+local function reconcile(d: any): any
+	local def = default()
+	for k, v in def do
+		if d[k] == nil then
+			d[k] = v
+		elseif type(v) == "table" and type(d[k]) == "table" and k ~= "purchases" and k ~= "owned" and k ~= "paints" then
+			for k2, v2 in v do
+				if d[k][k2] == nil then
+					d[k][k2] = v2
+				end
+			end
+		end
+	end
+	d.owned.F16 = true
+	d.owned.MIG29 = true
+	d.paints.team = true
+	return d
+end
+
+type Slot = { data: any, noSave: boolean, dirty: boolean, savedKills: number }
+local slots: { [Player]: Slot } = {}
+local warned = false
+
+function Data.load(p: Player): any
+	local key = "u_" .. p.UserId
+	local data: any = nil
+	local ok = false
+	if store then
+		for attempt = 1, 3 do
+			local s, res = pcall(function()
+				return (store :: DataStore):GetAsync(key)
+			end)
+			if s then
+				ok = true
+				data = res
+				break
+			end
+			if not warned then
+				warn("[CarrierStrike] DataStore недоступен:", res, "— в Studio включи Game Settings → Security → Enable Studio Access to API Services")
+				warned = true
+			end
+			task.wait(attempt)
+		end
+	end
+	local slot: Slot = {
+		data = reconcile(if type(data) == "table" then data else default()),
+		noSave = not ok, -- загрузка не удалась: не затираем настоящий профиль пустым
+		dirty = false,
+		savedKills = -1,
+	}
+	slots[p] = slot
+	return slot.data
+end
+
+function Data.get(p: Player): any?
+	local s = slots[p]
+	return s and s.data
+end
+
+function Data.mark(p: Player)
+	local s = slots[p]
+	if s then
+		s.dirty = true
+	end
+end
+
+function Data.save(p: Player): boolean
+	local s = slots[p]
+	if not s or s.noSave or not store then
+		return false
+	end
+	local key = "u_" .. p.UserId
+	local d = s.data
+	local ok = pcall(function()
+		(store :: DataStore):UpdateAsync(key, function()
+			return d
+		end)
+	end)
+	if ok then
+		s.dirty = false
+	end
+	-- недельный топ сбитий
+	local wk = Progress.week()
+	if wk ~= topWeek then
+		topWeek = wk
+		pcall(function()
+			top = DataStoreService:GetOrderedDataStore("CS_WeekKills_" .. wk)
+		end)
+	end
+	if ok and top and d.week.id == wk and d.week.kills ~= s.savedKills and d.week.kills > 0 then
+		local kills = d.week.kills
+		if pcall(function()
+			(top :: OrderedDataStore):SetAsync(key, kills)
+		end) then
+			s.savedKills = kills
+		end
+	end
+	return ok
+end
+
+function Data.release(p: Player)
+	if slots[p] then
+		Data.save(p)
+		slots[p] = nil
+	end
+end
+
+-- топ-10 недели: { {name, kills} }
+local nameCache: { [number]: string } = {}
+function Data.fetchTop(): { any }
+	local out = {}
+	local wk = Progress.week()
+	local ok, pages = pcall(function()
+		return DataStoreService:GetOrderedDataStore("CS_WeekKills_" .. wk):GetSortedAsync(false, 10)
+	end)
+	if not ok or not pages then
+		return out
+	end
+	for _, e in (pages :: any):GetCurrentPage() do
+		local uid = tonumber(string.match(e.key, "%d+")) or 0
+		local name = nameCache[uid]
+		if not name then
+			local s, n = pcall(function()
+				return Players:GetNameFromUserIdAsync(uid)
+			end)
+			name = if s and n then n else "?"
+			nameCache[uid] = name
+		end
+		table.insert(out, { name, e.value })
+	end
+	return out
+end
+
+function Data.encode(t: any): string
+	return HttpService:JSONEncode(t)
+end
+
+-- автосохранение раз в 90 с и при выключении сервера
+task.spawn(function()
+	while true do
+		task.wait(90)
+		for p, s in slots do
+			if s.dirty then
+				task.spawn(Data.save, p)
+			end
+		end
+	end
+end)
+game:BindToClose(function()
+	local left = 0
+	for p in slots do
+		left += 1
+		task.spawn(function()
+			Data.save(p)
+			left -= 1
+		end)
+	end
+	local t = os.clock()
+	while left > 0 and os.clock() - t < 25 do
+		task.wait(0.2)
+	end
+end)
+
+return Data
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Строит мир по описанию World: океан, авианосцы, острова с полосами и флагами баз, свет и небо.
 -- Всё из обычных деталей — никаких внешних моделей.
 local Lighting = game:GetService("Lighting")
@@ -2693,19 +3700,26 @@ return WorldBuilder
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX00000012"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000011"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX0000000D"><Properties><string name="Name">CarrierStrikeClient</string><ProtectedString name="Source"><![CDATA[--!strict
--- Carrier Strike — клиент: меню вылета, локальная физика своего самолёта (как в Sky Pilot),
--- катапульта и тросы, пушка/ракеты/ловушки, метки, радар, камера.
+<Item class="StarterPlayer" referent="RBX00000016"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000015"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000011"><Properties><string name="Name">CarrierStrikeClient</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Carrier Strike — клиент: меню (3D-витрина самолёта на палубе), прогресс, быстрый старт, обучение,
+-- локальная физика своего самолёта (как в Sky Pilot), катапульта и тросы, пушка/ракеты/ловушки,
+-- метки, радар, звуки, награды, итоги раунда, кинокамера для обложек (только в Studio, клавиша K).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Debris = game:GetService("Debris")
+local HttpService = game:GetService("HttpService")
+local SocialService = game:GetService("SocialService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("CarrierStrike")
 local World = require(Shared:WaitForChild("World"))
 local Jets = require(Shared:WaitForChild("Jets"))
+local Progress = require(Shared:WaitForChild("Progress"))
+local Config = require(Shared:WaitForChild("Config"))
+local Lang = require(Shared:WaitForChild("Lang"))
 local FlightPhysics = require(Shared:WaitForChild("FlightPhysics"))
+local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
 local R = ReplicatedStorage:WaitForChild("CSRemotes")
 local match = ReplicatedStorage:WaitForChild("CSMatch")
 
@@ -2721,9 +3735,16 @@ local SpawnR, StartedR, ReadyR, StateR = ev("Spawn"), ev("Started"), ev("Ready")
 local GunR, MissileR, FlareR, CrashR = ev("Gun"), ev("Missile"), ev("Flare"), ev("Crash")
 local RearmR, LeaveR, KilledR, NotifyR = ev("Rearm"), ev("Leave"), ev("Killed"), ev("Notify")
 local FeedR, WarnR, HitR = ev("Feed"), ev("Warn"), ev("Hit")
+local ProfileR, RewardR, BuyR, DailyR, TutR, RoundR = ev("Profile"), ev("Reward"), ev("Buy"), ev("ClaimDaily"), ev("TutorialDone"), ev("RoundEnd")
 
-local ui = Hud.new()
-ui.setJets(Jets.ORDER, Jets.JETS)
+-- ===== язык: русский для русскоязычных, иначе английский
+local lang = Lang.pick(player.LocaleId)
+local function L(key: string, ...: any): string
+	return Lang.t(lang, key, ...)
+end
+
+local ui = Hud.new(L)
+ui.setJets(Jets.ORDER, Jets.JETS, Progress)
 local cameraRig = CameraRig.new(ui)
 
 local function mySide(): string
@@ -2753,7 +3774,33 @@ local function setCharacterControls(enabled: boolean)
 end
 task.spawn(setCharacterControls, false)
 
--- ===== состояние полёта
+-- ===== звуки (id в Config.SOUNDS; пусто — без звука)
+local sounds: { [string]: Sound } = {}
+local function sound(name: string, looped: boolean?, vol: number?): Sound?
+	local id = (Config.SOUNDS :: any)[name]
+	if type(id) ~= "string" or id == "" then
+		return nil
+	end
+	local s = sounds[name]
+	if not s then
+		s = Instance.new("Sound")
+		s.SoundId = id
+		s.Looped = looped == true
+		s.Volume = vol or 0.6
+		s.Parent = workspace.CurrentCamera
+		sounds[name] = s
+	end
+	return s
+end
+local function play(name: string, vol: number?)
+	local s = sound(name, false, vol)
+	if s then
+		s.TimePosition = 0
+		s:Play()
+	end
+end
+
+-- ===== состояние
 local flight: any = nil
 local model: Model? = nil
 local root: BasePart? = nil
@@ -2766,27 +3813,77 @@ local deadUntil = 0
 local lastSync = 0
 local lastShot = 0
 local lastRearm = 0
-local lock = { target = nil :: Model?, t = 0 }
+local lock = { target = nil :: Model?, t = 0, beeped = false }
 local incoming: { BasePart } = {}
 local inMenu = true
+local profile: any = nil
+local dailyShown = false
+local tut = { on = false, step = 0, t = 0, hit = false, msl = false }
+local cine = { on = false, shot = 0, t = 0 }
 
--- ===== меню
+-- ===== витрина в меню: выбранный самолёт стоит на палубе своего авианосца
+local preview: Model? = nil
+local previewKey = ""
+local function paintCfg(c: any, side: string, paintId: string): any
+	local out = table.clone(c)
+	out.colors = table.clone(c.colors)
+	local team = if side == "Blue" then Color3.fromRGB(46, 104, 170) else Color3.fromRGB(170, 52, 46)
+	local pt = Progress.paint(paintId)
+	if pt and pt.body then
+		out.colors.body = pt.body
+		out.colors.accent = pt.accent
+	else
+		out.colors.accent = team
+	end
+	out.colors.tail = team
+	return out
+end
+local previewJet, previewPaint = "F16", "team"
+local function buildPreview()
+	local key = previewJet .. "|" .. previewPaint .. "|" .. mySide()
+	if key == previewKey and preview and preview.Parent then
+		return
+	end
+	previewKey = key
+	if preview then
+		preview:Destroy()
+	end
+	local c = Jets.JETS[previewJet]
+	if not c then
+		return
+	end
+	local m = PlaneBuilder.build(paintCfg(c, mySide(), previewPaint), { static = true })
+	local carrier = World.carrierOf(mySide())
+	m:PivotTo(carrier.cf * CFrame.new(-30, World.DECK_H + c.gearHeight, 40) * CFrame.Angles(0, math.rad(-25), 0))
+	m.Name = "Preview"
+	m.Parent = workspace
+	preview = m
+end
+ui.on("select", function(jet: string, paint: string)
+	previewJet, previewPaint = jet, paint
+	if inMenu then
+		buildPreview()
+	end
+end)
+
+-- ===== меню: точки вылета, счёт
 local function refreshMenu()
 	local side = mySide()
-	ui.setTeam(side, World.TEAM_NAME[side])
+	ui.setTeam(side)
 	local list = {
-		{ id = "deck:" .. side, title = "⚓ Палуба авианосца", sub = "Взлёт с катапульты: тяга 100% — и в небо", ok = true },
-		{ id = "air:" .. side, title = "✈ В воздухе у авианосца", sub = "Сразу в бой, высота ~2 400 ft", ok = true },
+		{ id = "deck:" .. side, title = "⚓ " .. L("sp_deck"), sub = L("sp_deck_sub"), ok = true },
+		{ id = "air:" .. side, title = "✈ " .. L("sp_air"), sub = L("sp_air_sub"), ok = true },
 	}
 	for _, i in World.ISLANDS do
 		local owner = match:GetAttribute("Owner_" .. i.id) or i.owner
 		local ok = owner == side
 		table.insert(list, {
-			id = "base:" .. i.id, title = "◆ База «" .. i.name .. "»",
-			sub = if ok then "Своя полоса на острове" elseif owner == "" then "Нейтральная — захвати, чтобы взлетать отсюда" else "У противника — отбей", ok = ok,
+			id = "base:" .. i.id, title = "◆ " .. L("sp_base", L("base_" .. i.id)),
+			sub = if ok then L("sp_base_ok") elseif owner == "" then L("sp_base_neutral") else L("sp_base_enemy"), ok = ok,
 		})
 	end
 	ui.setSpawns(list)
+	buildPreview()
 end
 
 local function refreshMatch()
@@ -2794,29 +3891,97 @@ local function refreshMatch()
 	local r = match:GetAttribute("TicketsRed") or 0
 	ui.setTickets(b, r)
 	local bases = {}
-	local nb, nr = 0, 0
 	for _, i in World.ISLANDS do
 		local owner = match:GetAttribute("Owner_" .. i.id) or i.owner
 		table.insert(bases, { id = i.id, owner = owner, cap = match:GetAttribute("Cap_" .. i.id) or 0 })
-		if owner == "Blue" then
-			nb += 1
-		elseif owner == "Red" then
-			nr += 1
-		end
 	end
 	ui.setBases(bases)
-	ui.setScoreLine(string.format("Синие %d · Красные %d   ·   базы %d : %d", b, r, nb, nr))
-	if inMenu then
+end
+local lastSpawnRefresh = 0
+match.AttributeChanged:Connect(function(name: string)
+	refreshMatch()
+	if name == "Top" then
+		local ok, list = pcall(function()
+			return HttpService:JSONDecode(match:GetAttribute("Top") or "[]")
+		end)
+		ui.setTop(if ok and type(list) == "table" then list else {}, profile and profile.week or 0)
+	elseif name:sub(1, 6) == "Owner_" and inMenu and os.clock() - lastSpawnRefresh > 0.5 then
+		lastSpawnRefresh = os.clock()
 		refreshMenu()
 	end
-end
-match.AttributeChanged:Connect(refreshMatch)
+end)
 player:GetPropertyChangedSignal("Team"):Connect(refreshMenu)
 refreshMatch()
 refreshMenu()
+ui.setTop({}, 0)
 
-ui.onLaunch(function(jetId: string, spawnId: string)
-	SpawnR:FireServer(jetId, spawnId)
+ui.on("launch", function(jetId: string, spawnId: string, paint: string)
+	SpawnR:FireServer(jetId, spawnId, paint)
+end)
+ui.on("quick", function(jetId: string, paint: string)
+	SpawnR:FireServer(jetId, "air:" .. mySide(), paint)
+end)
+ui.on("buy", function(kind: string, id: string)
+	BuyR:FireServer(kind, id)
+end)
+ui.on("daily", function()
+	DailyR:FireServer()
+end)
+ui.on("invite", function()
+	local ok, can = pcall(function()
+		return SocialService:CanSendGameInviteAsync(player)
+	end)
+	if ok and can then
+		pcall(function()
+			SocialService:PromptGameInvite(player)
+		end)
+	else
+		ui.toast(L("invite_fail"), "amber")
+	end
+end)
+ui.on("shop", function(kind: string, id: number)
+	if kind == "vip" and id > 0 then
+		MarketplaceService:PromptGamePassPurchase(player, id)
+	elseif kind == "coins" and id > 0 then
+		MarketplaceService:PromptProductPurchase(player, id)
+	elseif kind == "vip" then
+		ui.toast(L("soon"), "amber")
+	end
+end)
+
+-- ===== прогресс с сервера
+ProfileR.OnClientEvent:Connect(function(p: any)
+	profile = p
+	ui.setProfile(p)
+	ui.setQuickSub(if p.tut then L("play_sub") else L("play_sub_new"))
+	if p.daily.can and not dailyShown and inMenu then
+		dailyShown = true
+		task.delay(1.2, function()
+			if inMenu and profile and profile.daily.can then
+				ui.showDaily()
+			end
+		end)
+	end
+end)
+RewardR.OnClientEvent:Connect(function(coins: number, xp: number, key: string)
+	local k = if key:sub(1, 6) == "quest_" then "r_quest" else "r_" .. key
+	ui.reward(coins, xp, L(k))
+	play("reward", 0.5)
+end)
+NotifyR.OnClientEvent:Connect(function(key: string, colr: string?, ...: any)
+	local args = { ... }
+	if key == "bought" then
+		args = { Jets.JETS[args[1]] and Jets.JETS[args[1]].name or tostring(args[1]) }
+	end
+	local text = L("n_" .. key, table.unpack(args))
+	if key == "levelup" or key == "quest_done" then
+		ui.banner(text, Hud.C.gold)
+	else
+		ui.toast(text, colr)
+	end
+end)
+RoundR.OnClientEvent:Connect(function(winner: string, mvp: { any })
+	ui.showRound(winner, mvp, mySide(), 15)
 end)
 
 -- ===== начало и конец вылета
@@ -2828,7 +3993,16 @@ local function stopFlight()
 	Animator.setLocal(nil)
 	ui.setFlying(false)
 	ui.showMenu(true)
+	ui.tutorial(nil)
 	inMenu = true
+	local eng = sounds.engine
+	if eng then
+		eng:Stop()
+	end
+	local mus = sound("music", true, 0.35)
+	if mus and not mus.IsPlaying then
+		mus:Play()
+	end
 	refreshMenu()
 end
 
@@ -2841,6 +4015,7 @@ local function die(text: string)
 	end
 	deadUntil = os.clock() + 4
 	ui.showDead(text)
+	ui.tutorial(nil)
 	task.delay(4, function()
 		if os.clock() >= deadUntil - 0.05 then
 			ui.showDead(nil)
@@ -2871,6 +4046,12 @@ StartedR.OnClientEvent:Connect(function(m: Model, jetId: string, spawnCF: CFrame
 	parkBrake = not air
 	assist = false
 	inMenu = false
+	if preview then
+		preview:Destroy()
+		preview = nil
+		previewKey = ""
+	end
+	ui.closeModal()
 	ui.showMenu(false)
 	ui.showDead(nil)
 	ui.setFlying(true)
@@ -2878,32 +4059,71 @@ StartedR.OnClientEvent:Connect(function(m: Model, jetId: string, spawnCF: CFrame
 	cameraRig.reset(spawnCF.Rotation, c)
 	Animator.setLocal(m, f.gear, 0, f.throttle)
 	setCharacterControls(false)
+	local mus = sounds.music
+	if mus then
+		mus:Stop()
+	end
+	local eng = sound("engine", true, 0.45)
+	if eng then
+		eng:Play()
+	end
 	if air then
-		ui.toast("В воздухе! Ищи цели на радаре и в красных рамках", "accent")
+		ui.toast(L("t_air"), "accent")
 	elseif World.runwayAt(spawnCF.Position.X, spawnCF.Position.Z, 5) == World.carrierOf(mySide()).id then
-		ui.toast("Катапульта: тяга на 100% (Shift / ползунок) — разгонит сама", "accent")
+		ui.toast(L("t_catapult"), "accent")
 	else
-		ui.toast("Полоса базы: тяга на 100% — ускоритель взлёта разгонит", "accent")
+		ui.toast(L("t_runway"), "accent")
+	end
+	-- обучение новичка
+	if profile and not profile.tut then
+		tut.on, tut.step, tut.t, tut.hit, tut.msl = true, 1, 0, false, false
 	end
 	ReadyR:FireServer(m)
 end)
 
-KilledR.OnClientEvent:Connect(function(text: string)
+KilledR.OnClientEvent:Connect(function(killer: string, weapon: string)
 	if flight then
-		die(text)
+		if weapon == "round" then
+			die(L("round_new"))
+		elseif killer ~= "" then
+			die(L("killed_by", killer, L("w_" .. weapon)))
+		else
+			die(L("killed_" .. weapon))
+		end
 	end
 end)
-NotifyR.OnClientEvent:Connect(function(text: string, colr: string?)
-	ui.toast(text, colr)
-end)
-FeedR.OnClientEvent:Connect(function(text: string, sideA: string?, _sideB: string?)
-	ui.feed(text, World.TEAM_COLOR[sideA or ""] or Hud.C.text)
+FeedR.OnClientEvent:Connect(function(kind: string, d: any)
+	local C = World.TEAM_COLOR
+	if kind == "kill" then
+		if d.k ~= "" then
+			ui.feed(string.format("%s  [%s]  %s", d.k, L("w_" .. d.w), d.v), C[d.ks] or Hud.C.text)
+		else
+			ui.feed(string.format("%s  [%s]", d.v, L("w_" .. d.w)), C[d.vs] or Hud.C.text)
+		end
+	elseif kind == "crash" then
+		ui.feed(string.format("%s  [%s]", d.v, L("crash_" .. d.why)), C[d.vs] or Hud.C.text)
+	elseif kind == "cap" then
+		ui.feed(L("f_cap", L("team_" .. d.side), L("base_" .. d.base)), C[d.side] or Hud.C.text)
+		if d.side == mySide() and flight then
+			ui.banner(L("f_cap", L("team_" .. d.side), L("base_" .. d.base)), C[d.side])
+		end
+	elseif kind == "neutral" then
+		ui.feed(L("f_neutral", L("base_" .. d.base)), Hud.C.text)
+	elseif kind == "streak" then
+		ui.feed(L("f_streak", d.k, d.n), Hud.C.gold)
+		if model and d.k == model:GetAttribute("Pilot") then
+			ui.banner(L("streak_n", d.n), Hud.C.gold)
+		end
+	end
 end)
 HitR.OnClientEvent:Connect(function(_m: Model, kill: boolean)
 	ui.hit(kill)
+	play("hit", 0.5)
+	tut.hit = true
 end)
 WarnR.OnClientEvent:Connect(function(part: BasePart)
 	table.insert(incoming, part)
+	play("warn", 0.6)
 end)
 
 -- ===== цели
@@ -2957,8 +4177,7 @@ local function addFx(size: Vector3, cf: CFrame, color: Color3, vel: Vector3, lif
 	table.insert(fx, { part = p, vel = vel, t = 0, life = life, grav = grav })
 end
 local function tracer(from: CFrame, speed: number)
-	local dir = from.LookVector
-	addFx(Vector3.new(0.35, 0.35, 26), from * CFrame.new(0, 0, -20), Color3.fromRGB(255, 214, 120), dir * (2600 + speed), 0.7, 0)
+	addFx(Vector3.new(0.35, 0.35, 26), from * CFrame.new(0, 0, -20), Color3.fromRGB(255, 214, 120), from.LookVector * (2600 + speed), 0.7, 0)
 end
 local function flaresFx(cf: CFrame)
 	for k = 1, 6 do
@@ -2970,45 +4189,62 @@ end
 local seenFlare: { [Model]: number } = {}
 local lastTracer: { [Model]: number } = {}
 
+local function lockNeed(m: Model): number
+	local j = Jets.JETS[m:GetAttribute("PlaneId") :: any]
+	return Jets.MSL_LOCK * (if j then j.lockMul else 1)
+end
+
 -- ===== действия (клавиши, геймпад и сенсорные кнопки — один обработчик)
 local controls: any = nil
 local function act(a: string)
 	local f = flight
 	if a == "cam" then
-		ui.toast("Камера: " .. cameraRig.cycle())
+		cameraRig.cycle()
+		ui.toast(L("cam_" .. tostring(cameraRig.mode)))
+		return
+	end
+	if a == "cine" then
+		if RunService:IsStudio() then
+			cine.on = not cine.on
+			cine.shot = (cine.shot % 4) + 1
+			cine.t = 0
+			ui.hideAll(cine.on)
+		end
 		return
 	end
 	if not f or f.crashed then
 		return
 	end
 	if a == "missile" then
-		if lock.target and lock.t >= 0 then
-			local need = Jets.MSL_LOCK * ((Jets.JETS[lock.target:GetAttribute("PlaneId") :: any] or {}).lockMul or 1)
-			if lock.t >= need then
-				if ((model and model:GetAttribute("Missiles")) or 0) > 0 then
-					MissileR:FireServer(lock.target)
-					lock.t = 0
-					ui.toast("Пуск!", "amber")
-				else
-					ui.toast("Ракеты кончились — сядь на палубу или свою базу", "amber")
-				end
-				return
+		if lock.target and lock.t >= lockNeed(lock.target) then
+			if ((model and model:GetAttribute("Missiles")) or 0) > 0 then
+				MissileR:FireServer(lock.target)
+				lock.t = 0
+				lock.beeped = false
+				tut.msl = true
+				play("missile", 0.7)
+				ui.toast(L("t_fired"), "amber")
+			else
+				ui.toast(L("t_no_msl"), "amber")
 			end
+			return
 		end
-		ui.toast("Нет захвата: держи врага в рамке ~1.5 с", "amber")
+		ui.toast(L("t_no_lock"), "amber")
 	elseif a == "flare" then
 		FlareR:FireServer()
 	elseif a == "gear" then
-		local text = FlightPhysics.action(f, "gear")
-		if text then
-			ui.toast(text)
+		if f.onGround and f.gear then
+			ui.toast(L("gear_ground"), "amber")
+		else
+			FlightPhysics.action(f, "gear")
+			ui.toast(if f.gear then L("gear_down") else L("gear_up"))
 		end
 	elseif a == "mouse" then
 		controls.mouseYoke = not controls.mouseYoke
-		ui.toast(if controls.mouseYoke then "Мышь-штурвал включён (C)" else "Мышь-штурвал выключен")
+		ui.toast(if controls.mouseYoke then L("mouse_on") else L("mouse_off"))
 	elseif a == "brake" then
 		ui.touch.brake = not ui.touch.brake
-		ui.toast(if ui.touch.brake then "Тормоз включён" else "Тормоз выключен")
+		ui.toast(if ui.touch.brake then L("brake_on") else L("brake_off"))
 	elseif a == "idle" then
 		FlightPhysics.action(f, "idle")
 		ui.setThrottleKnob(0)
@@ -3017,7 +4253,7 @@ local function act(a: string)
 			LeaveR:FireServer()
 			stopFlight()
 		else
-			ui.toast("В меню — только на земле (палуба или своя база)", "amber")
+			ui.toast(L("menu_ground"), "amber")
 		end
 	end
 end
@@ -3027,6 +4263,16 @@ ui.onAction(function(a: string)
 		act(a)
 	end
 end)
+
+local function crashKind(reason: string?): string
+	local r = reason or ""
+	if r:find("океан") then
+		return "water"
+	elseif r:find("авианос") then
+		return "carrier"
+	end
+	return "ground"
+end
 
 -- ===== физика: каждый шаг перед симуляцией Roblox
 RunService.PreSimulation:Connect(function(dt)
@@ -3042,20 +4288,24 @@ RunService.PreSimulation:Connect(function(dt)
 		simulating = true
 	end
 	if not model.Parent or model.Name == "Wreck" then
-		die("Самолёт уничтожен")
+		die(L("destroyed"))
 		return
 	end
 	local input = controls.read()
 	if input.throttle then
 		ui.setThrottleKnob(input.throttle)
 	end
-	-- стояночный тормоз до полной тяги, затем катапульта / ускоритель
+	-- на телефоне самолёт сам выравнивает крен, когда стик отпущен (проще для новичков)
+	if ui.isTouch and not ui.touch.active and not f.onGround then
+		local bank = math.asin(math.clamp(-f.att.RightVector.Y, -1, 1))
+		input.r += math.clamp(-bank * 1.2, -0.6, 0.6)
+	end
 	if parkBrake then
 		input.brakes = true
 		if f.throttle >= 0.9 or (input.throttle and input.throttle >= 0.9) then
 			parkBrake = false
 			assist = true
-			ui.toast("СТАРТ!", "accent")
+			ui.toast(L("t_go"), "accent")
 		end
 	end
 	if assist and f.onGround and f.speed >= cfg.vrKts then
@@ -3081,8 +4331,9 @@ RunService.PreSimulation:Connect(function(dt)
 		f.crashReason = "Упал в океан!"
 	end
 	if f.crashed then
-		CrashR:FireServer(f.crashReason or "Крушение")
-		die(f.crashReason or "Крушение")
+		local kind = crashKind(f.crashReason)
+		CrashR:FireServer(kind)
+		die(L("crash_" .. kind))
 		return
 	end
 	r.CFrame = FlightPhysics.pose(f)
@@ -3090,6 +4341,10 @@ RunService.PreSimulation:Connect(function(dt)
 	r.AssemblyAngularVelocity = Vector3.zero
 	Animator.setLocal(model, f.gear, f.flaps, f.throttle)
 	Animator.setInputs(f.inP, f.inR, f.inY)
+	local eng = sounds.engine
+	if eng then
+		eng.PlaybackSpeed = 0.7 + f.throttle * 0.6
+	end
 	local now = os.clock()
 	if now - lastSync > 0.25 then
 		lastSync = now
@@ -3097,10 +4352,78 @@ RunService.PreSimulation:Connect(function(dt)
 	end
 end)
 
+-- ===== обучение: короткие шаги в первом вылете
+local TUT_STEPS = { "tut1", "tut2", "tut3", "tut4" }
+local function tutorialTick(dt: number, f: any)
+	if not tut.on then
+		return
+	end
+	tut.t += dt
+	local s = tut.step
+	local nextStep = (s == 1 and (tut.t > 7 or (tut.t > 3 and (math.abs(f.inR) > 0.3 or math.abs(f.inP) > 0.3))))
+		or (s == 2 and (tut.hit or tut.t > 22))
+		or (s == 3 and (tut.msl or tut.t > 18))
+		or (s == 4 and tut.t > 10)
+	if nextStep then
+		tut.step += 1
+		tut.t = 0
+		if tut.step > #TUT_STEPS then
+			tut.on = false
+			ui.tutorial(nil)
+			ui.banner(L("tut_done"), Hud.C.green)
+			TutR:FireServer()
+			return
+		end
+	end
+	local key = TUT_STEPS[tut.step]
+	ui.tutorial(L(key .. (if ui.isTouch then "_t" else "")))
+end
+
 -- ===== кадр: камера, оружие, приборы
 local function fmtDist(d: number): string
 	local m = d * 0.515
-	return if m >= 1000 then string.format("%.1f км", m / 1000) else string.format("%d м", math.round(m / 10) * 10)
+	return if m >= 1000 then string.format("%.1f km", m / 1000) else string.format("%d m", math.round(m / 10) * 10)
+end
+
+local function cinematic(dt: number, cam: Camera)
+	cine.t += dt
+	local c = World.carrierOf(mySide())
+	local folder = workspace:FindFirstChild("Planes")
+	local subject: BasePart? = nil
+	if model and model.PrimaryPart then
+		subject = model.PrimaryPart
+	elseif folder then
+		for _, m in folder:GetChildren() do
+			if m:IsA("Model") and m.PrimaryPart and m.Name ~= "Wreck" then
+				subject = m.PrimaryPart
+				break
+			end
+		end
+	end
+	cam.CameraType = Enum.CameraType.Scriptable
+	if cine.shot == 1 and subject then
+		-- низко сбоку от самолёта, длинный фокус
+		local p = subject.Position
+		local cf = subject.CFrame
+		cam.FieldOfView = 30
+		cam.CFrame = CFrame.lookAt(p + cf.RightVector * 90 + cf.UpVector * 12 - cf.LookVector * 30, p)
+	elseif cine.shot == 2 and subject then
+		-- сзади-сверху, видно море и остров
+		local cf = subject.CFrame
+		cam.FieldOfView = 55
+		cam.CFrame = CFrame.lookAt(cf.Position - cf.LookVector * 70 + Vector3.new(0, 25, 0), cf.Position + cf.LookVector * 400)
+	elseif cine.shot == 3 then
+		-- авианосец с воздуха, медленный облёт
+		local a = cine.t / 20
+		local center = c.cf.Position + Vector3.new(0, World.DECK_H, 0)
+		cam.FieldOfView = 40
+		cam.CFrame = CFrame.lookAt(center + Vector3.new(math.sin(a) * 900, 320, math.cos(a) * 900), center)
+	else
+		-- остров «Центр» на закате
+		local a = cine.t / 25
+		cam.FieldOfView = 45
+		cam.CFrame = CFrame.lookAt(Vector3.new(math.sin(a) * 2600, 500, math.cos(a) * 2600), Vector3.new(0, 80, 0))
+	end
 end
 
 RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 1, function(dt)
@@ -3109,7 +4432,6 @@ RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 
 	local cam = workspace.CurrentCamera
 	local serverNow = workspace:GetServerTimeNow()
 
-	-- эффекты
 	for i = #fx, 1, -1 do
 		local e = fx[i]
 		e.t += dt
@@ -3124,7 +4446,6 @@ RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 
 			end
 		end
 	end
-	-- чужие выстрелы и ловушки
 	local folder = workspace:FindFirstChild("Planes")
 	if folder then
 		for _, m in folder:GetChildren() do
@@ -3146,15 +4467,24 @@ RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 
 		end
 	end
 
+	if cine.on then
+		cinematic(dt, cam)
+		return
+	end
+
 	local f = flight
 	if not f then
-		-- меню: облёт своего авианосца
+		-- меню: медленный облёт самолёта на палубе (самолёт смещён вправо от меню)
 		local c = World.carrierOf(mySide())
-		local a = now / 16
-		local center = c.cf.Position + Vector3.new(0, World.DECK_H + 20, 0)
+		local target = if preview and preview.PrimaryPart then preview.PrimaryPart.Position else c.cf.Position + Vector3.new(0, World.DECK_H + 10, 0)
+		local L0 = (Jets.JETS[previewJet] or Jets.JETS.F16).length
+		local a = now / 18
+		local r = L0 * 1.5 + 34
+		local eye = target + Vector3.new(math.sin(a) * r, 10 + L0 * 0.18 + math.sin(a * 0.7) * 4, math.cos(a) * r)
+		local look = CFrame.lookAt(eye, target)
 		cam.CameraType = Enum.CameraType.Scriptable
-		cam.FieldOfView = 60
-		cam.CFrame = CFrame.lookAt(center + Vector3.new(math.sin(a) * 760, 210 + math.sin(a * 0.7) * 50, math.cos(a) * 760), center)
+		cam.FieldOfView = 50
+		cam.CFrame = CFrame.lookAt(eye, target - look.RightVector * L0 * 0.45)
 		return
 	end
 	if f.crashed then
@@ -3163,13 +4493,16 @@ RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 
 	end
 	local pose = if root and simulating then (root :: BasePart).CFrame else FlightPhysics.pose(f)
 	cameraRig.update(dt, pose, f.cfg, f.speed, f.onGround, false, f.buffet)
+	tutorialTick(dt, f)
 
-	-- пушка
+	-- пушка (на телефоне конус шире — помощь прицеливания)
+	local cone = if ui.isTouch then Jets.GUN_CONE_TOUCH else Jets.GUN_CONE
 	if simulating and controls.firing() and now - lastShot >= Jets.GUN_RATE then
 		lastShot = now
-		local t = bestInCone(f.att.LookVector, f.pos, Jets.GUN_CONE, Jets.GUN_RANGE)
+		local t = bestInCone(f.att.LookVector, f.pos, cone, Jets.GUN_RANGE)
 		GunR:FireServer(t)
 		tracer(FlightPhysics.pose(f) * CFrame.new(if math.random() < 0.5 then 1.5 else -1.5, 0, -f.cfg.length * 0.5), f.speed)
+		play("gun", 0.35)
 	end
 
 	-- захват ракетой
@@ -3177,6 +4510,7 @@ RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 
 	if cand ~= lock.target then
 		lock.target = cand
 		lock.t = 0
+		lock.beeped = false
 	elseif cand then
 		lock.t += dt
 	end
@@ -3184,8 +4518,13 @@ RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 
 	if lock.target and lock.target.PrimaryPart then
 		local sp, on = cam:WorldToViewportPoint(lock.target.PrimaryPart.Position)
 		if on then
-			local need = Jets.MSL_LOCK * ((Jets.JETS[lock.target:GetAttribute("PlaneId") :: any] or {}).lockMul or 1)
-			lockInfo = { x = sp.X, y = sp.Y, k = math.clamp(lock.t / need, 0, 1), locked = lock.t >= need }
+			local need = lockNeed(lock.target)
+			local locked = lock.t >= need
+			if locked and not lock.beeped then
+				lock.beeped = true
+				play("lock", 0.5)
+			end
+			lockInfo = { x = sp.X, y = sp.Y, k = math.clamp(lock.t / need, 0, 1), locked = locked }
 		end
 	end
 
@@ -3240,25 +4579,24 @@ RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 
 		end
 	end
 	if nearest < 9000 and (now % 0.5) < 0.33 then
-		warn = "⚠ РАКЕТА " .. fmtDist(nearest) .. " — ЛОВУШКИ (X) И ВИРАЖ!"
+		warn = L("w_missile", fmtDist(nearest))
 	end
-	local outside = math.abs(myPos.X) > World.SIZE or math.abs(myPos.Z) > World.SIZE
-	if outside then
-		warn = "ВНЕ ЗОНЫ БОЯ — РАЗВОРАЧИВАЙСЯ!"
+	if math.abs(myPos.X) > World.SIZE or math.abs(myPos.Z) > World.SIZE then
+		warn = L("w_zone")
 	end
 	local hp = (model and model:GetAttribute("HP") or 0) :: number
 	local maxHp = (model and model:GetAttribute("MaxHP") or 100) :: number
 	if not warn and hp < maxHp * 0.3 then
-		warn = "КОРПУС ПОВРЕЖДЁН — НА РЕМОНТ (палуба / своя база)"
+		warn = L("w_hp")
 	end
 	local info: string? = nil
 	if parkBrake then
-		info = "Тяга на 100% (Shift / ползунок) — старт"
+		info = L("i_throttle")
 	elseif f.onGround and f.speed < 15 then
 		local where = World.runwayAt(myPos.X, myPos.Z, 10)
 		local mine = where == World.carrierOf(side).id or (where ~= nil and match:GetAttribute("Owner_" .. where) == side)
 		if mine then
-			info = "Ремонт и перезарядка… · M — в меню"
+			info = L("i_rearm")
 			if now - lastRearm > 2 then
 				lastRearm = now
 				RearmR:FireServer()
@@ -3270,11 +4608,11 @@ RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 
 			if dx * dx + dz * dz < World.CAPTURE_R * World.CAPTURE_R then
 				local cap = (match:GetAttribute("Cap_" .. i.id) or 0) :: number
 				local pct = math.floor(math.abs(cap) * 100)
-				local whose = if cap >= 0 then "Синие" else "Красные"
+				local whose = L("team_" .. (if cap >= 0 then "Blue" else "Red"))
 				if myPos.Y < i.h + World.CAPTURE_ALT then
-					info = string.format("Захват «%s»: %s %d%%", i.name, whose, pct)
+					info = L("i_capture", L("base_" .. i.id), whose, pct)
 				else
-					info = string.format("База «%s»: снизься ниже %d ft для захвата", i.name, math.floor((i.h + World.CAPTURE_ALT) * World.FT))
+					info = L("i_capture_low", L("base_" .. i.id), math.floor((i.h + World.CAPTURE_ALT) * World.FT))
 				end
 			end
 		end
@@ -3289,11 +4627,20 @@ RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 
 	})
 end)
 
-Players.LocalPlayer.CharacterAdded:Connect(function()
+player.CharacterAdded:Connect(function()
 	task.wait(0.5)
 	setCharacterControls(false)
 end)
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
+
+-- музыка меню (если задана)
+task.defer(function()
+	local mus = sound("music", true, 0.35)
+	if mus and inMenu then
+		mus:Play()
+	end
+end)
+
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Локальная анимация всех самолётов (своих, чужих и ИИ): винт, огни, шасси, закрылки,
 -- инверсионный след, форсаж. Состояние приходит атрибутами модели от сервера,
 -- а для своего самолёта — прямо из локальной физики (без задержки сети).
@@ -3460,7 +4807,7 @@ end
 
 return Animator
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Камеры: сзади (плавная), кабина, орбита. Плюс облёт аэропорта в ангаре.
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -3576,7 +4923,7 @@ end
 
 return CameraRig
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
+<Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
 -- Ввод: клавиатура, мышь, геймпад и сенсор → ввод физики + оружие.
 local UserInputService = game:GetService("UserInputService")
 
@@ -3584,7 +4931,7 @@ local Controls = {}
 
 local ONCE: { [Enum.KeyCode]: string } = {
 	[Enum.KeyCode.F] = "missile", [Enum.KeyCode.X] = "flare", [Enum.KeyCode.G] = "gear", [Enum.KeyCode.V] = "cam",
-	[Enum.KeyCode.C] = "mouse", [Enum.KeyCode.M] = "menu", [Enum.KeyCode.Z] = "idle",
+	[Enum.KeyCode.C] = "mouse", [Enum.KeyCode.M] = "menu", [Enum.KeyCode.Z] = "idle", [Enum.KeyCode.K] = "cine",
 	-- геймпад
 	[Enum.KeyCode.ButtonX] = "missile", [Enum.KeyCode.ButtonB] = "flare", [Enum.KeyCode.ButtonY] = "gear",
 	[Enum.KeyCode.ButtonSelect] = "cam", [Enum.KeyCode.ButtonStart] = "menu",
@@ -3689,9 +5036,10 @@ end
 
 return Controls
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[--!strict
--- Интерфейс: меню вылета, приборы, радар, метки целей, лента событий, сенсорное управление.
--- Стиль: тёмно-синие панели, сталь и голубой акцент (как в обновлённой веб-версии).
+<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Интерфейс: меню (ангар, задания, топ, магазин), ежедневная награда, итоги раунда,
+-- приборы, радар, метки, лента, всплывающие награды, обучение, сенсорное управление.
+-- Всё масштабируется под экран (телефон / планшет / ПК). Тексты — через L() (русский / английский).
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -3699,16 +5047,18 @@ local TweenService = game:GetService("TweenService")
 local Hud = {}
 
 local C = {
-	bg = Color3.fromRGB(10, 16, 26),
+	bg = Color3.fromRGB(8, 14, 24),
 	panel = Color3.fromRGB(16, 26, 40),
+	panel2 = Color3.fromRGB(22, 40, 60),
 	line = Color3.fromRGB(46, 72, 100),
-	text = Color3.fromRGB(226, 236, 248),
+	text = Color3.fromRGB(230, 238, 248),
 	dim = Color3.fromRGB(140, 160, 184),
 	accent = Color3.fromRGB(92, 200, 255),
 	cyan = Color3.fromRGB(92, 200, 255),
-	amber = Color3.fromRGB(255, 186, 72),
+	amber = Color3.fromRGB(255, 190, 70),
+	gold = Color3.fromRGB(255, 206, 84),
 	red = Color3.fromRGB(255, 92, 86),
-	green = Color3.fromRGB(120, 230, 160),
+	green = Color3.fromRGB(110, 230, 150),
 	Blue = Color3.fromRGB(92, 200, 255),
 	Red = Color3.fromRGB(255, 96, 86),
 }
@@ -3727,8 +5077,8 @@ end
 local function corner(p: Instance, r: number?)
 	new("UICorner", { CornerRadius = UDim.new(0, r or 10) }, p)
 end
-local function stroke(p: Instance, col: Color3?, th: number?)
-	new("UIStroke", { Color = col or C.line, Thickness = th or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, p)
+local function stroke(p: Instance, col: Color3?, th: number?): UIStroke
+	return new("UIStroke", { Color = col or C.line, Thickness = th or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, p)
 end
 local function label(parent: Instance, text: string, size: number, col: Color3?, bold: boolean?, props: { [string]: any }?): TextLabel
 	local l = new("TextLabel", {
@@ -3741,91 +5091,350 @@ local function label(parent: Instance, text: string, size: number, col: Color3?,
 	end
 	return l
 end
-local function button(parent: Instance, text: string, size: UDim2, pos: UDim2, col: Color3?): TextButton
+local function button(parent: Instance, text: string, size: UDim2, pos: UDim2, col: Color3?, textCol: Color3?): TextButton
 	local b = new("TextButton", {
-		Size = size, Position = pos, BackgroundColor3 = col or C.panel, BackgroundTransparency = 0.1,
-		Text = text, TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 16, AutoButtonColor = true,
+		Size = size, Position = pos, BackgroundColor3 = col or C.panel, BackgroundTransparency = 0.05,
+		Text = text, TextColor3 = textCol or C.text, Font = Enum.Font.GothamBold, TextSize = 16, AutoButtonColor = true,
 	}, parent)
 	corner(b, 10)
 	stroke(b, C.line)
 	return b
 end
+local function bar(parent: Instance, size: UDim2, pos: UDim2, col: Color3): Frame
+	local bg = new("Frame", { Size = size, Position = pos, BackgroundColor3 = C.panel, BorderSizePixel = 0 }, parent)
+	corner(bg, 4)
+	local fill = new("Frame", { Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = col, BorderSizePixel = 0 }, bg)
+	corner(fill, 4)
+	return bg
+end
+local function setBar(bg: Frame, k: number)
+	(bg:FindFirstChild("Fill") :: Frame).Size = UDim2.fromScale(math.clamp(k, 0, 1), 1)
+end
+local function fmt(n: number): string
+	local s = tostring(math.floor(math.abs(n)))
+	local out = s:reverse():gsub("(%d%d%d)", "%1 "):reverse():gsub("^ ", "")
+	return (if n < 0 then "-" else "") .. out
+end
+Hud.fmt = fmt
 
-function Hud.new(): any
+function Hud.new(L: (string, ...any) -> string): any
 	local ui: any = {}
 	local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 	ui.isTouch = isTouch
 	local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local gui = new("ScreenGui", { Name = "CarrierStrikeUI", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, pg)
 
-	-- ================= МЕНЮ =================
-	local menu = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, gui)
-	local shade = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.bg, BackgroundTransparency = 0.35, BorderSizePixel = 0 }, menu)
-	new("UIGradient", { Rotation = 0, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.55, 0.4), NumberSequenceKeypoint.new(1, 1) }) }, shade)
-	local col = new("ScrollingFrame", {
-		Size = UDim2.new(0, math.min(460, 9999), 1, -40), Position = UDim2.fromOffset(24, 20), BackgroundTransparency = 1,
-		ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, BorderSizePixel = 0,
-	}, menu)
-	new("UISizeConstraint", { MaxSize = Vector2.new(460, math.huge) }, col)
-	col.Size = UDim2.new(0.9, 0, 1, -40)
-	new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, col)
-	label(col, "CARRIER STRIKE", 34, C.text, true, { LayoutOrder = 1 })
-	local teamLbl = label(col, "Команда: —", 18, C.accent, true, { LayoutOrder = 2 })
-	local scoreLbl = label(col, "", 15, C.dim, false, { LayoutOrder = 3 })
-	label(col, "1 · САМОЛЁТ", 14, C.dim, true, { LayoutOrder = 4 })
-	local jetGrid = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 5 }, col)
-	new("UIGridLayout", { CellSize = UDim2.new(0.5, -5, 0, 62), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, jetGrid)
-	label(col, "2 · ТОЧКА ВЫЛЕТА", 14, C.dim, true, { LayoutOrder = 6 })
-	local spawnList = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 7 }, col)
-	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spawnList)
-	local go = button(col, "В БОЙ  ▶", UDim2.new(1, 0, 0, 56), UDim2.new(), C.accent)
-	go.LayoutOrder = 8
-	go.TextColor3 = C.bg
-	go.TextSize = 22
-	local help = label(col, "", 13, C.dim, false, { LayoutOrder = 9, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
-	help.Text = if isTouch
-		then "Левый стик — штурвал (к себе = вверх). Справа: ОГОНЬ (держать), РАКЕТА (нужен захват), ЛОВУШКИ. Ползунок справа — тяга. С палубы: тяга на максимум — катапульта разгонит сама."
-		else "W/S — нос вниз/вверх · A/D — крен · Q/E — рули · Shift/Ctrl — тяга\nЛКМ или Пробел — пушка · F или ПКМ — ракета (держи цель в круге) · X — ловушки\nG — шасси · V — камера · C — мышь-штурвал · B — тормоз · M — в меню (на земле)\nС палубы: тяга 100% — катапульта. Садись на свою палубу или базу — ремонт и перезарядка."
-
-	local selJet = "F16"
-	local selSpawn = ""
-	local jetBtns: { [string]: TextButton } = {}
-	local spawnBtns: { [string]: TextButton } = {}
-	local function paintSel()
-		for id, b in jetBtns do
-			(b:FindFirstChildOfClass("UIStroke") :: UIStroke).Color = if id == selJet then C.accent else C.line
-			b.BackgroundColor3 = if id == selJet then Color3.fromRGB(22, 46, 70) else C.panel
+	-- корневая рамка под масштаб: интерфейс рисуется для 1280×720 и сжимается на маленьких экранах
+	local root = new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, gui)
+	local scaler = new("UIScale", { Scale = 1 }, root)
+	local function rescale()
+		local vs = workspace.CurrentCamera.ViewportSize
+		local s = math.clamp(math.min(vs.X / 1280, vs.Y / 720), 0.5, 1.25)
+		if isTouch then
+			s = math.clamp(s * 1.1, 0.5, 1.25)
 		end
-		for id, b in spawnBtns do
-			(b:FindFirstChildOfClass("UIStroke") :: UIStroke).Color = if id == selSpawn then C.accent else C.line
-			b.BackgroundColor3 = if id == selSpawn then Color3.fromRGB(22, 46, 70) else C.panel
+		scaler.Scale = s
+		root.Size = UDim2.fromScale(1 / s, 1 / s)
+		ui.scale = s
+	end
+	ui.scale = 1
+	rescale()
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
+
+	-- ============================================================ МЕНЮ
+	local menu = new("Frame", { Name = "Menu", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, root)
+	local shade = new("Frame", { Size = UDim2.fromScale(0.62, 1), BackgroundColor3 = C.bg, BackgroundTransparency = 0.15, BorderSizePixel = 0 }, menu)
+	new("UIGradient", { Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.6, 0.2), NumberSequenceKeypoint.new(1, 1) }) }, shade)
+
+	local left = new("Frame", { Size = UDim2.new(0, 470, 1, -24), Position = UDim2.fromOffset(18, 12), BackgroundTransparency = 1 }, menu)
+	label(left, "CARRIER STRIKE", 34, C.text, true, { Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 40) })
+	local teamLbl = label(left, "", 15, C.accent, true, { Position = UDim2.fromOffset(2, 40), Size = UDim2.new(1, 0, 0, 20) })
+
+	-- профиль: уровень, опыт, монеты
+	local prof = new("Frame", { Size = UDim2.new(1, 0, 0, 52), Position = UDim2.fromOffset(0, 66), BackgroundColor3 = C.panel, BackgroundTransparency = 0.1 }, left)
+	corner(prof, 12)
+	stroke(prof)
+	local lvlBox = new("Frame", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = C.accent }, prof)
+	corner(lvlBox, 20)
+	local lvlL = label(lvlBox, "1", 18, C.bg, true, { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center })
+	local xpTxt = label(prof, "", 12, C.dim, true, { Position = UDim2.fromOffset(56, 6), Size = UDim2.new(1, -200, 0, 16) })
+	local xpBar = bar(prof, UDim2.new(1, -200, 0, 8), UDim2.fromOffset(56, 28), C.accent)
+	local coinsL = label(prof, "💰 0", 20, C.gold, true, { Position = UDim2.new(1, -136, 0, 12), Size = UDim2.fromOffset(126, 26), TextXAlignment = Enum.TextXAlignment.Right })
+
+	-- большая кнопка «Играть»
+	local quick = button(left, "", UDim2.new(1, 0, 0, 64), UDim2.fromOffset(0, 128), C.accent)
+	label(quick, "▶  " .. L("play"), 26, C.bg, true, { Position = UDim2.fromOffset(18, 6), Size = UDim2.new(1, -24, 0, 32) })
+	local quickSub = label(quick, L("play_sub"), 13, C.bg, false, { Position = UDim2.fromOffset(20, 38), Size = UDim2.new(1, -24, 0, 16) })
+
+	-- вкладки
+	local tabsRow = new("Frame", { Size = UDim2.new(1, 0, 0, 36), Position = UDim2.fromOffset(0, 202), BackgroundTransparency = 1 }, left)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }, tabsRow)
+	local pages: { [string]: ScrollingFrame } = {}
+	local tabBtns: { [string]: TextButton } = {}
+	local tabDot: { [string]: Frame } = {}
+	local function page(name: string): ScrollingFrame
+		local sf = new("ScrollingFrame", {
+			Size = UDim2.new(1, 0, 1, -248), Position = UDim2.fromOffset(0, 246), BackgroundTransparency = 1, BorderSizePixel = 0,
+			ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Visible = false,
+		}, left)
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, sf)
+		new("UIPadding", { PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 12) }, sf)
+		pages[name] = sf
+		return sf
+	end
+	local curTab = "hangar"
+	local function showTab(name: string)
+		curTab = name
+		for n, pgf in pages do
+			pgf.Visible = n == name
+		end
+		for n, b in tabBtns do
+			b.BackgroundColor3 = if n == name then C.panel2 else C.panel
+			b.TextColor3 = if n == name then C.accent else C.dim
 		end
 	end
-	function ui.setJets(order: { string }, jets: { [string]: any })
+	for i, n in { "hangar", "missions", "top", "shop" } do
+		local b = button(tabsRow, L("tab_" .. n), UDim2.new(0.25, -5, 1, 0), UDim2.new(), C.panel, C.dim)
+		b.TextSize = 14
+		b.LayoutOrder = i
+		tabBtns[n] = b
+		local dot = new("Frame", { Size = UDim2.fromOffset(10, 10), Position = UDim2.new(1, -12, 0, 2), BackgroundColor3 = C.red, Visible = false }, b)
+		corner(dot, 5)
+		tabDot[n] = dot
+		b.MouseButton1Click:Connect(function()
+			showTab(n)
+		end)
+	end
+	local hangar = page("hangar")
+	local missions = page("missions")
+	local topPage = page("top")
+	local shop = page("shop")
+	showTab("hangar")
+
+	local function section(parent: Instance, text: string, order: number)
+		label(parent, text, 13, C.dim, true, { LayoutOrder = order, Size = UDim2.new(1, 0, 0, 18) })
+	end
+
+	-- ---------- АНГАР: самолёты, раскраски, точка вылета, кнопка «В бой»
+	section(hangar, L("sec_jet"), 1)
+	local jetGrid = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 2 }, hangar)
+	new("UIGridLayout", { CellSize = UDim2.new(0.5, -5, 0, 58), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, jetGrid)
+	section(hangar, L("sec_paint"), 3)
+	local paintRow = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 74), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X, LayoutOrder = 4 }, hangar)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, paintRow)
+	section(hangar, L("sec_spawn"), 5)
+	local spawnList = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 6 }, hangar)
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, spawnList)
+	local go = button(hangar, L("launch"), UDim2.new(1, 0, 0, 54), UDim2.new(), C.green, C.bg)
+	go.LayoutOrder = 7
+	go.TextSize = 22
+	label(hangar, if isTouch then L("help_touch") else L("help_pc"), 12, C.dim, false, { LayoutOrder = 8, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
+
+	-- карточка выбранного самолёта справа внизу
+	local card = new("Frame", { Size = UDim2.fromOffset(330, 196), Position = UDim2.new(1, -348, 1, -214), BackgroundColor3 = C.bg, BackgroundTransparency = 0.15 }, menu)
+	corner(card, 14)
+	stroke(card)
+	local cardName = label(card, "", 22, C.text, true, { Position = UDim2.fromOffset(16, 10), Size = UDim2.new(1, -32, 0, 28), TextXAlignment = Enum.TextXAlignment.Right })
+	local cardRole = label(card, "", 13, C.accent, true, { Position = UDim2.fromOffset(16, 38), Size = UDim2.new(1, -32, 0, 18), TextXAlignment = Enum.TextXAlignment.Right })
+	local statBars: { Frame } = {}
+	for i, n in { "st_speed", "st_agility", "st_armor", "st_missiles" } do
+		label(card, L(n), 12, C.dim, true, { Position = UDim2.fromOffset(16, 62 + (i - 1) * 20), Size = UDim2.fromOffset(110, 16) })
+		statBars[i] = bar(card, UDim2.new(1, -150, 0, 7), UDim2.fromOffset(134, 67 + (i - 1) * 20), C.accent)
+	end
+	local cardBuy = button(card, "", UDim2.new(1, -32, 0, 34), UDim2.fromOffset(16, 148), C.gold, C.bg)
+
+	-- пригласить друзей
+	local invite = button(menu, "👥 " .. L("invite"), UDim2.fromOffset(220, 40), UDim2.new(1, -238, 0, 14), C.panel, C.text)
+	invite.TextSize = 15
+
+	-- ---------- состояние меню
+	local jetsOrder: { string } = {}
+	local jetsDef: { [string]: any } = {}
+	local progDef: any = nil
+	local profile: any = nil
+	local selJet, selPaint, selSpawn = "F16", "team", ""
+	local jetBtns: { [string]: TextButton } = {}
+	local paintBtns: { [string]: TextButton } = {}
+	local spawnBtns: { [string]: TextButton } = {}
+	local cbs: any = {}
+
+	local function level(): number
+		if not profile or not progDef then
+			return 1
+		end
+		return (progDef.levelOf(profile.xp))
+	end
+	local function owned(id: string): boolean
+		return profile ~= nil and profile.owned[id] == true
+	end
+	local function paintOwned(pt: any): boolean
+		if not profile then
+			return pt.id == "team"
+		end
+		if pt.vip then
+			return profile.vip == true
+		end
+		return profile.paints[pt.id] == true
+	end
+
+	local function refreshCard()
+		local j = jetsDef[selJet]
+		if not j then
+			return
+		end
+		cardName.Text = j.name
+		cardRole.Text = L("role_" .. selJet)
+		setBar(statBars[1], (j.maxKts - 600) / 220)
+		setBar(statBars[2], (j.rollRate - 2.6) / 1.9)
+		setBar(statBars[3], (j.hp - 80) / 60)
+		setBar(statBars[4], j.missiles / 6)
+		local pj = progDef and progDef.JETS[selJet]
+		if owned(selJet) then
+			cardBuy.Visible = false
+		else
+			cardBuy.Visible = true
+			if pj and level() < pj.level then
+				cardBuy.Text = "🔒 " .. L("need_lvl", pj.level)
+				cardBuy.BackgroundColor3 = C.panel2
+				cardBuy.TextColor3 = C.dim
+			else
+				cardBuy.Text = L("buy_for", fmt(pj and pj.cost or 0))
+				cardBuy.BackgroundColor3 = C.gold
+				cardBuy.TextColor3 = C.bg
+			end
+		end
+	end
+
+	local function paintSel()
+		for id, b in jetBtns do
+			local s = b:FindFirstChildOfClass("UIStroke") :: UIStroke
+			s.Color = if id == selJet then C.accent else C.line
+			s.Thickness = if id == selJet then 2 else 1
+			b.BackgroundColor3 = if id == selJet then C.panel2 else C.panel
+		end
+		for id, b in paintBtns do
+			local s = b:FindFirstChildOfClass("UIStroke") :: UIStroke
+			s.Color = if id == selPaint then C.accent else C.line
+			s.Thickness = if id == selPaint then 3 else 1
+		end
+		for id, b in spawnBtns do
+			local s = b:FindFirstChildOfClass("UIStroke") :: UIStroke
+			s.Color = if id == selSpawn then C.accent else C.line
+			s.Thickness = if id == selSpawn then 2 else 1
+			b.BackgroundColor3 = if id == selSpawn then C.panel2 else C.panel
+		end
+		go.Text = if owned(selJet) then L("launch") else L("launch_locked")
+		go.BackgroundColor3 = if owned(selJet) then C.green else C.panel2
+		refreshCard()
+		if cbs.select then
+			cbs.select(selJet, selPaint)
+		end
+	end
+
+	function ui.setJets(order: { string }, jets: { [string]: any }, prog: any)
+		jetsOrder, jetsDef, progDef = order, jets, prog
 		for i, id in order do
 			local j = jets[id]
 			local b = button(jetGrid, "", UDim2.new(), UDim2.new())
 			b.LayoutOrder = i
-			label(b, j.name, 15, C.text, true, { Position = UDim2.fromOffset(12, 8), Size = UDim2.new(1, -16, 0, 20), TextTruncate = Enum.TextTruncate.AtEnd })
-			label(b, string.format("%s · %d HP · %d ракет", j.role, j.hp, j.missiles), 12, C.dim, false, { Position = UDim2.fromOffset(12, 32), Size = UDim2.new(1, -16, 0, 18), TextTruncate = Enum.TextTruncate.AtEnd })
+			label(b, j.name, 14, C.text, true, { Position = UDim2.fromOffset(10, 7), Size = UDim2.new(1, -16, 0, 18), TextTruncate = Enum.TextTruncate.AtEnd })
+			label(b, "", 12, C.dim, false, { Name = "Sub", Position = UDim2.fromOffset(10, 30), Size = UDim2.new(1, -16, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd })
 			b.MouseButton1Click:Connect(function()
 				selJet = id
 				paintSel()
 			end)
 			jetBtns[id] = b
 		end
+		for i, pt in prog.PAINTS do
+			local b = new("TextButton", { Size = UDim2.fromOffset(64, 64), BackgroundColor3 = pt.body or C.Blue, Text = "", AutoButtonColor = true, LayoutOrder = i }, paintRow)
+			corner(b, 12)
+			stroke(b, C.line)
+			if pt.accent then
+				new("Frame", { Size = UDim2.new(1, 0, 0.3, 0), Position = UDim2.fromScale(0, 0.7), BackgroundColor3 = pt.accent, BorderSizePixel = 0 }, b)
+			end
+			label(b, "", 11, C.text, true, { Name = "P", Size = UDim2.new(1, 0, 0, 14), Position = UDim2.new(0, 0, 1, -16), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.3, ZIndex = 2 })
+			b.MouseButton1Click:Connect(function()
+				if paintOwned(pt) then
+					selPaint = pt.id
+					paintSel()
+				elseif pt.vip then
+					if cbs.shop then
+						cbs.shop("vip", 0)
+					end
+				elseif cbs.buy then
+					cbs.buy("paint", pt.id)
+				end
+			end)
+			paintBtns[pt.id] = b
+		end
 		paintSel()
 	end
-	-- spawns: { {id, title, sub, ok} }
+
+	local function refreshLists()
+		if not profile or not progDef then
+			return
+		end
+		local lvl = level()
+		for id, b in jetBtns do
+			local sub = b:FindFirstChild("Sub") :: TextLabel
+			local pj = progDef.JETS[id]
+			if owned(id) then
+				sub.Text = "✓ " .. L("role_" .. id)
+				sub.TextColor3 = C.green
+			elseif pj and lvl < pj.level then
+				sub.Text = "🔒 " .. L("need_lvl", pj.level)
+				sub.TextColor3 = C.dim
+			else
+				sub.Text = "💰 " .. fmt(pj and pj.cost or 0)
+				sub.TextColor3 = C.gold
+			end
+		end
+		for _, pt in progDef.PAINTS do
+			local b = paintBtns[pt.id]
+			if b then
+				local p = b:FindFirstChild("P") :: TextLabel
+				p.Text = if paintOwned(pt) then "" elseif pt.vip then "VIP" elseif lvl < pt.level then "🔒" .. pt.level else fmt(pt.cost)
+			end
+		end
+		if not owned(selJet) and owned(profile.jet) then
+			selJet = profile.jet
+		end
+		paintSel()
+	end
+
+	function ui.setProfile(p: any)
+		local first = profile == nil
+		profile = p
+		local lvl, into, need = progDef.levelOf(p.xp)
+		lvlL.Text = tostring(lvl)
+		xpTxt.Text = L("level_xp", lvl, fmt(into), fmt(need))
+		setBar(xpBar, into / math.max(need, 1))
+		coinsL.Text = "💰 " .. fmt(p.coins)
+		if first then
+			if owned(p.jet) then
+				selJet = p.jet
+			end
+			local pt = progDef.paint(p.paint)
+			if pt and paintOwned(pt) then
+				selPaint = p.paint
+			end
+		end
+		refreshLists()
+		ui.renderMissions()
+		ui.renderShop()
+		tabDot.missions.Visible = p.daily.can
+	end
+
+	-- точки вылета: { {id, title, sub, ok} }
 	function ui.setSpawns(list: { any })
 		local seen = {}
 		for i, s in list do
 			seen[s.id] = true
 			local b = spawnBtns[s.id]
 			if not b then
-				b = button(spawnList, "", UDim2.new(1, 0, 0, 48), UDim2.new())
-				label(b, "", 15, C.text, true, { Name = "T", Position = UDim2.fromOffset(14, 6), Size = UDim2.new(1, -20, 0, 20) })
-				label(b, "", 12, C.dim, false, { Name = "S", Position = UDim2.fromOffset(14, 26), Size = UDim2.new(1, -20, 0, 16) })
+				b = button(spawnList, "", UDim2.new(1, 0, 0, 44), UDim2.new())
+				label(b, "", 15, C.text, true, { Name = "T", Position = UDim2.fromOffset(12, 4), Size = UDim2.new(1, -20, 0, 20) })
+				label(b, "", 11, C.dim, false, { Name = "S", Position = UDim2.fromOffset(12, 24), Size = UDim2.new(1, -20, 0, 16) })
 				local id = s.id
 				b.MouseButton1Click:Connect(function()
 					if b:GetAttribute("Ok") then
@@ -3837,11 +5446,12 @@ function Hud.new(): any
 			end
 			b.LayoutOrder = i
 			b:SetAttribute("Ok", s.ok)
-			;(b:FindFirstChild("T") :: TextLabel).Text = s.title
-			;(b:FindFirstChild("S") :: TextLabel).Text = s.sub
-			b.TextTransparency = 0
-			b.BackgroundTransparency = if s.ok then 0.1 else 0.6
-			;(b:FindFirstChild("T") :: TextLabel).TextColor3 = if s.ok then C.text else C.dim
+			local t = b:FindFirstChild("T") :: TextLabel
+			local sub = b:FindFirstChild("S") :: TextLabel
+			t.Text = s.title
+			sub.Text = s.sub
+			b.BackgroundTransparency = if s.ok then 0.05 else 0.6
+			t.TextColor3 = if s.ok then C.text else C.dim
 		end
 		for id, b in spawnBtns do
 			if not seen[id] then
@@ -3855,34 +5465,261 @@ function Hud.new(): any
 		end
 		paintSel()
 	end
-	function ui.setTeam(side: string, name: string)
-		teamLbl.Text = "Команда: " .. name
+	function ui.setTeam(side: string)
+		teamLbl.Text = L("team_" .. side)
 		teamLbl.TextColor3 = C[side] or C.accent
 	end
-	function ui.setScoreLine(t: string)
-		scoreLbl.Text = t
+	function ui.on(name: string, cb: any)
+		cbs[name] = cb
 	end
-	local launchCb: ((string, string) -> ())? = nil
-	function ui.onLaunch(cb: (string, string) -> ())
-		launchCb = cb
-	end
+	quick.MouseButton1Click:Connect(function()
+		if cbs.quick then
+			cbs.quick(if owned(selJet) then selJet else "F16", if owned(selJet) then selPaint else "team")
+		end
+	end)
 	go.MouseButton1Click:Connect(function()
-		if launchCb and selSpawn ~= "" then
-			launchCb(selJet, selSpawn)
+		if not owned(selJet) then
+			if cbs.buy then
+				cbs.buy("jet", selJet)
+			end
+		elseif cbs.launch and selSpawn ~= "" then
+			cbs.launch(selJet, selSpawn, selPaint)
+		end
+	end)
+	cardBuy.MouseButton1Click:Connect(function()
+		if cbs.buy then
+			cbs.buy("jet", selJet)
+		end
+	end)
+	invite.MouseButton1Click:Connect(function()
+		if cbs.invite then
+			cbs.invite()
 		end
 	end)
 	function ui.showMenu(v: boolean)
 		menu.Visible = v
 	end
+	function ui.setQuickSub(t: string)
+		quickSub.Text = t
+	end
 
-	-- ================= ПРИБОРЫ =================
-	local hud = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, gui)
-	-- счёт сверху
-	local top = new("Frame", { Size = UDim2.fromOffset(420, 58), Position = UDim2.new(0.5, -210, 0, 8), BackgroundColor3 = C.bg, BackgroundTransparency = 0.25 }, gui)
+	-- ---------- ЗАДАНИЯ
+	local dailyBtn: TextButton? = nil
+	function ui.renderMissions()
+		for _, ch in missions:GetChildren() do
+			if ch:IsA("GuiObject") then
+				ch:Destroy()
+			end
+		end
+		if not profile then
+			return
+		end
+		section(missions, L("sec_daily"), 1)
+		local d = profile.daily
+		local row = new("Frame", { Size = UDim2.new(1, 0, 0, 62), BackgroundTransparency = 1, LayoutOrder = 2 }, missions)
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5) }, row)
+		for i, coins in progDef.DAILY do
+			local got = (not d.can and i <= d.idx) or (d.can and i < d.idx)
+			local today = i == d.idx
+			local cell = new("Frame", { Size = UDim2.new(1 / 7, -5, 1, 0), BackgroundColor3 = if today then C.panel2 else C.panel, LayoutOrder = i }, row)
+			corner(cell, 8)
+			stroke(cell, if today then C.gold else C.line, if today then 2 else 1)
+			label(cell, L("day_n", i), 11, C.dim, true, { Size = UDim2.new(1, 0, 0, 16), Position = UDim2.fromOffset(0, 4), TextXAlignment = Enum.TextXAlignment.Center })
+			label(cell, if got then "✓" else fmt(coins), 14, if got then C.green else C.gold, true, { Size = UDim2.new(1, 0, 0, 20), Position = UDim2.fromOffset(0, 26), TextXAlignment = Enum.TextXAlignment.Center })
+		end
+		if d.can then
+			local b = button(missions, L("claim_daily", fmt(progDef.DAILY[d.idx])), UDim2.new(1, 0, 0, 44), UDim2.new(), C.gold, C.bg)
+			b.LayoutOrder = 3
+			b.MouseButton1Click:Connect(function()
+				if cbs.daily then
+					cbs.daily()
+				end
+			end)
+			dailyBtn = b
+		else
+			label(missions, L("daily_back"), 12, C.dim, false, { LayoutOrder = 3, TextWrapped = true, Size = UDim2.new(1, 0, 0, 30) })
+		end
+		section(missions, L("sec_quests"), 4)
+		for i, q in profile.quests do
+			local f = new("Frame", { Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = C.panel, LayoutOrder = 4 + i }, missions)
+			corner(f, 10)
+			stroke(f, if q.done then C.green else C.line)
+			label(f, L("q_" .. q.id, q.n), 14, if q.done then C.green else C.text, true, { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(1, -110, 0, 20) })
+			label(f, (if q.done then "✓ " else "") .. "💰 " .. fmt(q.reward), 14, C.gold, true, { Position = UDim2.new(1, -100, 0, 6), Size = UDim2.fromOffset(90, 20), TextXAlignment = Enum.TextXAlignment.Right })
+			local pb = bar(f, UDim2.new(1, -24, 0, 8), UDim2.fromOffset(12, 36), if q.done then C.green else C.accent)
+			setBar(pb, q.p / q.n)
+			label(f, string.format("%d / %d", q.p, q.n), 11, C.dim, true, { Position = UDim2.new(1, -80, 0, 30), Size = UDim2.fromOffset(68, 14), TextXAlignment = Enum.TextXAlignment.Right, Visible = false })
+		end
+		label(missions, L("quests_reset"), 12, C.dim, false, { LayoutOrder = 20, TextWrapped = true, Size = UDim2.new(1, 0, 0, 30) })
+		local st = profile.stats
+		section(missions, L("sec_stats"), 21)
+		label(missions, L("stats_line", st.kills, st.deaths, st.wins, st.caps, st.sorties), 13, C.text, false, { LayoutOrder = 22, TextWrapped = true, Size = UDim2.new(1, 0, 0, 40) })
+	end
+
+	-- ---------- ТОП НЕДЕЛИ
+	function ui.setTop(list: { any }, myWeek: number)
+		for _, ch in topPage:GetChildren() do
+			if ch:IsA("GuiObject") then
+				ch:Destroy()
+			end
+		end
+		section(topPage, L("sec_top"), 1)
+		if #list == 0 then
+			label(topPage, L("top_empty"), 13, C.dim, false, { LayoutOrder = 2, TextWrapped = true, Size = UDim2.new(1, 0, 0, 40) })
+		end
+		local me = Players.LocalPlayer.Name
+		for i, e in list do
+			local f = new("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundColor3 = if e[1] == me then C.panel2 else C.panel, LayoutOrder = 1 + i }, topPage)
+			corner(f, 8)
+			local medal = if i == 1 then "🥇" elseif i == 2 then "🥈" elseif i == 3 then "🥉" else tostring(i) .. "."
+			label(f, medal .. "  " .. tostring(e[1]), 15, C.text, true, { Position = UDim2.fromOffset(12, 7), Size = UDim2.new(1, -120, 0, 22) })
+			label(f, fmt(tonumber(e[2]) or 0) .. " ✈", 15, C.gold, true, { Position = UDim2.new(1, -110, 0, 7), Size = UDim2.fromOffset(98, 22), TextXAlignment = Enum.TextXAlignment.Right })
+		end
+		label(topPage, L("top_mine", myWeek), 13, C.accent, true, { LayoutOrder = 50, Size = UDim2.new(1, 0, 0, 20) })
+		label(topPage, L("top_hint"), 12, C.dim, false, { LayoutOrder = 51, TextWrapped = true, Size = UDim2.new(1, 0, 0, 30) })
+	end
+
+	-- ---------- МАГАЗИН
+	function ui.renderShop()
+		for _, ch in shop:GetChildren() do
+			if ch:IsA("GuiObject") then
+				ch:Destroy()
+			end
+		end
+		if not profile then
+			return
+		end
+		section(shop, L("sec_vip"), 1)
+		local v = new("Frame", { Size = UDim2.new(1, 0, 0, 110), BackgroundColor3 = C.panel, LayoutOrder = 2 }, shop)
+		corner(v, 12)
+		stroke(v, C.gold, 2)
+		label(v, "★ VIP", 22, C.gold, true, { Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 0, 26) })
+		label(v, L("vip_desc"), 13, C.text, false, { Position = UDim2.fromOffset(14, 38), Size = UDim2.new(1, -28, 0, 36), TextWrapped = true })
+		local vb = button(v, if profile.vip then L("vip_have") elseif profile.shop.vip > 0 then L("vip_buy") else L("soon"), UDim2.new(1, -28, 0, 28), UDim2.fromOffset(14, 76), if profile.vip then C.panel2 else C.gold, C.bg)
+		vb.Active = profile.shop.vip > 0 and not profile.vip
+		vb.MouseButton1Click:Connect(function()
+			if cbs.shop and profile.shop.vip > 0 and not profile.vip then
+				cbs.shop("vip", profile.shop.vip)
+			end
+		end)
+		section(shop, L("sec_coins"), 3)
+		for i, pr in profile.shop.coins do
+			local b = button(shop, "💰 " .. fmt(pr.coins) .. (if pr.id > 0 then "" else "  ·  " .. L("soon")), UDim2.new(1, 0, 0, 44), UDim2.new(), C.panel, C.gold)
+			b.LayoutOrder = 3 + i
+			b.MouseButton1Click:Connect(function()
+				if cbs.shop and pr.id > 0 then
+					cbs.shop("coins", pr.id)
+				end
+			end)
+		end
+		label(shop, L("shop_hint"), 12, C.dim, false, { LayoutOrder = 20, TextWrapped = true, Size = UDim2.new(1, 0, 0, 44) })
+	end
+
+	-- ============================================================ ОКНА (ежедневная награда, итоги раунда)
+	local modal = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, Visible = false, ZIndex = 20 }, root)
+	local box = new("Frame", { Size = UDim2.fromOffset(560, 330), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.bg, ZIndex = 21 }, modal)
+	corner(box, 16)
+	stroke(box, C.accent, 2)
+	local function clearBox()
+		for _, ch in box:GetChildren() do
+			if ch:IsA("GuiObject") then
+				ch:Destroy()
+			end
+		end
+	end
+	local function zall(f: Instance)
+		for _, d in f:GetDescendants() do
+			if d:IsA("GuiObject") then
+				d.ZIndex = 22
+			end
+		end
+	end
+	function ui.closeModal()
+		modal.Visible = false
+	end
+
+	function ui.showDaily()
+		if not profile or not profile.daily.can then
+			return
+		end
+		clearBox()
+		modal.Visible = true
+		local d = profile.daily
+		label(box, "🎁 " .. L("daily_title"), 26, C.gold, true, { Position = UDim2.fromOffset(0, 18), Size = UDim2.new(1, 0, 0, 32), TextXAlignment = Enum.TextXAlignment.Center })
+		label(box, L("daily_sub", d.idx), 14, C.dim, false, { Position = UDim2.fromOffset(20, 56), Size = UDim2.new(1, -40, 0, 20), TextXAlignment = Enum.TextXAlignment.Center })
+		local row = new("Frame", { Size = UDim2.new(1, -40, 0, 92), Position = UDim2.fromOffset(20, 92), BackgroundTransparency = 1 }, box)
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }, row)
+		for i, coins in progDef.DAILY do
+			local today = i == d.idx
+			local cell = new("Frame", { Size = UDim2.new(1 / 7, -6, 1, 0), BackgroundColor3 = if today then C.panel2 else C.panel, LayoutOrder = i }, row)
+			corner(cell, 10)
+			stroke(cell, if today then C.gold else C.line, if today then 3 else 1)
+			label(cell, L("day_n", i), 12, C.dim, true, { Size = UDim2.new(1, 0, 0, 16), Position = UDim2.fromOffset(0, 8), TextXAlignment = Enum.TextXAlignment.Center })
+			label(cell, if i < d.idx then "✓" else (if i == 7 then "🎁" else "💰"), 22, C.gold, true, { Size = UDim2.new(1, 0, 0, 28), Position = UDim2.fromOffset(0, 28), TextXAlignment = Enum.TextXAlignment.Center })
+			label(cell, fmt(coins), 13, if i < d.idx then C.green else C.gold, true, { Size = UDim2.new(1, 0, 0, 16), Position = UDim2.fromOffset(0, 64), TextXAlignment = Enum.TextXAlignment.Center })
+		end
+		local b = button(box, L("claim_daily", fmt(progDef.DAILY[d.idx])), UDim2.new(1, -40, 0, 54), UDim2.fromOffset(20, 210), C.gold, C.bg)
+		b.TextSize = 20
+		b.MouseButton1Click:Connect(function()
+			modal.Visible = false
+			if cbs.daily then
+				cbs.daily()
+			end
+		end)
+		label(box, L("daily_back"), 12, C.dim, false, { Position = UDim2.fromOffset(20, 276), Size = UDim2.new(1, -40, 0, 36), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center })
+		zall(box)
+	end
+
+	function ui.showRound(winner: string, mvp: { any }, mySide: string, secs: number)
+		clearBox()
+		modal.Visible = true
+		local won = winner == mySide
+		label(box, if won then "🏆 " .. L("victory") else L("defeat"), 34, if won then C.gold else C.red, true, { Position = UDim2.fromOffset(0, 16), Size = UDim2.new(1, 0, 0, 40), TextXAlignment = Enum.TextXAlignment.Center })
+		label(box, L("winner_is", L("team_" .. winner)), 15, C[winner] or C.text, true, { Position = UDim2.fromOffset(0, 60), Size = UDim2.new(1, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Center })
+		local row = new("Frame", { Size = UDim2.new(1, -40, 0, 150), Position = UDim2.fromOffset(20, 96), BackgroundTransparency = 1 }, box)
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }, row)
+		if #mvp == 0 then
+			label(row, L("no_mvp"), 14, C.dim, false, { Size = UDim2.new(1, 0, 1, 0), TextXAlignment = Enum.TextXAlignment.Center })
+		end
+		for i, e in mvp do
+			local f = new("Frame", { Size = UDim2.new(1 / 3, -10, 1, 0), BackgroundColor3 = C.panel, LayoutOrder = i }, row)
+			corner(f, 12)
+			stroke(f, if i == 1 then C.gold else C.line, if i == 1 then 2 else 1)
+			local img = new("ImageLabel", { Size = UDim2.fromOffset(56, 56), Position = UDim2.new(0.5, -28, 0, 8), BackgroundColor3 = C.panel2, Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(e.userId) .. "&w=150&h=150" }, f)
+			corner(img, 28)
+			label(f, (if i == 1 then "MVP · " else "") .. tostring(e.name), 14, C[e.side] or C.text, true, { Position = UDim2.fromOffset(4, 70), Size = UDim2.new(1, -8, 0, 18), TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd })
+			label(f, L("mvp_line", e.kills, e.caps), 12, C.dim, false, { Position = UDim2.fromOffset(4, 94), Size = UDim2.new(1, -8, 0, 16), TextXAlignment = Enum.TextXAlignment.Center })
+			label(f, fmt(e.score), 18, C.gold, true, { Position = UDim2.fromOffset(4, 116), Size = UDim2.new(1, -8, 0, 22), TextXAlignment = Enum.TextXAlignment.Center })
+		end
+		local cd = label(box, "", 13, C.dim, false, { Position = UDim2.fromOffset(0, 262), Size = UDim2.new(1, 0, 0, 18), TextXAlignment = Enum.TextXAlignment.Center })
+		local ok = button(box, "OK", UDim2.fromOffset(160, 36), UDim2.new(0.5, -80, 0, 286), C.panel2, C.text)
+		ok.MouseButton1Click:Connect(function()
+			modal.Visible = false
+		end)
+		zall(box)
+		task.spawn(function()
+			local t = secs
+			while t > 0 and cd.Parent do
+				cd.Text = L("next_round", t)
+				task.wait(1)
+				t -= 1
+			end
+			if cd.Parent then
+				modal.Visible = false
+			end
+		end)
+	end
+
+	-- ============================================================ ПРИБОРЫ
+	local hud = new("Frame", { Name = "Hud", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, root)
+	-- урон: красная рамка по краям
+	local hurtF = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, hud)
+	local hurt = new("UIStroke", { Color = C.red, Thickness = 26, Transparency = 1 }, hurtF)
+	local top = new("Frame", { Size = UDim2.fromOffset(420, 58), Position = UDim2.new(0.5, -210, 0, 8), BackgroundColor3 = C.bg, BackgroundTransparency = 0.25 }, hud)
 	corner(top, 12)
 	stroke(top)
-	local tBlue = label(top, "250", 22, C.Blue, true, { Position = UDim2.fromOffset(14, 4), Size = UDim2.fromOffset(70, 28) })
-	local tRed = label(top, "250", 22, C.Red, true, { Position = UDim2.new(1, -84, 0, 4), Size = UDim2.fromOffset(70, 28), TextXAlignment = Enum.TextXAlignment.Right })
+	local tBlue = label(top, "", 22, C.Blue, true, { Position = UDim2.fromOffset(14, 4), Size = UDim2.fromOffset(70, 28) })
+	local tRed = label(top, "", 22, C.Red, true, { Position = UDim2.new(1, -84, 0, 4), Size = UDim2.fromOffset(70, 28), TextXAlignment = Enum.TextXAlignment.Right })
 	local baseRow = new("Frame", { Size = UDim2.fromOffset(240, 26), Position = UDim2.new(0.5, -120, 0, 6), BackgroundTransparency = 1 }, top)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center }, baseRow)
 	local baseChips: { [string]: Frame } = {}
@@ -3892,8 +5729,8 @@ function Hud.new(): any
 			if not chip then
 				chip = new("Frame", { Size = UDim2.fromOffset(40, 26), BackgroundColor3 = C.panel, LayoutOrder = i }, baseRow)
 				corner(chip, 6)
-				new("Frame", { Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.Blue, BorderSizePixel = 0 }, chip)
-				corner(chip:FindFirstChild("Fill") :: Instance, 6)
+				local fill = new("Frame", { Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.Blue, BorderSizePixel = 0 }, chip)
+				corner(fill, 6)
 				label(chip, b.id, 15, C.text, true, { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 2 })
 				baseChips[b.id] = chip
 			end
@@ -3903,65 +5740,104 @@ function Hud.new(): any
 			fill.BackgroundTransparency = if b.owner == "" then 0.55 else 0.1
 		end
 	end
-	local topSub = label(top, "очки команд · базы", 11, C.dim, false, { Position = UDim2.new(0, 0, 1, -18), Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Center })
+	label(top, L("score_sub"), 11, C.dim, false, { Position = UDim2.new(0, 0, 1, -18), Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Center })
 	function ui.setTickets(b: number, r: number)
 		tBlue.Text = tostring(b)
 		tRed.Text = tostring(r)
 	end
-	function ui.setTopHint(t: string)
-		topSub.Text = t
-	end
 
-	-- приборная панель слева снизу
 	local dash = new("Frame", { Size = UDim2.fromOffset(230, 132), Position = UDim2.new(0, 16, 1, -148), BackgroundColor3 = C.bg, BackgroundTransparency = 0.3 }, hud)
 	corner(dash, 12)
 	stroke(dash)
 	local spdL = label(dash, "0", 30, C.text, true, { Position = UDim2.fromOffset(14, 6), Size = UDim2.fromOffset(110, 34) })
-	label(dash, "СКОР kt", 11, C.dim, true, { Position = UDim2.fromOffset(14, 40), Size = UDim2.fromOffset(100, 14) })
+	label(dash, L("spd"), 11, C.dim, true, { Position = UDim2.fromOffset(14, 40), Size = UDim2.fromOffset(100, 14) })
 	local altL = label(dash, "0", 30, C.text, true, { Position = UDim2.fromOffset(120, 6), Size = UDim2.fromOffset(100, 34) })
-	label(dash, "ВЫС ft", 11, C.dim, true, { Position = UDim2.fromOffset(120, 40), Size = UDim2.fromOffset(100, 14) })
-	local function bar(y: number, name: string, colr: Color3): (Frame, TextLabel)
+	label(dash, L("alt"), 11, C.dim, true, { Position = UDim2.fromOffset(120, 40), Size = UDim2.fromOffset(100, 14) })
+	local function dbar(y: number, name: string, colr: Color3): (Frame, TextLabel)
 		label(dash, name, 11, C.dim, true, { Position = UDim2.fromOffset(14, y), Size = UDim2.fromOffset(60, 14) })
-		local bg = new("Frame", { Size = UDim2.fromOffset(150, 8), Position = UDim2.fromOffset(66, y + 4), BackgroundColor3 = C.panel }, dash)
-		corner(bg, 4)
-		local fill = new("Frame", { Size = UDim2.fromScale(0.5, 1), BackgroundColor3 = colr, BorderSizePixel = 0 }, bg)
-		corner(fill, 4)
+		local bg = bar(dash, UDim2.fromOffset(150, 8), UDim2.fromOffset(66, y + 4), colr)
 		local v = label(dash, "", 11, C.dim, false, { Position = UDim2.fromOffset(66, y + 12), Size = UDim2.fromOffset(150, 12) })
-		return fill, v
+		return bg, v
 	end
-	local thrFill = bar(62, "ТЯГА", C.accent)
-	local hpFill, hpTxt = bar(88, "КОРПУС", C.green)
+	local thrBar = dbar(62, L("thr"), C.accent)
+	local hpBar, hpTxt = dbar(88, L("hull"), C.green)
 	local ammoL = label(dash, "", 12, C.text, true, { Position = UDim2.fromOffset(14, 112), Size = UDim2.fromOffset(210, 16) })
 
-	-- прицел и захват
 	local cross = new("Frame", { Size = UDim2.fromOffset(34, 34), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1 }, hud)
 	local crossRing = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, cross)
 	corner(crossRing, 17)
 	stroke(crossRing, C.accent, 2)
 	new("Frame", { Size = UDim2.fromOffset(4, 4), Position = UDim2.new(0.5, -2, 0.5, -2), BackgroundColor3 = C.accent, BorderSizePixel = 0 }, cross)
 	local lockBox = new("Frame", { Size = UDim2.fromOffset(46, 46), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, Visible = false }, hud)
-	local lockStroke = new("UIStroke", { Color = C.amber, Thickness = 2 }, lockBox)
-	local lockTxt = label(lockBox, "", 12, C.amber, true, { Position = UDim2.new(0, -20, 1, 4), Size = UDim2.new(1, 40, 0, 14), TextXAlignment = Enum.TextXAlignment.Center })
+	local lockStroke = stroke(lockBox, C.amber, 2)
+	local lockTxt = label(lockBox, "", 12, C.amber, true, { Position = UDim2.new(0, -40, 1, 4), Size = UDim2.new(1, 80, 0, 14), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.5 })
 
-	local warnL = label(hud, "", 22, C.red, true, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 78), Size = UDim2.fromOffset(500, 28), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.4 })
-	local infoL = label(hud, "", 16, C.amber, true, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 108), Size = UDim2.fromOffset(560, 22), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.5 })
-	local hitL = label(hud, "", 16, C.amber, true, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 46), Size = UDim2.fromOffset(200, 20), TextXAlignment = Enum.TextXAlignment.Center })
+	local warnL = label(hud, "", 22, C.red, true, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 78), Size = UDim2.fromOffset(600, 28), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.4 })
+	local infoL = label(hud, "", 16, C.amber, true, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 108), Size = UDim2.fromOffset(640, 22), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.5 })
+	local hitL = label(hud, "", 16, C.amber, true, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 46), Size = UDim2.fromOffset(200, 20), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.5 })
+	-- подсказка обучения
+	local tutBox = new("Frame", { Size = UDim2.fromOffset(560, 56), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 140), BackgroundColor3 = C.bg, BackgroundTransparency = 0.15, Visible = false }, hud)
+	corner(tutBox, 12)
+	stroke(tutBox, C.accent, 2)
+	local tutL = label(tutBox, "", 16, C.text, true, { Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 1, 0), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center })
+	function ui.tutorial(text: string?)
+		tutBox.Visible = text ~= nil
+		tutL.Text = text or ""
+	end
+	-- крупный баннер (серия сбитий, захват)
+	local banner = label(root, "", 30, C.gold, true, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.3), Size = UDim2.fromOffset(700, 40), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.3, TextTransparency = 1 })
+	local bannerSeq = 0
+	function ui.banner(text: string, colr: Color3?)
+		bannerSeq += 1
+		local s = bannerSeq
+		banner.Text = text
+		banner.TextColor3 = colr or C.gold
+		banner.TextTransparency = 0
+		banner.TextStrokeTransparency = 0.3
+		banner.Size = UDim2.fromOffset(700, 40)
+		TweenService:Create(banner, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Size = UDim2.fromOffset(760, 48) }):Play()
+		task.delay(2.2, function()
+			if s == bannerSeq then
+				TweenService:Create(banner, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+			end
+		end)
+	end
+	-- всплывающие награды «+50 💰 +100 XP»
+	local rewards = new("Frame", { Size = UDim2.fromOffset(320, 200), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.5, 60, 0.5, 0), BackgroundTransparency = 1 }, root)
+	new("UIListLayout", { Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Center }, rewards)
+	function ui.reward(coins: number, xp: number, text: string)
+		local t = text
+		if coins > 0 then
+			t ..= "  +" .. fmt(coins) .. " 💰"
+		end
+		if xp > 0 then
+			t ..= "  +" .. fmt(xp) .. " XP"
+		end
+		local l = label(rewards, t, 17, C.gold, true, { TextStrokeTransparency = 0.3, Size = UDim2.new(1, 0, 0, 22) })
+		task.delay(2.4, function()
+			if l.Parent then
+				TweenService:Create(l, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+				task.wait(0.6)
+				l:Destroy()
+			end
+		end)
+	end
 
-	-- метки самолётов (пул)
 	local markers: { Frame } = {}
 	for i = 1, 28 do
 		local m = new("Frame", { Size = UDim2.fromOffset(18, 18), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, Visible = false }, hud)
 		new("UIStroke", { Name = "S", Color = C.Red, Thickness = 2 }, m)
-		label(m, "", 11, C.Red, true, { Name = "D", Position = UDim2.new(0, -30, 1, 2), Size = UDim2.new(1, 60, 0, 13), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.5 })
+		label(m, "", 11, C.Red, true, { Name = "D", Position = UDim2.new(0, -40, 1, 2), Size = UDim2.new(1, 80, 0, 13), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.5 })
 		markers[i] = m
 	end
-	-- list: {x, y, color, text, size}
+	-- координаты меток — в пикселях экрана; переводим в координаты масштабированного корня
 	function ui.setMarkers(list: { any })
+		local s = ui.scale
 		for i, m in markers do
 			local it = list[i]
 			if it then
 				m.Visible = true
-				m.Position = UDim2.fromOffset(it.x, it.y)
+				m.Position = UDim2.fromOffset(it.x / s, it.y / s)
 				m.Size = UDim2.fromOffset(it.size, it.size)
 				;(m:FindFirstChild("S") :: UIStroke).Color = it.color
 				local d = m:FindFirstChild("D") :: TextLabel
@@ -3973,7 +5849,6 @@ function Hud.new(): any
 		end
 	end
 
-	-- радар справа сверху
 	local radar = new("Frame", { Size = UDim2.fromOffset(150, 150), Position = UDim2.new(1, -166, 0, 76), BackgroundColor3 = C.bg, BackgroundTransparency = 0.3 }, hud)
 	corner(radar, 75)
 	stroke(radar)
@@ -3987,7 +5862,6 @@ function Hud.new(): any
 		corner(d, 3)
 		dots[i] = d
 	end
-	-- list: {dx, dy (−1..1), color, big}
 	function ui.setRadar(list: { any })
 		for i, d in dots do
 			local it = list[i]
@@ -3995,30 +5869,28 @@ function Hud.new(): any
 				d.Visible = true
 				d.Position = UDim2.new(0.5 + it.dx * 0.45, 0, 0.5 + it.dy * 0.45, 0)
 				d.BackgroundColor3 = it.color
-				local s = if it.big then 11 else 6
-				d.Size = UDim2.fromOffset(s, s)
+				local sz = if it.big then 11 else 6
+				d.Size = UDim2.fromOffset(sz, sz)
 			else
 				d.Visible = false
 			end
 		end
 	end
 
-	-- лента событий
-	local feed = new("Frame", { Size = UDim2.fromOffset(340, 160), Position = UDim2.new(1, -356, 0, 236), BackgroundTransparency = 1 }, gui)
-	new("UIListLayout", { Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Top, HorizontalAlignment = Enum.HorizontalAlignment.Right }, feed)
+	local feed = new("Frame", { Size = UDim2.fromOffset(360, 170), Position = UDim2.new(1, -376, 0, 236), BackgroundTransparency = 1 }, root)
+	new("UIListLayout", { Padding = UDim.new(0, 4), HorizontalAlignment = Enum.HorizontalAlignment.Right }, feed)
 	function ui.feed(text: string, colr: Color3)
 		local l = label(feed, text, 13, colr, true, { TextXAlignment = Enum.TextXAlignment.Right, BackgroundTransparency = 0.35, BackgroundColor3 = C.bg, Size = UDim2.new(1, 0, 0, 20), TextTruncate = Enum.TextTruncate.AtEnd })
 		new("UIPadding", { PaddingRight = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8) }, l)
 		corner(l, 6)
-		local kids = feed:GetChildren()
 		local n = 0
-		for _, k in kids do
+		for _, k in feed:GetChildren() do
 			if k:IsA("TextLabel") then
 				n += 1
 			end
 		end
 		if n > 6 then
-			for _, k in kids do
+			for _, k in feed:GetChildren() do
 				if k:IsA("TextLabel") and k ~= l then
 					k:Destroy()
 					break
@@ -4034,8 +5906,7 @@ function Hud.new(): any
 		end)
 	end
 
-	-- всплывающие подсказки
-	local toastL = label(gui, "", 17, C.text, true, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -170), Size = UDim2.fromOffset(620, 30), TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = C.bg, BackgroundTransparency = 1, TextTransparency = 1, TextWrapped = true })
+	local toastL = label(root, "", 17, C.text, true, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -170), Size = UDim2.fromOffset(640, 30), TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = C.bg, BackgroundTransparency = 1, TextTransparency = 1, TextWrapped = true, ZIndex = 30 })
 	corner(toastL, 8)
 	local toastSeq = 0
 	function ui.toast(text: string, colr: string?)
@@ -4052,18 +5923,16 @@ function Hud.new(): any
 		end)
 	end
 
-	-- экран «сбит»
-	local dead = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(30, 6, 6), BackgroundTransparency = 0.45, Visible = false }, gui)
-	local deadT = label(dead, "", 34, C.text, true, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(700, 44), TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true })
-	label(dead, "Возврат на авианосец…", 16, C.dim, false, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.53), Size = UDim2.fromOffset(500, 20), TextXAlignment = Enum.TextXAlignment.Center })
+	local dead = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(30, 6, 6), BackgroundTransparency = 0.45, Visible = false, ZIndex = 10 }, root)
+	local deadT = label(dead, "", 34, C.text, true, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(760, 44), TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, ZIndex = 11 })
+	label(dead, L("back_to_carrier"), 16, C.dim, false, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.53), Size = UDim2.fromOffset(500, 20), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 11 })
 	function ui.showDead(text: string?)
 		dead.Visible = text ~= nil
 		deadT.Text = text or ""
 	end
 
-	-- ================= СЕНСОРНОЕ УПРАВЛЕНИЕ =================
-	ui.touch = { x = 0, y = 0, rr = 0, rl = 0, brake = false, throttle = nil :: number?, fire = false }
-	local touchBtns: { [string]: TextButton } = {}
+	-- ============================================================ СЕНСОРНОЕ УПРАВЛЕНИЕ
+	ui.touch = { x = 0, y = 0, brake = false, throttle = nil :: number?, fire = false, active = false }
 	local activeTouches: { [InputObject]: boolean } = {}
 	function ui.isTouchingControls(): boolean
 		return next(activeTouches) ~= nil
@@ -4073,19 +5942,22 @@ function Hud.new(): any
 		actionCb = cb
 	end
 	local touchLayer = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, hud)
+	function ui.setThrottleKnob(_v: number) end
 	if isTouch then
 		touchLayer.Visible = true
-		-- стик
-		local stickBase = new("Frame", { Size = UDim2.fromOffset(170, 170), Position = UDim2.new(0, 36, 1, -330), BackgroundColor3 = C.bg, BackgroundTransparency = 0.5 }, touchLayer)
-		corner(stickBase, 85)
+		-- приборы выше, чтобы не мешали стику
+		dash.Position = UDim2.new(0, 16, 0, 76)
+		local stickBase = new("Frame", { Size = UDim2.fromOffset(190, 190), Position = UDim2.new(0, 40, 1, -230), BackgroundColor3 = C.bg, BackgroundTransparency = 0.5 }, touchLayer)
+		corner(stickBase, 95)
 		stroke(stickBase, C.line, 2)
-		local knob = new("Frame", { Size = UDim2.fromOffset(70, 70), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.accent, BackgroundTransparency = 0.25 }, stickBase)
-		corner(knob, 35)
+		local knob = new("Frame", { Size = UDim2.fromOffset(76, 76), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.accent, BackgroundTransparency = 0.25 }, stickBase)
+		corner(knob, 38)
 		local stickInput: InputObject? = nil
 		stickBase.InputBegan:Connect(function(i)
 			if i.UserInputType == Enum.UserInputType.Touch and not stickInput then
 				stickInput = i
 				activeTouches[i] = true
+				ui.touch.active = true
 			end
 		end)
 		UserInputService.TouchMoved:Connect(function(i)
@@ -4096,7 +5968,7 @@ function Hud.new(): any
 				if d.Magnitude > r then
 					d = d.Unit * r
 				end
-				knob.Position = UDim2.new(0.5, d.X, 0.5, d.Y)
+				knob.Position = UDim2.new(0.5, d.X / ui.scale, 0.5, d.Y / ui.scale)
 				ui.touch.x = d.X / r
 				ui.touch.y = d.Y / r -- вниз = на себя = нос вверх
 			end
@@ -4107,27 +5979,27 @@ function Hud.new(): any
 				stickInput = nil
 				knob.Position = UDim2.fromScale(0.5, 0.5)
 				ui.touch.x, ui.touch.y = 0, 0
+				ui.touch.active = false
 			end
 		end)
-		-- тяга: вертикальный ползунок у правого края
-		local thrBar = new("Frame", { Size = UDim2.fromOffset(46, 220), Position = UDim2.new(1, -70, 1, -330), BackgroundColor3 = C.bg, BackgroundTransparency = 0.4 }, touchLayer)
-		corner(thrBar, 12)
-		stroke(thrBar, C.line, 2)
-		local thrKnob = new("Frame", { Size = UDim2.new(1, -8, 0, 30), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, -15), BackgroundColor3 = C.accent }, thrBar)
+		local thrBg = new("Frame", { Size = UDim2.fromOffset(50, 230), Position = UDim2.new(1, -74, 1, -270), BackgroundColor3 = C.bg, BackgroundTransparency = 0.4 }, touchLayer)
+		corner(thrBg, 12)
+		stroke(thrBg, C.line, 2)
+		local thrKnob = new("Frame", { Size = UDim2.new(1, -8, 0, 30), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, -15), BackgroundColor3 = C.accent }, thrBg)
 		corner(thrKnob, 8)
-		label(thrBar, "ТЯГА", 11, C.dim, true, { Position = UDim2.new(0, 0, 1, 4), Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Center })
+		label(thrBg, L("thr"), 11, C.dim, true, { Position = UDim2.new(0, -10, 1, 4), Size = UDim2.new(1, 20, 0, 14), TextXAlignment = Enum.TextXAlignment.Center })
 		local thrInput: InputObject? = nil
+		function ui.setThrottleKnob(v: number)
+			thrKnob.Position = UDim2.new(0.5, 0, 1 - v, 15 - v * 30)
+		end
 		local function setThr(y: number)
-			local a = thrBar.AbsolutePosition.Y + 15
-			local b = thrBar.AbsolutePosition.Y + thrBar.AbsoluteSize.Y - 15
+			local a = thrBg.AbsolutePosition.Y + 15 * ui.scale
+			local b = thrBg.AbsolutePosition.Y + thrBg.AbsoluteSize.Y - 15 * ui.scale
 			local v = math.clamp((b - y) / (b - a), 0, 1)
 			ui.touch.throttle = v
 			ui.setThrottleKnob(v)
 		end
-		function ui.setThrottleKnob(v: number)
-			thrKnob.Position = UDim2.new(0.5, 0, 1 - v, 15 - v * 30)
-		end
-		thrBar.InputBegan:Connect(function(i)
+		thrBg.InputBegan:Connect(function(i)
 			if i.UserInputType == Enum.UserInputType.Touch then
 				thrInput = i
 				activeTouches[i] = true
@@ -4144,9 +6016,8 @@ function Hud.new(): any
 				thrInput = nil
 			end
 		end)
-		-- кнопки оружия
 		local function tbtn(name: string, text: string, size: number, pos: UDim2, colr: Color3, hold: boolean)
-			local b = new("TextButton", { Size = UDim2.fromOffset(size, size), Position = pos, BackgroundColor3 = colr, BackgroundTransparency = 0.25, Text = text, TextColor3 = C.bg, Font = Enum.Font.GothamBold, TextSize = 15, AutoButtonColor = false }, touchLayer)
+			local b = new("TextButton", { Size = UDim2.fromOffset(size, size), Position = pos, BackgroundColor3 = colr, BackgroundTransparency = 0.25, Text = text, TextColor3 = C.bg, Font = Enum.Font.GothamBold, TextSize = 15, AutoButtonColor = false, TextWrapped = true }, touchLayer)
 			corner(b, size // 2)
 			stroke(b, C.text, 1)
 			b.InputBegan:Connect(function(i)
@@ -4169,15 +6040,13 @@ function Hud.new(): any
 					b.BackgroundTransparency = 0.25
 				end
 			end)
-			touchBtns[name] = b
 		end
-		tbtn("gun", "ОГОНЬ", 110, UDim2.new(1, -200, 1, -230), C.red, true)
-		tbtn("missile", "РАКЕТА", 74, UDim2.new(1, -290, 1, -300), C.amber, false)
-		tbtn("flare", "ЛОВУШ.", 64, UDim2.new(1, -170, 1, -320), C.text, false)
-		-- верхние мелкие
-		local small = { { "cam", "КАМЕРА" }, { "gear", "ШАССИ" }, { "brake", "ТОРМОЗ" }, { "menu", "МЕНЮ" } }
+		tbtn("gun", L("b_fire"), 120, UDim2.new(1, -220, 1, -170), C.red, true)
+		tbtn("missile", L("b_msl"), 82, UDim2.new(1, -320, 1, -250), C.amber, false)
+		tbtn("flare", L("b_flare"), 70, UDim2.new(1, -196, 1, -262), C.text, false)
+		local small = { { "cam", L("b_cam") }, { "gear", L("b_gear") }, { "brake", L("b_brake") }, { "menu", L("b_menu") } }
 		for k, s in small do
-			local b = new("TextButton", { Size = UDim2.fromOffset(84, 34), Position = UDim2.new(0, 16 + (k - 1) * 92, 0, 76), BackgroundColor3 = C.bg, BackgroundTransparency = 0.3, Text = s[2], TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 13 }, touchLayer)
+			local b = new("TextButton", { Size = UDim2.fromOffset(88, 34), Position = UDim2.new(0, 262 + (k - 1) * 96, 0, 76), BackgroundColor3 = C.bg, BackgroundTransparency = 0.3, Text = s[2], TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 13 }, touchLayer)
 			corner(b, 17)
 			stroke(b, C.line)
 			b.Activated:Connect(function()
@@ -4186,37 +6055,40 @@ function Hud.new(): any
 				end
 			end)
 		end
-	else
-		function ui.setThrottleKnob(_v: number) end
 	end
 
-	-- ================= ОБНОВЛЕНИЕ ПРИБОРОВ =================
+	-- ============================================================ ОБНОВЛЕНИЕ ПРИБОРОВ
 	function ui.setFlying(v: boolean)
 		hud.Visible = v
+	end
+	function ui.hideAll(v: boolean)
+		root.Visible = not v
 	end
 	local hitT = 0
 	function ui.hit(kill: boolean)
 		hitT = os.clock()
-		hitL.Text = if kill then "✖ СБИТ!" else "✕ попадание"
+		hitL.Text = if kill then "✖ " .. L("downed") else "✕ " .. L("hit")
 		hitL.TextColor3 = if kill then C.green else C.amber
 	end
 	function ui.update(d: any)
 		spdL.Text = tostring(math.round(d.speed))
-		altL.Text = tostring(math.round(d.alt))
-		thrFill.Size = UDim2.fromScale(d.thr, 1)
-		thrFill.BackgroundColor3 = if d.thr > 0.92 then C.amber else C.accent
+		altL.Text = fmt(d.alt)
+		setBar(thrBar, d.thr)
+		;(thrBar:FindFirstChild("Fill") :: Frame).BackgroundColor3 = if d.thr > 0.92 then C.amber else C.accent
 		local hpk = math.clamp(d.hp / math.max(d.maxHp, 1), 0, 1)
-		hpFill.Size = UDim2.fromScale(hpk, 1)
-		hpFill.BackgroundColor3 = if hpk > 0.5 then C.green elseif hpk > 0.25 then C.amber else C.red
+		setBar(hpBar, hpk)
+		;(hpBar:FindFirstChild("Fill") :: Frame).BackgroundColor3 = if hpk > 0.5 then C.green elseif hpk > 0.25 then C.amber else C.red
 		hpTxt.Text = string.format("%d / %d", math.ceil(d.hp), d.maxHp)
-		ammoL.Text = string.format("РАКЕТЫ %d   ЛОВУШКИ %d   %s", d.missiles, d.flares, if d.gear then "ШАССИ ▼" else "")
-		cross.Position = UDim2.fromOffset(d.aim.X, d.aim.Y)
+		ammoL.Text = L("ammo", d.missiles, d.flares) .. (if d.gear then "   " .. L("gear_down") else "")
+		hurt.Transparency = if hpk < 0.3 then 0.55 + 0.25 * math.sin(os.clock() * 6) else 1
+		local s = ui.scale
+		cross.Position = UDim2.fromOffset(d.aim.X / s, d.aim.Y / s)
 		if d.lock then
 			lockBox.Visible = true
-			lockBox.Position = UDim2.fromOffset(d.lock.x, d.lock.y)
+			lockBox.Position = UDim2.fromOffset(d.lock.x / s, d.lock.y / s)
 			lockStroke.Color = if d.lock.locked then C.red else C.amber
 			lockTxt.TextColor3 = lockStroke.Color
-			lockTxt.Text = if d.lock.locked then "ЗАХВАТ — ПУСК!" else string.format("захват %d%%", math.floor(d.lock.k * 100))
+			lockTxt.Text = if d.lock.locked then L("locked") else L("locking", math.floor(d.lock.k * 100))
 		else
 			lockBox.Visible = false
 		end

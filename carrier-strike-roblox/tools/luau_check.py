@@ -673,8 +673,8 @@ class Parser:
                 self.args()
                 kind, info = "call", None
             elif self.at("(") or self.at("{") or self.peek()[0] == "str":
-                if self.at("(") and self.peek()[2] != self.t[self.p - 1][2] and assign_ctx is False:
-                    pass
+                if self.at("(") and self.peek()[2] != self.t[self.p - 1][2]:
+                    raise LuauError(f"line {self.peek()[2]}: неоднозначный синтаксис — строка начинается с '(' сразу после выражения (поставь ';' в начале)")
                 self.args()
                 kind, info = "call", None
             else:

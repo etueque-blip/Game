@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Exo+2:wght@800;900&display=swap" rel="stylesheet">
+<style>html,body{margin:0;background:#000}svg{display:block}</style></head><body>
+<svg id="s" xmlns="http://www.w3.org/2000/svg"></svg>
+<script>
+const P=new URLSearchParams(location.search),MODE=P.get('m')||'icon';
+const W=MODE==='icon'?512:1920,H=MODE==='icon'?512:1080;
+const s=document.getElementById('s');s.setAttribute('width',W);s.setAttribute('height',H);s.setAttribute('viewBox',`0 0 ${W} ${H}`);
+const JET='M0,-110 L7,-78 L10,-40 L12,-18 L72,28 L72,40 L13,30 L12,60 L38,84 L38,93 L9,88 L5,99 L-5,99 L-9,88 L-38,93 L-38,84 L-12,60 L-13,30 L-72,40 L-72,28 L-12,-18 L-10,-40 L-7,-78 Z';
+function jet(x,y,sc,rot,team,ab=true){return `<g transform="translate(${x},${y}) rotate(${rot}) scale(${sc})">
+ ${ab?`<ellipse cx="0" cy="128" rx="10" ry="34" fill="url(#ab)"/><ellipse cx="0" cy="108" rx="7" ry="12" fill="#fff6d0"/>`:''}
+ <path d="${JET}" fill="url(#body)" stroke="#0b1018" stroke-width="2.5" stroke-linejoin="round"/>
+ <path d="M0,-108 L6,-78 L8,-40 L10,-18 L10,96 L0,98 Z" fill="#ffffff" opacity=".18"/>
+ <path d="M38,84 L38,93 L9,88 L12,60 Z" fill="${team}"/><path d="M-38,84 L-38,93 L-9,88 L-12,60 Z" fill="${team}"/>
+ <path d="M72,28 L72,40 L60,38 L60,24 Z" fill="${team}"/><path d="M-72,28 L-72,40 L-60,38 L-60,24 Z" fill="${team}"/>
+ <ellipse cx="0" cy="-58" rx="5.5" ry="16" fill="url(#glass)"/>
+ <rect x="-3" y="-8" width="6" height="40" rx="2" fill="#1a2230" opacity=".5"/>
+</g>`}
+function missile(x1,y1,x2,y2){return `<path d="M${x1},${y1} Q${(x1+x2)/2+60},${(y1+y2)/2-80} ${x2},${y2}" stroke="url(#smoke)" stroke-width="14" fill="none" stroke-linecap="round" opacity=".85"/>
+<circle cx="${x2}" cy="${y2}" r="9" fill="#fff2c0"/><circle cx="${x2}" cy="${y2}" r="22" fill="url(#ab)" opacity=".8"/>`}
+const defs=`<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2a5a"/><stop offset=".45" stop-color="#b9476a"/><stop offset=".72" stop-color="#ff8a3d"/><stop offset="1" stop-color="#ffd27a"/></linearGradient>
+<radialGradient id="sun" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fffbe6"/><stop offset=".25" stop-color="#ffe9a8"/><stop offset=".6" stop-color="#ffb35c" stop-opacity=".55"/><stop offset="1" stop-color="#ff7a3d" stop-opacity="0"/></radialGradient>
+<linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3f6e"/><stop offset=".35" stop-color="#1d2c50"/><stop offset="1" stop-color="#08121f"/></linearGradient>
+<linearGradient id="body" x1="0" y1="-1" x2="0" y2="1"><stop offset="0" stop-color="#c9d3de"/><stop offset=".5" stop-color="#8a96a4"/><stop offset="1" stop-color="#4c5664"/></linearGradient>
+<radialGradient id="glass" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#e8fbff"/><stop offset=".4" stop-color="#5cc8ff"/><stop offset="1" stop-color="#0b2a44"/></radialGradient>
+<radialGradient id="ab" cx=".5" cy=".3" r=".6"><stop offset="0" stop-color="#fff3c4"/><stop offset=".4" stop-color="#ff9a2e"/><stop offset="1" stop-color="#ff3d00" stop-opacity="0"/></radialGradient>
+<linearGradient id="con" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<linearGradient id="smoke" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity=".9"/></linearGradient>
+<linearGradient id="title" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#dff3ff"/><stop offset="1" stop-color="#5cc8ff"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff1b0"/><stop offset="1" stop-color="#ffb22e"/></linearGradient>
+<linearGradient id="refl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffcf8a" stop-opacity="0"/><stop offset=".5" stop-color="#ffcf8a" stop-opacity=".22"/><stop offset="1" stop-color="#ffcf8a" stop-opacity="0"/></linearGradient>
+<filter id="glow"><feGaussianBlur stdDeviation="6"/></filter>
+</defs>`;
+function scene(hz){ // небо, солнце, море, авианосец
+ return `<rect width="${W}" height="${H}" fill="url(#sky)"/>
+ <circle cx="${W*.7}" cy="${hz-H*.06}" r="${H*.33}" fill="url(#sun)"/>
+ <rect y="${hz}" width="${W}" height="${H-hz}" fill="url(#sea)"/>
+ <rect x="${W*.5}" y="${hz}" width="${W*.4}" height="${H-hz}" fill="url(#refl)"/>
+ ${[...Array(14)].map((_,i)=>`<rect x="${W*.58+((i*97)%(W*.25))}" y="${hz+6+i*((H-hz)/16)}" width="${40+(i*53)%120}" height="3" fill="#ffd9a0" opacity="${.5-i*.03}"/>`).join('')}
+ <g transform="translate(${W*.2},${hz+2})" fill="#141826"><path d="M-${W*.16},0 L${W*.13},0 L${W*.15},-${H*.025} L-${W*.17},-${H*.025} Z"/><rect x="${W*.06}" y="-${H*.075}" width="${W*.025}" height="${H*.055}"/><rect x="${W*.068}" y="-${H*.1}" width="${W*.006}" height="${H*.03}"/></g>`}
+let out=defs;
+if(MODE==='icon'){
+ out+=scene(330);
+ out+=jet(300,300,1.55,-38,'#2e68aa');
+ out+=jet(110,150,.55,-30,'#aa342e',true);
+ out+=`<g font-family="'Russo One','Exo 2',Impact,sans-serif" text-anchor="middle">
+  <text x="256" y="440" font-size="74" fill="#0a0f1a" stroke="#0a0f1a" stroke-width="16" stroke-linejoin="round">CARRIER</text>
+  <text x="256" y="440" font-size="74" fill="url(#title)">CARRIER</text>
+  <text x="256" y="500" font-size="62" fill="#0a0f1a" stroke="#0a0f1a" stroke-width="16" stroke-linejoin="round">STRIKE</text>
+  <text x="256" y="500" font-size="62" fill="url(#gold)">STRIKE</text></g>`;
+} else if(MODE==='t1'){
+ out+=scene(700);
+ out+=missile(300,420,1050,560);
+ out+=jet(1280,520,2.6,-62,'#aa342e');
+ out+=jet(620,330,1.6,-70,'#2e68aa');
+ out+=`<g font-family="'Russo One','Exo 2',Impact,sans-serif"><text x="80" y="160" font-size="120" fill="#0a0f1a" stroke="#0a0f1a" stroke-width="20" stroke-linejoin="round">DOGFIGHT!</text><text x="80" y="160" font-size="120" fill="url(#gold)">DOGFIGHT!</text>
+ <text x="84" y="235" font-size="52" fill="#fff" stroke="#0a0f1a" stroke-width="8" paint-order="stroke">BLUE vs RED · 6 JETS</text></g>`;
+} else {
+ out+=scene(640);
+ // острова
+ out+=`<ellipse cx="560" cy="760" rx="420" ry="60" fill="#2f5a3a"/><ellipse cx="560" cy="745" rx="300" ry="40" fill="#4f7d45"/><ellipse cx="640" cy="720" rx="120" ry="60" fill="#3e6a3b"/><rect x="430" y="742" width="330" height="10" rx="4" fill="#3a3d44" transform="rotate(-4 560 747)"/>
+ <ellipse cx="1500" cy="700" rx="220" ry="30" fill="#2f5a3a"/><ellipse cx="1500" cy="690" rx="150" ry="20" fill="#4f7d45"/>
+ <rect x="545" y="600" width="6" height="110" fill="#ddd"/><path d="M551,600 L640,620 L551,640 Z" fill="#5cc8ff"/>`;
+ out+=jet(1100,430,2.2,-95,'#2e68aa');
+ out+=jet(1450,300,1.1,-95,'#2e68aa');
+ out+=`<g font-family="'Russo One','Exo 2',Impact,sans-serif"><text x="80" y="160" font-size="110" fill="#0a0f1a" stroke="#0a0f1a" stroke-width="20" stroke-linejoin="round">CAPTURE ISLANDS</text><text x="80" y="160" font-size="110" fill="url(#title)">CAPTURE ISLANDS</text>
+ <text x="84" y="235" font-size="52" fill="#fff" stroke="#0a0f1a" stroke-width="8" paint-order="stroke">TAKE OFF FROM YOUR CARRIER</text></g>`;
+}
+s.innerHTML=out;
+document.fonts.ready.then(()=>document.body.setAttribute('data-ready','1'));
+</script></body></html>
