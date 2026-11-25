@@ -784,7 +784,11 @@ RunService.Heartbeat:Connect(function(dt)
 	dt = math.min(dt, 0.1)
 	for _, u in units do
 		if u.bot and u.alive then
-			stepBot(u, dt)
+			local ok, err = pcall(stepBot, u, dt)
+			if not ok then
+				warn("[CarrierStrike] бот убран из-за ошибки:", err)
+				removeUnit(u, false)
+			end
 		end
 	end
 	stepMissiles(dt)

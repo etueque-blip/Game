@@ -44,21 +44,20 @@ local function disc(parent: Instance, name: string, r: number, h: number, pos: V
 end
 
 local function ocean(f: Folder)
-	local tile = 2048
-	local n = math.ceil((World.SIZE + 6000) * 2 / tile)
-	local half = n * tile / 2
-	for ix = 0, n - 1 do
-		for iz = 0, n - 1 do
-			local p = part(f, "Sea", Vector3.new(tile, 4, tile), CFrame.new(-half + tile * (ix + 0.5), World.SEA - 2, -half + tile * (iz + 0.5)), Color3.fromRGB(22, 74, 112), Enum.Material.Glass)
-			p.Reflectance = 0.12
-			p.Transparency = 0.05
-			p.CastShadow = false
-		end
-	end
+	-- ОДНА непрозрачная деталь на весь океан (раньше было 484 «стеклянных» — это и лагало).
+	-- Деталь не больше 2048, а видимый размер растягивает SpecialMesh.
+	local span = (World.SIZE + 8000) * 2
+	local sea = part(f, "Sea", Vector3.new(2048, 2, 2048), CFrame.new(0, World.SEA - 1, 0), Color3.fromRGB(24, 78, 116), Enum.Material.SmoothPlastic)
+	sea.Reflectance = 0.06
+	sea.CastShadow = false
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Brick
+	mesh.Scale = Vector3.new(span / 2048, 1, span / 2048)
+	mesh.Parent = sea
 	-- граница зоны боя: светящиеся буи по периметру
 	local s = World.SIZE
-	for i = -8, 8 do
-		for _, pos in { Vector3.new(i * s / 8, 6, -s), Vector3.new(i * s / 8, 6, s), Vector3.new(-s, 6, i * s / 8), Vector3.new(s, 6, i * s / 8) } do
+	for i = -4, 4 do
+		for _, pos in { Vector3.new(i * s / 4, 6, -s), Vector3.new(i * s / 4, 6, s), Vector3.new(-s, 6, i * s / 4), Vector3.new(s, 6, i * s / 4) } do
 			part(f, "Buoy", Vector3.new(10, 12, 10), CFrame.new(pos), Color3.fromRGB(255, 170, 40), Enum.Material.Neon, Enum.PartType.Cylinder)
 		end
 	end
@@ -143,8 +142,7 @@ local function island(f: Folder, i: any): BasePart
 	local sand = Color3.fromRGB(214, 196, 148)
 	local grass = Color3.fromRGB(86, 128, 70)
 	-- мелководье, пляж, плато
-	local shallow = disc(m, "Shallow", i.r + World.BEACH + 260, 1, Vector3.new(i.x, World.SEA + 0.1, i.z), Color3.fromRGB(60, 150, 170), Enum.Material.Glass)
-	shallow.Transparency = 0.35
+	local shallow = disc(m, "Shallow", i.r + World.BEACH + 260, 1, Vector3.new(i.x, World.SEA + 0.1, i.z), Color3.fromRGB(52, 140, 160), Enum.Material.SmoothPlastic)
 	shallow.CastShadow = false
 	disc(m, "Beach", i.r + World.BEACH, 6, Vector3.new(i.x, 0, i.z), sand, Enum.Material.Sand)
 	disc(m, "Plateau", i.r, i.h, Vector3.new(i.x, i.h / 2, i.z), grass, Enum.Material.Grass)
@@ -180,8 +178,8 @@ local function island(f: Folder, i: any): BasePart
 	-- граница зоны захвата: кольцо светящихся буёв (видно с воздуха)
 	local ring = Instance.new("Model")
 	ring.Name = "CaptureRing"
-	for k = 0, 35 do
-		local a = k / 36 * math.pi * 2
+	for k = 0, 23 do
+		local a = k / 24 * math.pi * 2
 		local bp = Vector3.new(i.x + math.cos(a) * World.CAPTURE_R, World.SEA + 4, i.z + math.sin(a) * World.CAPTURE_R)
 		part(ring, "RingBuoy", Vector3.new(8, 8, 8), CFrame.new(bp), World.TEAM_COLOR[i.owner], Enum.Material.Neon, Enum.PartType.Ball).CastShadow = false
 	end
