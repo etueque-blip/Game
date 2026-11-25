@@ -5,7 +5,7 @@ local Achievements = {}
 
 export type Ach = { id: string, icon: string, title: string, desc: string, reward: number, client: boolean? }
 
-Achievements.LIST: { Ach } = {
+Achievements.LIST = {
 	{ id = "first_flight", icon = "✈", title = "Первый полёт", desc = "Оторвись от полосы", reward = 100, client = true },
 	{ id = "soft", icon = "🪶", title = "Мягкая посадка", desc = "Сядь мягче 250 ft/min", reward = 200 },
 	{ id = "butter", icon = "🧈", title = "Как по маслу", desc = "Сядь мягче 80 ft/min", reward = 500 },
@@ -20,7 +20,7 @@ Achievements.LIST: { Ach } = {
 	{ id = "heavy", icon = "🐘", title = "Тяжеловес", desc = "Посади Airbus A380 или Boeing 747", reward = 300 },
 	{ id = "photographer", icon = "📸", title = "Фотограф", desc = "Сними 10 достопримечательностей в фото-режиме", reward = 1000 },
 	{ id = "one_engine", icon = "🔥", title = "Один мотор", desc = "Посади самолёт с отказавшим двигателем", reward = 600, client = true },
-}
+} :: { Ach }
 
 Achievements.BY_ID = {} :: { [string]: Ach }
 for _, a in Achievements.LIST do
