@@ -1,0 +1,4236 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
+<Item class="Workspace" referent="RBX0000000E"><Properties><string name="Name">Workspace</string><bool name="StreamingEnabled">false</bool><float name="FallenPartsDestroyHeight">-2000</float></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX0000000F"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000005"><Properties><string name="Name">CarrierStrike</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">FlightPhysics</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Физика полёта из Sky Pilot (без изменений, кроме текста столкновения из World.lastHit).
+-- Единицы: 1 stud/s = 1 kt, высота в футах = Y * FT, G = 19 stud/s².
+local World = require(script.Parent.World)
+
+local FT = World.FT
+local G = 19
+
+local FlightPhysics = {}
+
+-- Ограничения по перегрузке (G) и самолёты с fly-by-wire (защита от перегрузки, как в реальности)
+local FBW = { A220 = true, A320 = true, A330 = true, A350 = true, A380 = true, B777 = true, B787 = true, G650 = true, GL7500 = true, F16 = true }
+function FlightPhysics.limits(c: any): (number, number, boolean)
+	local gMax = c.gMax or (if c.id == "F16" then 9 elseif c.id == "C172" then 3.8 elseif c.length < 130 then 2.6 else 2.5)
+	local gMin = c.gMin or (if c.id == "F16" then -3 elseif c.id == "C172" then -1.5 else -1)
+	return gMax, gMin, FBW[c.id] == true
+end
+function FlightPhysics.gearMaxKts(c: any): number
+	return c.gearMaxKts or (if c.maxKts > 300 then 270 else 9999)
+end
+FlightPhysics.FT = FT
+FlightPhysics.G = G
+
+export type Input = {
+	p: number, r: number, y: number,
+	thrUp: boolean?, thrDn: boolean?, brakes: boolean?,
+	throttle: number?, -- абсолютная тяга (слайдер, автопилот)
+}
+
+export type Event = { type: string, text: string, good: boolean?, fpm: number?, grade: string?, airport: string? }
+
+export type Flight = {
+	cfg: any, mode: string,
+	pos: Vector3, att: CFrame,
+	speed: number, throttle: number, flaps: number, gear: boolean,
+	brakes: boolean, reverse: boolean, spoilers: boolean,
+	inP: number, inR: number, inY: number,
+	vyExtra: number, lastVelY: number, vel: Vector3,
+	wind: Vector3?, -- снос ветром (stud/с, задаёт клиент); на земле не действует
+	onGround: boolean, airTime: number, crashed: boolean, crashReason: string?,
+	hard: boolean?, -- «Сложный» уровень: перегрузка G, повреждения и поломки (на обычном — выключено)
+	gload: number, damage: number, buffet: number, flapStress: number, gearStress: number, flapsDamaged: boolean, gearStuck: boolean,
+	events: { Event }, dbg: { [string]: number },
+}
+
+local function clamp(v: number, a: number, b: number): number
+	return math.min(b, math.max(a, v))
+end
+FlightPhysics.clamp = clamp
+
+function FlightPhysics.new(cfg: any, spawnCF: CFrame, air: boolean): Flight
+	local speed = air and math.floor(cfg.maxKts * 0.6) or 0
+	return {
+		cfg = cfg, mode = air and "air" or "runway",
+		pos = spawnCF.Position, att = spawnCF.Rotation,
+		speed = speed, throttle = air and 0.7 or 0, flaps = 0, gear = (cfg.fixedGear == true) or not air,
+		brakes = false, reverse = false, spoilers = false,
+		inP = 0, inR = 0, inY = 0,
+		vyExtra = 0, lastVelY = 0, vel = spawnCF.LookVector * speed,
+		onGround = not air, airTime = 0, crashed = false, crashReason = nil,
+		gload = 1, damage = 0, buffet = 0, flapStress = 0, gearStress = 0, flapsDamaged = false, gearStuck = false,
+		events = {}, dbg = { agl = 0, lift = 1, eff = 1, stall = cfg.stallKts, thrust = 0, drag = 0, accel = 0, thrustMul = 1 },
+	}
+end
+
+local function crash(f: Flight, reason: string)
+	f.crashed = true
+	f.crashReason = reason
+	table.insert(f.events, { type = "crash", text = reason })
+end
+
+local function stepOnce(f: Flight, input: Input, dt: number)
+	if f.crashed then
+		return
+	end
+	dt = clamp(dt, 1 / 240, 1 / 20)
+	local c = f.cfg
+	local sm = math.min(1, dt * 6)
+	f.inP += (clamp(input.p, -1, 1) - f.inP) * sm
+	f.inR += (clamp(input.r, -1, 1) - f.inR) * sm
+	f.inY += (clamp(input.y, -1, 1) - f.inY) * sm
+	if input.throttle ~= nil then
+		f.throttle = clamp(input.throttle, 0, 1)
+	end
+	if input.thrUp then
+		f.throttle = math.min(1, f.throttle + dt * 0.45)
+	end
+	if input.thrDn then
+		f.throttle = math.max(0, f.throttle - dt * 0.45)
+	end
+	f.brakes = input.brakes == true
+
+	local pos = f.pos
+	local gy = World.groundAt(pos.X, pos.Z)
+	local agl = if gy == -math.huge then math.huge else pos.Y - c.gearHeight - gy
+	local nowGround = agl <= 0.6
+	local att = f.att
+	local look = att.LookVector
+	local right = att.RightVector
+	local up = att.UpVector
+
+	if pos.Y < -400 then
+		return crash(f, "Самолёт упал за край мира")
+	end
+
+	if nowGround and not f.onGround then
+		local fpm = math.floor(-f.lastVelY * 60 * FT)
+		local bankDeg = math.deg(math.asin(clamp(-right.Y, -1, 1)))
+		local pitchDeg = math.deg(math.asin(clamp(look.Y, -1, 1)))
+		if not f.gear then
+			return crash(f, "Посадка без шасси!")
+		end
+		if fpm > c.maxTouchdownFpm then
+			return crash(f, string.format("Слишком жёсткая посадка: %d fpm (лимит %d)", fpm, c.maxTouchdownFpm))
+		end
+		if math.abs(bankDeg) > 20 or pitchDeg < -8 or up.Y < 0 then
+			return crash(f, string.format("Удар крылом о землю (крен %d°, тангаж %d°)", math.round(bankDeg), math.round(pitchDeg)))
+		end
+		-- удар хвостом: нос задран выше предела — повреждение (как в жизни), посадка считается жёсткой
+		local tailStrike = f.hard == true and pitchDeg > c.maxRotate + 2
+		if tailStrike then
+			f.damage = math.min(0.95, f.damage + 0.35)
+			table.insert(f.events, { type = "warn", text = string.format("Удар хвостом о полосу: тангаж %d° (предел %d°) — повреждение", math.round(pitchDeg), c.maxRotate) })
+		end
+		if f.speed > 15 and f.airTime > 1 then
+			local grade = if tailStrike then "hard" elseif fpm < 250 then "perfect" elseif fpm < 600 then "good" else "hard"
+			local label = if grade == "perfect" then "Идеальная посадка!" elseif grade == "good" then "Хорошая посадка" else "Жёсткая посадка"
+			table.insert(f.events, {
+				type = "landing", text = string.format("%s  %d fpm", label, math.max(fpm, 0)),
+				good = fpm < 600 and not tailStrike, fpm = math.max(fpm, 0), grade = grade, airport = World.runwayAt(pos.X, pos.Z, 20),
+			})
+		end
+	end
+	if not nowGround and f.onGround and f.speed > 20 then
+		table.insert(f.events, { type = "takeoff", text = string.format("Отрыв на %d kt", math.round(f.speed)) })
+	end
+	f.onGround = nowGround
+	f.airTime = if nowGround then 0 else f.airTime + dt
+	if not nowGround then
+		f.reverse = false
+	end
+
+	local stall = c.stallKts * (1 - 0.07 * f.flaps)
+	local lift = clamp((f.speed - 0.6 * stall) / (0.4 * stall), 0, 1)
+	local eff = clamp(f.speed / (stall * 1.1), 0.15, 1)
+	local ceil = c.ceilingFt / FT
+	local thrustMul = clamp((ceil - pos.Y) / (0.15 * ceil), 0.05, 1)
+	-- engOut: доля отказавших двигателей (аварийная тренировка), как в веб-версии
+	local alive = 1 - ((f :: any).engOut or 0)
+	local thrust = c.thrust * f.throttle * thrustMul * alive
+	if f.reverse then
+		thrust = -c.thrust * 0.45 * f.throttle * alive
+	end
+	local retractGear = f.gear and not c.fixedGear
+	local dragK = c.thrust / (c.maxKts * c.maxKts)
+	local dragMul = 1 + 0.12 * f.flaps + (if retractGear then 0.15 else 0)
+	local vr = c.vrKts * (1 - 0.04 * f.flaps)
+	local extra = (0.3 * f.flaps + (if retractGear then 0.4 else 0)) * (f.speed / c.vrKts) ^ 2
+	-- эффект земли: ниже половины размаха индуктивное сопротивление и просадка меньше
+	local ge = if f.onGround or agl == math.huge then 0 else clamp(1 - agl / (c.span * 0.5), 0, 1)
+	local induced = if f.onGround then 0 else 1.2 * (c.stallKts / math.max(f.speed, 30)) ^ 2 * lift * (1 - 0.5 * ge)
+	-- интерцепторы: сопротивление растёт с квадратом скорости (в воздухе и на пробеге)
+	local spoilerDrag = if f.spoilers then math.min(c.thrust * 0.6, c.thrust * 0.35 * (f.speed / c.vrKts) ^ 2) else 0
+	local drag = dragK * dragMul * f.speed * f.speed + extra + induced + spoilerDrag
+	local accel = thrust - drag - G * look.Y
+	if f.onGround and f.speed > 0 then
+		accel -= 0.6
+		if f.brakes then
+			accel -= c.brakeDecel * (if f.spoilers then 1.25 else 1)
+		end
+	end
+	f.speed = math.max(0, f.speed + accel * dt)
+
+	if f.onGround then
+		local heading = math.atan2(-look.X, -look.Z)
+		local pitch = math.asin(clamp(look.Y, -1, 1))
+		local steer = clamp(f.inY + f.inR, -1, 1)
+		local steerRate = c.groundSteer * clamp(f.speed / 12, 0, 1) / (1 + f.speed / 40)
+		heading -= steer * steerRate * dt
+		if f.speed >= vr and f.inP > 0.05 then
+			pitch = clamp(pitch + c.pitchRate * 0.6 * f.inP * dt, 0, math.rad(c.maxRotate))
+		else
+			pitch = math.max(0, pitch - pitch * math.min(1, dt * 1.5))
+		end
+		att = CFrame.Angles(0, heading, 0) * CFrame.Angles(pitch, 0, 0)
+	else
+		-- fly-by-wire: компьютер не даёт выйти за предел перегрузки
+		local gMaxP, gMinP, fbw = FlightPhysics.limits(c)
+		local inP = f.inP
+		-- аэродинамический предел: крыло не даст больше (V/Vs)² — дальше срыв потока
+		local aeroMax = (f.speed / stall) ^ 2
+		local capMax = if fbw then math.min(gMaxP, aeroMax) else aeroMax
+		local capMin = if fbw then math.max(gMinP, -0.6 * aeroMax) else -0.6 * aeroMax
+		if inP > 0 and f.gload > capMax * 0.85 then
+			inP *= clamp((capMax * 0.98 - f.gload) / (capMax * 0.13 + 0.05), 0, 1)
+		elseif inP < 0 and f.gload < capMin * 0.85 then
+			inP *= clamp((f.gload - capMin * 0.98) / (math.abs(capMin) * 0.13 + 0.05), 0, 1)
+		end
+		local pr = c.pitchRate * eff * inP
+		if lift < 1 then
+			pr -= (1 - lift) * 0.9
+		end
+		local rr = -c.rollRate * eff * f.inR
+		local yr = -c.yawRate * eff * f.inY
+		att = att * CFrame.Angles(pr * dt, yr * dt, rr * dt)
+		local bank = -att.RightVector.Y
+		local omega = c.turnBoost * G * bank / math.max(f.speed, 60) * lift
+		att = (CFrame.fromAxisAngle(Vector3.yAxis, -omega * dt) * att):Orthonormalize()
+	end
+	f.att = att
+	look = att.LookVector
+	up = att.UpVector
+
+	local vel: Vector3
+	if f.onGround then
+		vel = look * f.speed
+		local glue = if (f.inP > 0.05 and agl > 0 and f.speed >= vr) then 0 else -agl * 10
+		vel += Vector3.new(0, glue, 0)
+		f.vyExtra = 0
+	else
+		local sinkTarget = (-(1 - lift) * c.stallSink - (1 - math.abs(up.Y)) * 12 * lift) * (1 - 0.4 * ge) - (if f.spoilers then 4 * lift else 0)
+		f.vyExtra += (sinkTarget - f.vyExtra) * math.min(1, dt * 1.5)
+		vel = look * f.speed + Vector3.new(0, f.vyExtra, 0)
+	end
+
+	if f.speed > 20 then
+		local dir = if f.onGround then Vector3.new(look.X, 0, look.Z) else vel
+		if dir.Magnitude > 0.01 then
+			dir = dir.Unit
+			local len = c.length * 0.5 + f.speed * dt * 2
+			for _, t in { 0.5, 0.75, 1 } do
+				local p = pos + dir * (len * t)
+				if World.hitsObstacle(p) then
+					return crash(f, (World :: any).lastHit or "Столкновение со зданием!")
+				end
+				if not f.onGround and p.Y < World.groundAt(p.X, p.Z) - 0.5 then
+					return crash(f, "Столкновение с землёй / горой!")
+				end
+			end
+		end
+	end
+
+	-- перегрузка: (ускорение + g) в проекции на «пол» самолёта, в единицах g
+	if f.onGround or dt <= 0 then
+		f.gload += (1 - f.gload) * math.min(1, dt * 5)
+	else
+		local acc = (vel - f.vel) / dt + Vector3.new(0, G, 0)
+		local nz = acc:Dot(up) / G
+		f.gload += (clamp(nz, -15, 15) - f.gload) * math.min(1, dt * 8)
+	end
+	local gMax, gMin = FlightPhysics.limits(c)
+	if f.hard and not f.onGround then
+		if f.gload > gMax * 1.5 or f.gload < gMin * 1.5 then
+			return crash(f, string.format("Разрушение конструкции: перегрузка %.1f G (предел %.1f G)", f.gload, if f.gload > 0 then gMax else gMin))
+		end
+		if f.gload > gMax then
+			f.damage += (f.gload - gMax) / gMax * dt * 1.5
+		elseif f.gload < gMin then
+			f.damage += (gMin - f.gload) / math.abs(gMin) * dt * 1.5
+		end
+	end
+	if f.hard and f.speed > c.maxKts * 1.1 then
+		f.damage += (f.speed / c.maxKts - 1.1) * dt * 2
+	end
+	if f.damage >= 1 then
+		return crash(f, "Разрушение конструкции: превышены ограничения самолёта")
+	end
+	-- скоростной напор ломает закрылки и шасси
+	if f.hard and f.flaps > 0 and f.speed > c.flapMaxKts * 1.15 then
+		f.flapStress += dt
+		if f.flapStress > 2 and not f.flapsDamaged then
+			f.flapsDamaged, f.flaps = true, 0
+			table.insert(f.events, { type = "warn", text = "Закрылки повреждены скоростным напором — заблокированы" })
+		end
+	else
+		f.flapStress = math.max(0, f.flapStress - dt)
+	end
+	if f.hard and f.gear and not c.fixedGear and not f.onGround and f.speed > FlightPhysics.gearMaxKts(c) * 1.15 then
+		f.gearStress += dt
+		if f.gearStress > 3 and not f.gearStuck then
+			f.gearStuck = true
+			table.insert(f.events, { type = "warn", text = "Шасси повреждено на скорости — заклинило в выпущенном положении" })
+		end
+	else
+		f.gearStress = math.max(0, f.gearStress - dt)
+	end
+	-- тряска: у сваливания, при превышении скорости и у предела перегрузки
+	local bStall = if f.onGround then 0 else clamp((1.12 - f.speed / stall) / 0.12, 0, 1)
+	local bSpeed = clamp((f.speed / c.maxKts - 1) / 0.1, 0, 1)
+	local bG = if f.hard then clamp((f.gload - gMax * 0.85) / (gMax * 0.2), 0, 1) else 0
+	f.buffet = math.max(bStall, bSpeed, bG)
+
+	f.vel = vel
+	f.lastVelY = vel.Y
+	-- ветер сносит самолёт в воздухе (воздушная скорость та же, меняется путевая)
+	local drift = if f.wind and not f.onGround then f.wind * dt else Vector3.zero
+	f.pos = pos + vel * dt + drift
+	f.dbg = { agl = agl, lift = lift, eff = eff, stall = stall, thrust = thrust, drag = drag, accel = accel, thrustMul = thrustMul }
+end
+
+-- Ветер: направление «откуда дует» (°) и сила (kt) → вектор сноса; боковая составляющая к полосе
+function FlightPhysics.windVector(dirDeg: number, kts: number): Vector3
+	local d = math.rad(dirDeg)
+	return Vector3.new(-math.sin(d), 0, math.cos(d)) * kts
+end
+function FlightPhysics.crosswind(dirDeg: number, kts: number, runwayHdg: number): number
+	return math.abs(kts * math.sin(math.rad(dirDeg - runwayHdg)))
+end
+
+-- Действия кнопок (шасси/закрылки/реверс). Возвращает текст подсказки и цвет.
+function FlightPhysics.action(f: Flight, a: string): (string?, string?)
+	if f.crashed then
+		return nil, nil
+	end
+	local c = f.cfg
+	if a == "gear" then
+		if f.gearStuck then
+			return "Шасси заклинило в выпущенном положении", "amber"
+		elseif c.fixedGear then
+			return "У этого самолёта шасси не убирается", nil
+		elseif f.onGround and f.gear then
+			return "Нельзя убрать шасси на земле", "amber"
+		end
+		f.gear = not f.gear
+		return if f.gear then "Шасси выпущено" else "Шасси убрано", nil
+	elseif a == "flapDn" or a == "flapUp" then
+		if c.noFlaps then
+			return "У истребителя нет закрылков", nil
+		end
+		if f.flapsDamaged then
+			return "Закрылки повреждены и заблокированы", "amber"
+		end
+		f.flaps = clamp(f.flaps + (if a == "flapDn" then 1 else -1), 0, 3)
+		return "Закрылки: " .. f.flaps, nil
+	elseif a == "rev" then
+		if f.onGround then
+			f.reverse = not f.reverse
+			return if f.reverse then "Реверс включён, добавь тягу" else "Реверс выключен", "amber"
+		end
+		return "Реверс только на земле", nil
+	elseif a == "spoiler" then
+		f.spoilers = not f.spoilers
+		return if f.spoilers then "Интерцепторы выпущены" else "Интерцепторы убраны", if f.spoilers then "amber" else nil
+	elseif a == "idle" then
+		f.throttle = 0
+	end
+	return nil, nil
+end
+
+function FlightPhysics.pose(f: Flight): CFrame
+	return CFrame.new(f.pos) * f.att
+end
+
+-- Шаг не больше 1/60 с: при низком FPS перегрузка и защита fly-by-wire работают так же, как при 60 FPS
+function FlightPhysics.step(f: Flight, input: Input, dt: number)
+	local n = math.max(1, math.ceil(dt * 60 - 0.01))
+	local h = dt / n
+	for _ = 1, n do
+		if f.crashed then
+			break
+		end
+		stepOnce(f, input, h)
+	end
+end
+
+return FlightPhysics
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000002"><Properties><string name="Name">Jets</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Палубные истребители и параметры оружия.
+-- Формат самолёта — как PlaneConfigs из Sky Pilot (1 stud/s = 1 kt), плюс боевые поля:
+-- hp (прочность), missiles (ракет на вылет), lockMul (насколько дольше по нему захват).
+local B = { body = Color3.fromHex("8e98a3"), accent = Color3.fromHex("6b737d"), tail = Color3.fromHex("78808a"), engine = Color3.fromHex("3c3c41") }
+
+local function jet(t: { [string]: any }): any
+	local base = {
+		cls = "Истребитель", diameter = 5.5, wing = "mid", wingPos = 0.6, sweep = 40, dihedral = 0,
+		engines = "jet1", engineD = 4, tail = "conventional", hstabSpan = 20, finHeight = 12, finSweep = 45,
+		gearLen = 2.5, canopy = true, noFlaps = true, flapMaxKts = 9999, yawRate = 0.5, turnBoost = 6,
+		groundSteer = 0.6, brakeDecel = 10, stallSink = 40, maxRotate = 15, ceilingFt = 50000, maxTouchdownFpm = 1500,
+		gMax = 9, gMin = -3, lockMul = 1, colors = B,
+	}
+	for k, v in t do
+		base[k] = v
+	end
+	base.gearHeight = base.diameter * 0.5 + base.gearLen
+	return base
+end
+
+local JETS: { [string]: any } = {
+	F16 = jet({ name = "F-16C Fighting Falcon", role = "Манёвренный, быстрый", length = 54, span = 35, chord = 14, thrust = 22, maxKts = 800, stallKts = 115, vrKts = 140, pitchRate = 1.5, rollRate = 4, hp = 100, missiles = 4 }),
+	FA18 = jet({ name = "F/A-18E Super Hornet", role = "Прочный, 6 ракет", length = 60, diameter = 6, span = 44, chord = 16, sweep = 30, thrust = 19, maxKts = 700, stallKts = 105, vrKts = 130, pitchRate = 1.6, rollRate = 3.2, hp = 125, missiles = 6, hstabSpan = 22, finHeight = 11,
+		colors = { body = Color3.fromHex("7d8792"), accent = Color3.fromHex("5d6670"), tail = Color3.fromHex("6a737d"), engine = Color3.fromHex("33363b") } }),
+	SU33 = jet({ name = "Су-33", role = "Тяжёлый, дальний", length = 72, diameter = 6.5, span = 48, chord = 18, sweep = 42, thrust = 21, maxKts = 760, stallKts = 112, vrKts = 138, pitchRate = 1.35, rollRate = 3, hp = 135, missiles = 6, hstabSpan = 26, finHeight = 14,
+		colors = { body = Color3.fromHex("a9b6c2"), accent = Color3.fromHex("6c8296"), tail = Color3.fromHex("8a9cad"), engine = Color3.fromHex("3a3d42") } }),
+	RAFALE = jet({ name = "Rafale M", role = "Самый вёрткий", length = 50, span = 36, chord = 18, sweep = 50, thrust = 22, maxKts = 740, stallKts = 108, vrKts = 132, pitchRate = 1.75, rollRate = 4.3, hp = 95, missiles = 4, hstabSpan = 10, finHeight = 12,
+		colors = { body = Color3.fromHex("9aa1a8"), accent = Color3.fromHex("70777e"), tail = Color3.fromHex("848b92"), engine = Color3.fromHex("3a3a3e") } }),
+	MIG29 = jet({ name = "МиГ-29К", role = "Быстрый набор", length = 57, diameter = 6, span = 40, chord = 16, thrust = 23.5, maxKts = 780, stallKts = 116, vrKts = 140, pitchRate = 1.5, rollRate = 3.6, hp = 105, missiles = 4, hstabSpan = 22,
+		colors = { body = Color3.fromHex("8f9ea8"), accent = Color3.fromHex("5f7280"), tail = Color3.fromHex("77878f"), engine = Color3.fromHex("38393d") } }),
+	F35 = jet({ name = "F-35C Lightning II", role = "Малозаметный: захват дольше", length = 52, diameter = 6, span = 43, chord = 17, sweep = 34, thrust = 20, maxKts = 680, stallKts = 110, vrKts = 135, pitchRate = 1.45, rollRate = 3.4, hp = 110, missiles = 4, lockMul = 1.8, hstabSpan = 20,
+		colors = { body = Color3.fromHex("6e747a"), accent = Color3.fromHex("575c61"), tail = Color3.fromHex("63686d"), engine = Color3.fromHex("2f3134") } }),
+}
+for id, c in JETS do
+	c.id = id
+end
+
+return {
+	JETS = JETS,
+	ORDER = { "F16", "FA18", "SU33", "RAFALE", "MIG29", "F35" },
+	-- оружие
+	GUN_RANGE = 2400, -- studs
+	GUN_CONE = 3.2, -- градусов: попадание, если цель в этом конусе по курсу
+	GUN_DMG = 6,
+	GUN_RATE = 0.09, -- секунд между выстрелами
+	MSL_RANGE = 7000,
+	MSL_CONE = 24, -- градусов для захвата
+	MSL_LOCK = 1.4, -- секунд держать цель для захвата
+	MSL_SPEED = 1300,
+	MSL_TURN = 2.4, -- рад/с
+	MSL_DMG = 70,
+	MSL_LIFE = 9,
+	FLARES = 10,
+	FLARE_TIME = 1.6,
+	FLARE_CHANCE = 0.7, -- шанс увести ракету
+	-- матч
+	TICKETS = 250,
+	BOTS_PER_TEAM = 4, -- боты добавляются, пока в команде мало живых игроков; 0 = без ботов
+	BLEED_EVERY = 6, -- раз в N секунд команда с меньшим числом баз теряет очки
+}
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">PlaneBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Строит модель самолёта из обычных деталей Roblox по PlaneConfigs.
+-- Оси модели: нос -Z, верх +Y, правое крыло +X. Корень (Root) — центр фюзеляжа,
+-- он стоит на высоте gearHeight над землёй, когда шасси касается полосы.
+local PlaneBuilder = {}
+
+type Ctx = { model: Model, root: BasePart, static: boolean, cfg: any }
+
+local DARK = Color3.fromRGB(28, 32, 40)
+local TIRE = Color3.fromRGB(25, 25, 25)
+local METAL = Color3.fromRGB(150, 155, 162)
+
+local function basePart(ctx: Ctx, cls: string, name: string, color: Color3, material: Enum.Material?): BasePart
+	local p = Instance.new(cls) :: BasePart
+	p.Name = name
+	p.Color = color
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = true
+	p.Anchored = ctx.static
+	p.Massless = true
+	return p
+end
+
+local function attach(ctx: Ctx, p: BasePart, parent: Instance?)
+	p.Parent = parent or ctx.model
+	if not ctx.static then
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = ctx.root
+		w.Part1 = p
+		w.Parent = p
+	end
+end
+
+local function block(ctx: Ctx, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, parent: Instance?): BasePart
+	local p = basePart(ctx, "Part", name, color, material)
+	p.Size = size
+	p.CFrame = ctx.root.CFrame * cf
+	attach(ctx, p, parent)
+	return p
+end
+
+-- Эллипсоид: шар с SpecialMesh, можно любые полуоси
+local function ellipsoid(ctx: Ctx, name: string, semi: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, parent: Instance?): BasePart
+	local p = basePart(ctx, "Part", name, color, material)
+	p.Size = semi * 2
+	local m = Instance.new("SpecialMesh")
+	m.MeshType = Enum.MeshType.Sphere
+	m.Parent = p
+	p.CFrame = ctx.root.CFrame * cf
+	attach(ctx, p, parent)
+	return p
+end
+
+-- Цилиндр вдоль оси Z модели
+local function cylZ(ctx: Ctx, name: string, length: number, diameter: number, pos: Vector3, color: Color3, material: Enum.Material?, parent: Instance?): BasePart
+	local p = basePart(ctx, "Part", name, color, material)
+	p.Shape = Enum.PartType.Cylinder
+	p.Size = Vector3.new(length, diameter, diameter)
+	p.CFrame = ctx.root.CFrame * CFrame.new(pos) * CFrame.Angles(0, math.pi / 2, 0)
+	attach(ctx, p, parent)
+	return p
+end
+
+-- Цилиндр вдоль оси Y модели (стойки шасси)
+local function cylY(ctx: Ctx, name: string, length: number, diameter: number, pos: Vector3, color: Color3, parent: Instance?): BasePart
+	local p = basePart(ctx, "Part", name, color, Enum.Material.Metal)
+	p.Shape = Enum.PartType.Cylinder
+	p.Size = Vector3.new(length, diameter, diameter)
+	p.CFrame = ctx.root.CFrame * CFrame.new(pos) * CFrame.Angles(0, 0, math.pi / 2)
+	attach(ctx, p, parent)
+	return p
+end
+
+-- Треугольник из двух клиньев (классический приём для произвольных плоскостей)
+local function triangle(ctx: Ctx, name: string, a: Vector3, b: Vector3, c: Vector3, thick: number, color: Color3, parent: Instance?)
+	local ab, ac, bc = b - a, c - a, c - b
+	local abd, acd, bcd = ab:Dot(ab), ac:Dot(ac), bc:Dot(bc)
+	if abd > acd and abd > bcd then
+		c, a = a, c
+	elseif acd > bcd and acd > abd then
+		a, b = b, a
+	end
+	ab, ac, bc = b - a, c - a, c - b
+	local cross = ac:Cross(ab)
+	if cross.Magnitude < 1e-6 then
+		return
+	end
+	local rightV = cross.Unit
+	local upV = bc:Cross(rightV).Unit
+	local backV = bc.Unit
+	local height = math.abs(ab:Dot(upV))
+	local w1 = basePart(ctx, "WedgePart", name, color)
+	w1.Size = Vector3.new(thick, math.max(height, 0.05), math.max(math.abs(ab:Dot(backV)), 0.05))
+	w1.CFrame = ctx.root.CFrame * CFrame.fromMatrix((a + b) / 2, rightV, upV, backV)
+	attach(ctx, w1, parent)
+	local w2 = basePart(ctx, "WedgePart", name, color)
+	w2.Size = Vector3.new(thick, math.max(height, 0.05), math.max(math.abs(ac:Dot(backV)), 0.05))
+	w2.CFrame = ctx.root.CFrame * CFrame.fromMatrix((a + c) / 2, -rightV, upV, -backV)
+	attach(ctx, w2, parent)
+end
+
+-- Трапециевидная плоскость: корневая/концевая передние кромки и хорды (хорда идёт в +Z)
+local function panel(ctx: Ctx, name: string, rootLE: Vector3, rootChord: number, tipLE: Vector3, tipChord: number, thick: number, color: Color3)
+	local rootTE = rootLE + Vector3.new(0, 0, rootChord)
+	local tipTE = tipLE + Vector3.new(0, 0, tipChord)
+	triangle(ctx, name, rootLE, rootTE, tipTE, thick, color)
+	triangle(ctx, name, rootLE, tipTE, tipLE, thick, color)
+end
+
+local function light(ctx: Ctx, kind: string, pos: Vector3, color: Color3, size: number)
+	local p = block(ctx, "Light", Vector3.one * size, CFrame.new(pos), color, Enum.Material.Neon)
+	p.CastShadow = false
+	p:SetAttribute("LightKind", kind)
+	return p
+end
+
+function PlaneBuilder.build(cfg: any, opts: { static: boolean?, seat: boolean?, label: string? }?): Model
+	local o = opts or {}
+	local model = Instance.new("Model")
+	model.Name = cfg.name
+	model:SetAttribute("PlaneId", cfg.id)
+
+	local L, D, span, chord = cfg.length, cfg.diameter, cfg.span, cfg.chord
+	local col = cfg.colors
+	local static = o.static == true
+
+	local root = Instance.new("Part")
+	root.Name = "Root"
+	root.Size = Vector3.new(D * 0.5, D * 0.5, L * 0.5)
+	root.Transparency = 1
+	root.CanCollide = false
+	root.CanTouch = false
+	root.CanQuery = false
+	root.Anchored = true
+	root.Massless = false
+	root.CFrame = CFrame.identity
+	root.Parent = model
+	model.PrimaryPart = root
+
+	local ctx: Ctx = { model = model, root = root, static = static, cfg = cfg }
+
+	-- ===== фюзеляж
+	local Ln = math.max(D * 1.1, L * 0.12)
+	local Lt = L * 0.24
+	local cylLen = L - Ln - Lt
+	local cylMid = -L / 2 + Ln + cylLen / 2
+	local glossy = cfg.engines ~= "jet1" and cfg.engines ~= "prop"
+	local fus = cylZ(ctx, "Fuselage", cylLen + 0.02, D, Vector3.new(0, 0, cylMid), col.body)
+	local nose = ellipsoid(ctx, "Nose", Vector3.new(D / 2, D / 2, Ln), CFrame.new(0, 0, -L / 2 + Ln), col.body)
+	local tcone = ellipsoid(ctx, "TailCone", Vector3.new(D / 2, D / 2, Lt), CFrame.new(0, 0, L / 2 - Lt), col.body)
+	if glossy then
+		-- лаковая краска: лёгкое отражение неба
+		for _, part in { fus, nose, tcone } do
+			part.Reflectance = 0.07
+		end
+	end
+	if cfg.hump then
+		ellipsoid(ctx, "Hump", Vector3.new(D * 0.4, D * 0.45, L * 0.2), CFrame.new(0, D * 0.28, -L / 2 + L * 0.24), col.body)
+	end
+	-- кабина
+	if cfg.canopy then
+		local cp = ellipsoid(ctx, "Canopy", Vector3.new(D * 0.3, D * 0.32, L * 0.13), CFrame.new(0, D * 0.42, -L / 2 + L * 0.3), Color3.fromRGB(60, 80, 100), Enum.Material.Glass)
+		cp.Transparency = 0.25
+	else
+		-- остекление кабины: 3 панели на сторону по поверхности носового эллипсоида
+		local z0 = -L / 2 + Ln
+		for i, f in { 0.8, 0.7, 0.58 } do
+			local zc = z0 - Ln * f
+			local r = D / 2 * math.sqrt(1 - f * f)
+			for _, s in { -1, 1 } do
+				local ang = math.rad(18 + (i - 1) * 24)
+				local x, y = s * r * math.sin(ang), r * math.cos(ang) * 0.92
+				local mk = if cfg.mask then 1.45 else 1
+				local pane = block(ctx, "CockpitWindow", Vector3.new(r * 0.42 * mk, 0.08 * D * mk, Ln * 0.11 * mk), CFrame.new(x, y, zc) * CFrame.Angles(math.rad(-38 + i * 8), 0, -s * ang), DARK, Enum.Material.Glass)
+				pane.CastShadow = false
+				pane.Reflectance = 0.25
+			end
+		end
+	end
+	-- иллюминаторы и двери (как у настоящих лайнеров), полоса ливреи
+	for _, s in { -1, 1 } do
+		if cfg.windows then
+			local pitch = math.max(D * 0.11, 1.1)
+			local z0 = -L / 2 + Ln * 1.05
+			local z1 = L / 2 - Lt * 0.95
+			local n = math.min(math.floor((z1 - z0) / pitch), 70)
+			local step = (z1 - z0) / math.max(n, 1)
+			-- двухпалубный (тип A380): два ряда иллюминаторов по всей длине
+			local rows = if cfg.doubleDeck then { -0.02, 0.3 } else { 0.13 }
+			local wx = s * math.sqrt(0.25 - 0.0169) * D
+			for _, ry in rows do
+				local wy = D * ry
+				local rx = s * math.sqrt(0.25 - ry * ry) * D
+				for i = 0, n do
+					local z = z0 + i * step
+					if i ~= 1 and i ~= n - 1 then
+						local w = block(ctx, "Window", Vector3.new(D * 0.025, D * 0.055, D * 0.04), CFrame.new(rx, wy, z), DARK, Enum.Material.Glass)
+						w.CastShadow = false
+					end
+				end
+			end
+			for _, z in { z0 + step * 1, z1 - step * 1 } do
+				local door = block(ctx, "Door", Vector3.new(D * 0.02, D * 0.2, D * 0.085), CFrame.new(wx * 1.005, D * 0.05, z), Color3.fromRGB(170, 175, 182))
+				door.CastShadow = false
+			end
+		end
+		block(ctx, "Cheatline", Vector3.new(D * 0.04, D * 0.05, cylLen), CFrame.new(s * D * 0.49, -D * 0.06, cylMid), col.accent)
+		-- «волна» ливреи: полоса фирменного цвета поднимается от брюха к хвосту
+		if glossy and L > 50 then
+			local zA, zB = cylMid + cylLen * 0.08, L / 2 - Lt * 0.55
+			local N = 9
+			for i = 0, N - 1 do
+				local t0 = i / N
+				local tm = (i + 0.5) / N
+				local z = zA + (zB - zA) * tm
+				local phi = math.rad(-62 + 92 * tm ^ 1.3) -- угол на окружности: снизу вверх
+				local rad = D / 2 * (if z > L / 2 - Lt then math.max(0.35, (L / 2 - z) / Lt) ^ 0.6 else 1) + 0.03
+				local seg = (zB - zA) / N * 1.08
+				local band = block(ctx, "LiverySwoosh", Vector3.new(D * 0.02, D * (0.2 - 0.08 * t0), seg),
+					CFrame.new(s * rad * math.cos(phi), rad * math.sin(phi), z) * CFrame.Angles(0, 0, if s == 1 then phi else math.pi - phi),
+					if tm < 0.5 then col.accent else col.tail)
+				band.CastShadow = false
+				band.Reflectance = 0.07
+			end
+		end
+	end
+	-- брюхо светло-серое, как у настоящих лайнеров
+	if L > 50 then
+		local belly = ellipsoid(ctx, "Belly", Vector3.new(D * 0.47, D * 0.22, cylLen * 0.5), CFrame.new(0, -D * 0.3, cylMid), Color3.fromRGB(205, 210, 216))
+		belly.CastShadow = false
+	end
+
+	-- ===== крыло
+	local wy = if cfg.wing == "high" then D * 0.42 elseif cfg.wing == "low" then -D * 0.32 else 0
+	local wz = -L / 2 + L * cfg.wingPos
+	local taper = if cfg.sweep > 5 then 0.32 else 0.7
+	local tipChord = chord * taper
+	local half = span / 2
+	local rootX = D * 0.35
+	local l = half - rootX
+	local tanS, tanD = math.tan(math.rad(cfg.sweep)), math.tan(math.rad(cfg.dihedral))
+	local wingThick = math.clamp(chord * 0.09, 0.35, 3)
+	local rootLEz = wz - chord / 2
+
+	local function wingPoint(s: number, frac: number): (Vector3, number)
+		-- передняя кромка и хорда на доле размаха frac (0 = корень, 1 = законцовка)
+		local d = l * frac
+		return Vector3.new(s * (rootX + d), wy + d * tanD, rootLEz + d * tanS), chord + (tipChord - chord) * frac
+	end
+
+	local flapsFolder = Instance.new("Folder")
+	flapsFolder.Name = "Flaps"
+	flapsFolder.Parent = model
+	-- рули: элероны, руль высоты, руль направления (поворачивает Animator по управлению)
+	local controlsFolder = Instance.new("Folder")
+	controlsFolder.Name = "Controls"
+	controlsFolder.Parent = model
+	local function controlSurface(kind: string, pA: Vector3, pB: Vector3, fc: number, thick: number, color: Color3, vertical: boolean?)
+		local sgn = if vertical then 1 else (if pB.X >= pA.X then 1 else -1)
+		local u = ((pB - pA) * sgn).Unit
+		local back = Vector3.zAxis - u * Vector3.zAxis:Dot(u)
+		back = back.Unit
+		local upV = back:Cross(u)
+		local hinge = CFrame.fromMatrix((pA + pB) / 2, u, upV, back)
+		local cp = basePart(ctx, "Part", "Control", color)
+		cp.Size = Vector3.new((pB - pA).Magnitude, thick, fc)
+		local c0 = hinge * CFrame.new(0, 0, fc / 2)
+		cp.CFrame = root.CFrame * c0
+		cp.CastShadow = false
+		cp.Parent = controlsFolder
+		if not static then
+			local w = Instance.new("Weld")
+			w.Name = "ControlWeld"
+			w.Part0 = root
+			w.Part1 = cp
+			w.C0 = c0
+			w:SetAttribute("Hinge", hinge)
+			w:SetAttribute("Chord", fc)
+			w:SetAttribute("Kind", kind)
+			w.Parent = cp
+		end
+	end
+	local gearFolder = Instance.new("Folder")
+	gearFolder.Name = "Gear"
+	gearFolder.Parent = model
+
+	for _, s in { -1, 1 } do
+		local rLE = Vector3.new(s * rootX, wy, rootLEz)
+		local tLE, tChord = wingPoint(s, 1)
+		local WINGC = if cfg.id == "F16" then col.body else Color3.fromRGB(214, 218, 224)
+		panel(ctx, "Wing", rLE, chord, tLE, tChord, wingThick, WINGC)
+		-- обтекатели механизации закрылков под задней кромкой
+		if L > 80 then
+			for _, fr in { 0.22, 0.42, 0.62 } do
+				local le, ch = wingPoint(s, fr)
+				ellipsoid(ctx, "FlapFairing", Vector3.new(chord * 0.03, chord * 0.045, ch * 0.28), CFrame.new(le.X, le.Y - wingThick * 0.6, le.Z + ch * 0.95), WINGC)
+			end
+		end
+		-- подкосы крыла у лёгкого самолёта
+		if cfg.wing == "high" then
+			local a0 = Vector3.new(s * D * 0.45, -D * 0.3, wz)
+			local tipP = wingPoint(s, 0.55)
+			local a1 = Vector3.new(tipP.X, tipP.Y - wingThick * 0.5, wz)
+			local mid = (a0 + a1) / 2
+			local dir = (a1 - a0).Unit
+			local strut = block(ctx, "Strut", Vector3.new((a1 - a0).Magnitude, 0.3, 0.6), CFrame.fromMatrix(mid, dir, Vector3.zAxis:Cross(dir).Unit), col.body)
+			strut.CastShadow = false
+		end
+		-- элерон на внешней части крыла
+		do
+			local ai, cai = wingPoint(s, 0.6)
+			local ao, cao = wingPoint(s, 0.92)
+			local afc = math.min(cai, cao) * 0.26
+			controlSurface(if s > 0 then "ailR" else "ailL", ai + Vector3.new(0, 0, cai - afc), ao + Vector3.new(0, 0, cao - afc), afc, wingThick * 0.6, Color3.fromRGB(214, 218, 224))
+		end
+		-- закрылки на внутренней половине
+		if not cfg.noFlaps then
+			local fi, ci = wingPoint(s, 0.04)
+			local fo, co = wingPoint(s, 0.5)
+			local fc = math.min(ci, co) * 0.24
+			local pIn = fi + Vector3.new(0, 0, ci - fc)
+			local pOut = fo + Vector3.new(0, 0, co - fc)
+			local u = ((pOut - pIn) * s).Unit -- всегда в +X, чтобы ось Y шарнира смотрела вверх
+			local back = Vector3.zAxis - u * Vector3.zAxis:Dot(u)
+			back = back.Unit
+			local upV = back:Cross(u)
+			local hinge = CFrame.fromMatrix((pIn + pOut) / 2, u, upV, back)
+			local flap = basePart(ctx, "Part", "Flap", col.body)
+			flap.Size = Vector3.new((pOut - pIn).Magnitude, wingThick * 0.7, fc)
+			local c0 = hinge * CFrame.new(0, 0, fc / 2)
+			flap.CFrame = root.CFrame * c0
+			flap.Parent = flapsFolder
+			if not static then
+				local w = Instance.new("Weld")
+				w.Name = "FlapWeld"
+				w.Part0 = root
+				w.Part1 = flap
+				w.C0 = c0
+				w:SetAttribute("Hinge", hinge)
+				w:SetAttribute("Chord", fc)
+				w.Parent = flap
+			end
+		end
+		-- законцовки
+		if cfg.winglets then
+			local wlH = math.max(2, span * 0.045)
+			local wlLE = tLE + Vector3.new(0, 0, tChord * 0.1)
+			panel(ctx, "Winglet", wlLE, tChord * 0.8, wlLE + Vector3.new(s * wlH * 0.15, wlH, wlH * 0.6), tChord * 0.35, wingThick * 0.6, col.tail)
+		end
+		-- навигационные огни и стробы
+		light(ctx, "nav", tLE + Vector3.new(0, 0, tChord * 0.3), if s < 0 then Color3.fromRGB(255, 40, 40) else Color3.fromRGB(40, 255, 90), math.max(0.6, D * 0.08))
+		light(ctx, "strobe", tLE + Vector3.new(0, 0, tChord * 0.8), Color3.new(1, 1, 1), math.max(0.5, D * 0.06))
+		-- след с законцовок (инверсионный след включает клиент на высоте)
+		if not static then
+			local a0 = Instance.new("Attachment")
+			a0.Name = "TrailA"
+			a0.Position = tLE + Vector3.new(0, 0.3, tChord)
+			a0.Parent = root
+			local a1 = Instance.new("Attachment")
+			a1.Name = "TrailB"
+			a1.Position = tLE + Vector3.new(0, -0.3, tChord)
+			a1.Parent = root
+			local tr = Instance.new("Trail")
+			tr.Name = "Contrail"
+			tr.Attachment0 = a0
+			tr.Attachment1 = a1
+			tr.Lifetime = 5
+			tr.MinLength = 2
+			tr.FaceCamera = true
+			tr.WidthScale = NumberSequence.new(1, 6)
+			tr.Transparency = NumberSequence.new(0.35, 1)
+			tr.Color = ColorSequence.new(Color3.new(1, 1, 1))
+			tr.LightEmission = 0.2
+			tr.Enabled = false
+			tr.Parent = root
+		end
+	end
+
+	-- обтекатель стыка крыла и фюзеляжа
+	if cfg.wing == "low" and L > 50 then
+		ellipsoid(ctx, "WingFairing", Vector3.new(D * 0.46, D * 0.28, chord * 0.85), CFrame.new(0, -D * 0.28, wz + chord * 0.1), Color3.fromRGB(205, 210, 216))
+	end
+
+	-- ===== хвостовое оперение
+	local finRoot = math.max(cfg.finHeight * 0.95, L * 0.1)
+	local finLE = Vector3.new(0, D * 0.3, L / 2 - finRoot - L * 0.02)
+	local finTanS = math.tan(math.rad(cfg.finSweep))
+	local finTipLE = finLE + Vector3.new(0, cfg.finHeight, cfg.finHeight * finTanS)
+	local finTip = finRoot * 0.5
+	local finThick = math.clamp(finRoot * 0.08, 0.3, 2.5)
+	-- плоскость киля вертикальная: строим треугольники напрямую
+	triangle(ctx, "Fin", finLE, finLE + Vector3.new(0, 0, finRoot), finTipLE + Vector3.new(0, 0, finTip), finThick, col.tail)
+	triangle(ctx, "Fin", finLE, finTipLE + Vector3.new(0, 0, finTip), finTipLE, finThick, col.tail)
+	light(ctx, "beacon", finTipLE + Vector3.new(0, 0.4, finTip * 0.5), Color3.fromRGB(255, 40, 40), math.max(0.5, D * 0.07))
+	do -- руль направления у задней кромки киля
+		local rcB, rcT = finRoot * 0.3, finTip * 0.3
+		local rb = finLE + Vector3.new(0, cfg.finHeight * 0.08, finRoot - rcB)
+		local rt = finTipLE + Vector3.new(0, -cfg.finHeight * 0.08, finTip - rcT)
+		controlSurface("rud", rb, rt, (rcB + rcT) / 2, finThick * 0.7, col.tail, true)
+	end
+	-- форкиль и выхлоп ВСУ
+	triangle(ctx, "Dorsal", finLE + Vector3.new(0, 0, -finRoot * 0.45), finLE, finLE + Vector3.new(0, cfg.finHeight * 0.18, finRoot * 0.12), finThick * 0.8, col.tail)
+	if L > 50 then
+		cylZ(ctx, "APU", 0.4, D * 0.09, Vector3.new(0, 0, L / 2 - 0.1), DARK, Enum.Material.Metal)
+	end
+	light(ctx, "beacon", Vector3.new(0, -D / 2 - 0.2, cylMid), Color3.fromRGB(255, 40, 40), math.max(0.5, D * 0.07))
+
+	local hsRootChord = math.max(cfg.hstabSpan * 0.3, D * 0.6)
+	local hsHalf = cfg.hstabSpan / 2
+	local hsY, hsLEz, hsRootX
+	if cfg.tail == "T" then
+		hsY = finTipLE.Y - 0.2
+		hsLEz = finTipLE.Z - finTip * 0.1
+		hsRootX = 0
+		hsRootChord = math.max(finTip * 1.1, hsRootChord * 0.8)
+	else
+		hsY = D * 0.08
+		hsLEz = L / 2 - hsRootChord - L * 0.03
+		hsRootX = D * 0.2
+	end
+	local hsTan = math.tan(math.rad(cfg.finSweep * 0.85))
+	for _, s in { -1, 1 } do
+		local r = Vector3.new(s * hsRootX, hsY, hsLEz)
+		local d = hsHalf - hsRootX
+		local t = Vector3.new(s * hsHalf, hsY + d * 0.05, hsLEz + d * hsTan)
+		panel(ctx, "HStab", r, hsRootChord, t, hsRootChord * 0.45, math.clamp(hsRootChord * 0.08, 0.25, 2), col.body)
+		local efcR, efcT = hsRootChord * 0.3, hsRootChord * 0.45 * 0.3
+		local ea = r + Vector3.new(s * 0.2, 0, hsRootChord - efcR)
+		local eb = t + Vector3.new(-s * 0.5, 0, hsRootChord * 0.45 - efcT)
+		controlSurface("elev", ea, eb, (efcR + efcT) / 2, math.clamp(hsRootChord * 0.08, 0.25, 2) * 0.7, col.body)
+	end
+
+	-- ===== двигатели
+	local engines = Instance.new("Folder")
+	engines.Name = "Engines"
+	engines.Parent = model
+	local eD = cfg.engineD or D * 0.4
+	local eL = cfg.engineLen or eD * 2
+
+	-- турбовентиляторный двигатель: губа воздухозаборника, вентилятор, кок, мотогондола, сопло и конус
+	local function nacelle(pos: Vector3)
+		cylZ(ctx, "Nacelle", eL * 0.78, eD, pos + Vector3.new(0, 0, eL * 0.02), col.engine, Enum.Material.SmoothPlastic, engines)
+		cylZ(ctx, "Lip", eL * 0.08, eD * 1.02, pos + Vector3.new(0, 0, -eL * 0.4), Color3.fromRGB(225, 228, 232), Enum.Material.Metal, engines)
+		-- вентилятор: тёмный диск + вращающийся ротор с 8 лопатками (Weld «FanWeld», крутит Animator)
+		cylZ(ctx, "Fan", 0.2, eD * 0.86, pos + Vector3.new(0, 0, -eL * 0.36), Color3.fromRGB(32, 34, 40), Enum.Material.Metal, engines)
+		local hub = basePart(ctx, "Part", "FanRotor", Color3.fromRGB(150, 156, 164), Enum.Material.Metal)
+		hub.Shape = Enum.PartType.Cylinder
+		hub.Size = Vector3.new(0.25, eD * 0.22, eD * 0.22)
+		local hc0 = CFrame.new(pos + Vector3.new(0, 0, -eL * 0.385)) * CFrame.Angles(0, math.pi / 2, 0)
+		hub.CFrame = ctx.root.CFrame * hc0
+		hub.Parent = engines
+		if not ctx.static then
+			local w = Instance.new("Weld")
+			w.Name = "FanWeld"
+			w.Part0 = ctx.root
+			w.Part1 = hub
+			w.C0 = hc0
+			w:SetAttribute("Base", hc0)
+			w.Parent = hub
+		end
+		for i = 0, 7 do
+			local blade = basePart(ctx, "Part", "FanBlade", Color3.fromRGB(140, 147, 156), Enum.Material.Metal)
+			blade.Size = Vector3.new(0.12, eD * 0.3, eD * 0.1)
+			blade.CFrame = hub.CFrame * CFrame.Angles(i / 8 * math.pi * 2, 0, 0) * CFrame.new(0, eD * 0.24, 0) * CFrame.Angles(0, 0.55, 0)
+			blade.CastShadow = false
+			blade.Parent = engines
+			if not ctx.static then
+				local wc = Instance.new("WeldConstraint")
+				wc.Part0 = hub
+				wc.Part1 = blade
+				wc.Parent = blade
+			end
+		end
+		ellipsoid(ctx, "Spinner", Vector3.new(eD * 0.15, eD * 0.15, eD * 0.2), CFrame.new(pos + Vector3.new(0, 0, -eL * 0.38)), Color3.fromRGB(200, 204, 210), Enum.Material.Metal, engines)
+		cylZ(ctx, "Nozzle", eL * 0.2, eD * 0.72, pos + Vector3.new(0, 0, eL * 0.5), Color3.fromRGB(150, 154, 160), Enum.Material.Metal, engines)
+		ellipsoid(ctx, "Plug", Vector3.new(eD * 0.22, eD * 0.22, eL * 0.18), CFrame.new(pos + Vector3.new(0, 0, eL * 0.6)), Color3.fromRGB(70, 72, 78), Enum.Material.Metal, engines)
+		if cfg.id == "B787" then
+			-- «шевроны» на сопле (зубцы против шума), как у Boeing 787
+			for i = 0, 11 do
+				local a = i / 12 * math.pi * 2
+				block(ctx, "Chevron", Vector3.new(eD * 0.09, eD * 0.09, 0.15), CFrame.new(pos + Vector3.new(math.cos(a) * eD * 0.37, math.sin(a) * eD * 0.37, eL * 0.6)) * CFrame.Angles(0, 0, a + math.pi / 4), col.engine, Enum.Material.Metal, engines)
+			end
+		end
+	end
+
+	if cfg.engines == "wing2" or cfg.engines == "wing4" then
+		local fracs = if cfg.engines == "wing2" then { 0.3 } else { 0.28, 0.58 }
+		for _, s in { -1, 1 } do
+			for _, fr in fracs do
+				local le, ch = wingPoint(s, fr)
+				local pos = Vector3.new(le.X, le.Y - eD * 0.65, le.Z - eL * 0.35)
+				nacelle(pos)
+				block(ctx, "Pylon", Vector3.new(eD * 0.15, eD * 0.5, math.min(eL * 0.8, ch)), CFrame.new(le.X, le.Y - eD * 0.3, le.Z + ch * 0.15), col.engine, Enum.Material.Metal, engines)
+			end
+		end
+	elseif cfg.engines == "tail2" then
+		for _, s in { -1, 1 } do
+			local pos = Vector3.new(s * (D / 2 + eD * 0.55), D * 0.18, L / 2 - Lt - eL * 0.2)
+			nacelle(pos)
+			block(ctx, "Pylon", Vector3.new(eD * 0.6, eD * 0.2, eL * 0.5), CFrame.new(s * (D / 2), D * 0.18, pos.Z), col.engine, Enum.Material.Metal, engines)
+		end
+	elseif cfg.engines == "jet1" then
+		cylZ(ctx, "Nozzle", eL * 0.6, eD, Vector3.new(0, 0, L / 2 - 0.5), DARK, Enum.Material.Metal, engines)
+		local ab = cylZ(ctx, "Afterburner", 0.4, eD * 0.75, Vector3.new(0, 0, L / 2 + eL * 0.3 - 0.3), Color3.fromRGB(255, 140, 50), Enum.Material.Neon, engines)
+		ab.Transparency = 1
+		ab.CastShadow = false
+		-- подфюзеляжные гребни и пусковые на законцовках
+		for _, s in { -1, 1 } do
+			triangle(ctx, "Ventral", Vector3.new(s * D * 0.25, -D * 0.45, L / 2 - L * 0.2), Vector3.new(s * D * 0.25, -D * 0.45, L / 2 - L * 0.08), Vector3.new(s * D * 0.35, -D * 0.85, L / 2 - L * 0.09), 0.25, col.body)
+			local tLE2, tC2 = wingPoint(s, 1)
+			cylZ(ctx, "Rail", tC2 * 1.6, 0.6, Vector3.new(tLE2.X + s * 0.4, tLE2.Y, tLE2.Z + tC2 * 0.4), Color3.fromRGB(220, 220, 220), Enum.Material.Metal, engines)
+		end
+		-- воздухозаборник под фюзеляжем
+		block(ctx, "Intake", Vector3.new(D * 0.6, D * 0.4, L * 0.12), CFrame.new(0, -D * 0.45, wz - chord * 0.6), DARK, Enum.Material.Metal, engines)
+	elseif cfg.engines == "turboprop2" then
+		-- турбовинтовые: гондолы под высоким крылом, шестилопастные винты (вращает Animator), выхлоп сбоку
+		for _, s in { -1, 1 } do
+			local le = wingPoint(s, 0.3)
+			local p = Vector3.new(le.X, le.Y - eD * 0.45, le.Z + eL * 0.1)
+			ellipsoid(ctx, "Nacelle", Vector3.new(eD * 0.5, eD * 0.6, eL * 0.55), CFrame.new(p), col.engine, Enum.Material.SmoothPlastic, engines)
+			cylZ(ctx, "Exhaust", eD * 0.5, eD * 0.28, p + Vector3.new(s * eD * 0.45, -eD * 0.1, eL * 0.05), DARK, Enum.Material.Metal, engines)
+			local pc0 = CFrame.new(p + Vector3.new(0, 0, -eL * 0.55 - 0.25))
+			local hub = basePart(ctx, "Part", "Prop", Color3.fromRGB(230, 232, 236), Enum.Material.Metal)
+			hub.Size = Vector3.new(eD * 0.6, eD * 0.6, eD * 0.75)
+			local hm = Instance.new("SpecialMesh")
+			hm.MeshType = Enum.MeshType.Sphere
+			hm.Parent = hub
+			hub.CFrame = root.CFrame * pc0
+			hub.Parent = engines
+			if not static then
+				local w = Instance.new("Weld")
+				w.Name = "PropWeld"
+				w.Part0 = root
+				w.Part1 = hub
+				w.C0 = pc0
+				w:SetAttribute("Base", pc0)
+				w.Parent = hub
+			end
+			for i = 0, 5 do
+				local a = i / 6 * math.pi * 2
+				local bl = basePart(ctx, "Part", "Blade", DARK, Enum.Material.Metal)
+				bl.Size = Vector3.new(eD * 0.16, eD * 1.55, 0.2)
+				bl.CFrame = hub.CFrame * CFrame.Angles(0, 0, a - math.pi / 2) * CFrame.new(0, eD * 0.82, 0) * CFrame.Angles(0, 0.35, 0)
+				bl.Parent = engines
+				if not static then
+					local wc = Instance.new("WeldConstraint")
+					wc.Part0 = hub
+					wc.Part1 = bl
+					wc.Parent = bl
+				end
+			end
+			local disc = basePart(ctx, "Part", "PropDisc", Color3.fromRGB(200, 200, 200), Enum.Material.Glass)
+			disc.Shape = Enum.PartType.Cylinder
+			disc.Size = Vector3.new(0.05, eD * 3.3, eD * 3.3)
+			disc.CFrame = root.CFrame * pc0 * CFrame.Angles(0, math.pi / 2, 0)
+			disc.Transparency = 1
+			disc.CastShadow = false
+			attach(ctx, disc, engines)
+		end
+	elseif cfg.engines == "prop" then
+		ellipsoid(ctx, "Spinner", Vector3.new(D * 0.16, D * 0.16, D * 0.22), CFrame.new(0, 0, -L / 2 - D * 0.05), Color3.fromRGB(230, 230, 230), Enum.Material.Metal, engines)
+		local prop = basePart(ctx, "Part", "Prop", DARK, Enum.Material.Metal)
+		prop.Size = Vector3.new(D * 1.15, 0.35, 0.18)
+		local pc0 = CFrame.new(0, 0, -L / 2 - D * 0.08)
+		prop.CFrame = root.CFrame * pc0
+		prop.Parent = engines
+		if not static then
+			local w = Instance.new("Weld")
+			w.Name = "PropWeld"
+			w.Part0 = root
+			w.Part1 = prop
+			w.C0 = pc0
+			w:SetAttribute("Base", pc0)
+			w.Parent = prop
+		end
+		local disc = basePart(ctx, "Part", "PropDisc", Color3.fromRGB(200, 200, 200), Enum.Material.Glass)
+		disc.Shape = Enum.PartType.Cylinder
+		disc.Size = Vector3.new(0.05, D * 1.15, D * 1.15)
+		disc.CFrame = root.CFrame * pc0 * CFrame.Angles(0, math.pi / 2, 0)
+		disc.Transparency = 1
+		disc.CastShadow = false
+		attach(ctx, disc, engines)
+	end
+
+	-- ===== шасси
+	local gearLen = cfg.gearLen
+	local wheelR = math.max(0.7, gearLen * 0.32)
+	local wheelW = math.max(0.6, wheelR * 0.8)
+	local wheelY = -cfg.gearHeight + wheelR
+	local mainGear = {}
+	local function leg(x: number, z: number, wheels: number, bogie: boolean?)
+		local top = -D * 0.35
+		cylY(ctx, "Strut", top - wheelY, math.max(0.25, wheelR * 0.35), Vector3.new(x, (top + wheelY) / 2, z), METAL, gearFolder)
+		-- у Boeing 777 тележки на шесть колёс (три пары подряд)
+		local triple = bogie and cfg.id == "B777"
+		local rows = if triple then { -wheelR * 2.3, 0, wheelR * 2.3 } elseif bogie then { -wheelR * 1.15, wheelR * 1.15 } else { 0 }
+		if bogie then
+			block(ctx, "Bogie", Vector3.new(wheelW * 0.5, wheelR * 0.4, wheelR * (if triple then 5.6 else 3.2)), CFrame.new(x, wheelY, z), METAL, Enum.Material.Metal, gearFolder)
+		end
+		for _, dzz in rows do
+			for k = 1, wheels do
+				local off = if wheels == 1 then 0 else (k - 1.5) * wheelW * 1.15
+				local w = basePart(ctx, "Part", "Wheel", TIRE, Enum.Material.Rubber)
+				w.Shape = Enum.PartType.Cylinder
+				w.Size = Vector3.new(wheelW, wheelR * 2, wheelR * 2)
+				w.CFrame = root.CFrame * CFrame.new(x + off, wheelY, z + dzz)
+				attach(ctx, w, gearFolder)
+				local hub = basePart(ctx, "Part", "Hub", Color3.fromRGB(190, 192, 196), Enum.Material.Metal)
+				hub.Shape = Enum.PartType.Cylinder
+				hub.Size = Vector3.new(wheelW * 1.02, wheelR * 1.1, wheelR * 1.1)
+				hub.CFrame = w.CFrame
+				hub.CastShadow = false
+				attach(ctx, hub, gearFolder)
+			end
+		end
+	end
+	local big = L > 100
+	local noseZ = -L / 2 + math.max(L * 0.12, Ln * 0.9)
+	leg(0, noseZ, if big then 2 else 1)
+	-- посадочная фара на передней стойке
+	local lampPart = block(ctx, "LandingLight", Vector3.one * math.max(0.4, wheelR * 0.4), CFrame.new(0, -D * 0.4 - gearLen * 0.3, noseZ - 0.5), Color3.fromRGB(255, 250, 230), Enum.Material.Neon, gearFolder)
+	lampPart.CastShadow = false
+	if not static then
+		local sl = Instance.new("SpotLight")
+		sl.Brightness = 4
+		sl.Range = 60
+		sl.Angle = 40
+		sl.Face = Enum.NormalId.Front
+		sl.Parent = lampPart
+	end
+	-- посадочные фары у корней крыльев (горят при выпущенном шасси — их включает setGearVisible)
+	if cfg.engines ~= "jet1" and cfg.engines ~= "prop" then
+		for _, s in { -1, 1 } do
+			local le = wingPoint(s, 0.1)
+			local wl = block(ctx, "LandingLight", Vector3.one * math.max(0.4, D * 0.05), CFrame.new(le.X, le.Y - wingThick * 0.3, le.Z + 0.3), Color3.fromRGB(255, 250, 230), Enum.Material.Neon, gearFolder)
+			wl.CastShadow = false
+			if not static then
+				local wsl = Instance.new("SpotLight")
+				wsl.Brightness = 3
+				wsl.Range = 90
+				wsl.Angle = 30
+				wsl.Face = Enum.NormalId.Front
+				wsl.Color = Color3.fromRGB(255, 241, 214)
+				wsl.Parent = wl
+			end
+		end
+	end
+	local mainZ = wz + chord * 0.25
+	local turboprop = cfg.engines == "turboprop2"
+	local mainX = if turboprop then D * 0.42 elseif cfg.wing == "high" then D * 0.75 else math.max(D * 0.55, span * 0.08)
+	for _, s in { -1, 1 } do
+		leg(s * mainX, mainZ, if big then 2 else 1, L > 130 or turboprop)
+		if turboprop then
+			-- обтекатель ниши основной стойки сбоку фюзеляжа
+			ellipsoid(ctx, "Sponson", Vector3.new(D * 0.2, D * 0.17, L * 0.09), CFrame.new(s * D * 0.44, -D * 0.36, mainZ), col.body)
+		end
+		table.insert(mainGear, Vector3.new(s * mainX, -cfg.gearHeight, mainZ))
+		if cfg.id == "B747" then
+			leg(s * D * 0.3, mainZ + chord * 0.15, 2, true)
+		end
+	end
+	-- створки шасси: открытые у стоек (в папке шасси), закрытые панели — в папке GearDoorsUp (видны, когда шасси убрано)
+	if not cfg.fixedGear and cfg.engines ~= "jet1" and cfg.engines ~= "prop" then
+		local doorsUp = Instance.new("Folder")
+		doorsUp.Name = "GearDoorsUp"
+		doorsUp.Parent = model
+		local SEAM = col.body:Lerp(Color3.new(0, 0, 0), 0.12)
+		local bayY = if mainX > D * 0.5 then wy - wingThick * 0.6 else -D * 0.46
+		for _, s in { -1, 1 } do
+			block(ctx, "GearDoor", Vector3.new(0.16, gearLen * 0.6, wheelR * 2.4), CFrame.new(s * (mainX + wheelW * 1.5), bayY - gearLen * 0.32, mainZ), col.body, Enum.Material.SmoothPlastic, gearFolder)
+			block(ctx, "GearDoor", Vector3.new(0.12, D * 0.17, wheelR * 2.2), CFrame.new(s * wheelW * 0.9, -D * 0.43, noseZ), col.body, Enum.Material.SmoothPlastic, gearFolder)
+			local pnl = block(ctx, "BayPanel", Vector3.new(wheelR * 2.6, 0.12, wheelR * 3.2), CFrame.new(s * mainX, bayY - 0.08, mainZ), SEAM, Enum.Material.SmoothPlastic, doorsUp)
+			pnl.CastShadow = false
+		end
+		local np = block(ctx, "BayPanel", Vector3.new(wheelR * 1.5, 0.1, wheelR * 2.6), CFrame.new(0, -D * 0.485, noseZ), SEAM, Enum.Material.SmoothPlastic, doorsUp)
+		np.CastShadow = false
+		for _, p in doorsUp:GetChildren() do
+			if p:IsA("BasePart") then
+				p.Transparency = 1 -- по умолчанию шасси выпущено; при уборке панели показывает setGearVisible
+			end
+		end
+	end
+	if not static then
+		for i, p in mainGear do
+			local a = Instance.new("Attachment")
+			a.Name = "MainGear" .. i
+			a.Position = p
+			a.Parent = root
+		end
+	end
+
+	-- ===== кресло пилота
+	if o.seat and not static then
+		local seat = Instance.new("Seat")
+		seat.Name = "PilotSeat"
+		seat.Size = Vector3.new(2, 0.4, 2)
+		seat.Transparency = 1
+		seat.CanCollide = false
+		seat.CanTouch = false
+		seat.Massless = true
+		local seatY = if D < 8 then -D * 0.3 else -D * 0.15
+		seat.CFrame = root.CFrame * CFrame.new(0, seatY, -L / 2 + Ln * 0.85 + 1.5)
+		seat.Parent = model
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = root
+		w.Part1 = seat
+		w.Parent = seat
+	end
+
+	-- ===== подпись
+	if o.label then
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "Tag"
+		bb.Size = UDim2.fromOffset(220, 40)
+		bb.StudsOffsetWorldSpace = Vector3.new(0, D + cfg.finHeight + 6, 0)
+		bb.MaxDistance = 4000
+		bb.AlwaysOnTop = false
+		bb.LightInfluence = 0
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundTransparency = 1
+		t.Text = o.label
+		t.TextColor3 = Color3.fromRGB(228, 238, 255)
+		t.TextStrokeTransparency = 0.4
+		t.Font = Enum.Font.GothamBold
+		t.TextScaled = true
+		t.Parent = bb
+		bb.Parent = root
+	end
+
+	if static then
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Anchored = true
+			end
+		end
+	end
+	return model
+end
+
+-- Положение закрылков (0..3) — меняет C0 сварки, работает локально у каждого клиента
+-- p: штурвал на себя (+), r: крен вправо (+), y: педаль вправо (+); значения -1..1
+function PlaneBuilder.setControls(model: Model, p: number, r: number, y: number)
+	local f = model:FindFirstChild("Controls")
+	if not f then
+		return
+	end
+	for _, part in f:GetChildren() do
+		local w = part:FindFirstChild("ControlWeld") :: Weld?
+		if w then
+			local hinge = w:GetAttribute("Hinge") :: CFrame?
+			local fc = w:GetAttribute("Chord") :: number?
+			local kind = w:GetAttribute("Kind")
+			if hinge and fc then
+				local deg = if kind == "ailR" then -r * 18 elseif kind == "ailL" then r * 18 elseif kind == "elev" then -p * 20 else y * 25
+				w.C0 = hinge * CFrame.Angles(math.rad(deg), 0, 0) * CFrame.new(0, 0, fc / 2)
+			end
+		end
+	end
+end
+
+function PlaneBuilder.setFlaps(model: Model, flaps: number)
+	local f = model:FindFirstChild("Flaps")
+	if not f then
+		return
+	end
+	for _, flap in f:GetChildren() do
+		local w = flap:FindFirstChild("FlapWeld") :: Weld?
+		if w then
+			local hinge = w:GetAttribute("Hinge") :: CFrame?
+			local fc = w:GetAttribute("Chord") :: number?
+			if hinge and fc then
+				w.C0 = hinge * CFrame.Angles(math.rad(flaps * 11), 0, 0) * CFrame.new(0, 0, fc / 2)
+			end
+		end
+	end
+end
+
+function PlaneBuilder.setGearVisible(model: Model, visible: boolean)
+	local du = model:FindFirstChild("GearDoorsUp")
+	if du then
+		for _, p in du:GetChildren() do
+			if p:IsA("BasePart") then
+				p.Transparency = if visible then 1 else 0
+			end
+		end
+	end
+	local g = model:FindFirstChild("Gear")
+	if not g then
+		return
+	end
+	for _, p in g:GetChildren() do
+		if p:IsA("BasePart") then
+			p.LocalTransparencyModifier = if visible then 0 else 1
+			local sl = p:FindFirstChildOfClass("SpotLight")
+			if sl then
+				sl.Enabled = visible
+			end
+		end
+	end
+end
+
+return PlaneBuilder
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Carrier Strike: карта — океан, два авианосца и пять островов-баз.
+-- Это же описание использует физика полёта (groundAt / hitsObstacle / runwayAt),
+-- сервер (строит мир по этим данным) и клиент (карта, точки появления).
+local World = {}
+
+World.FT = 1.69 -- футов в одном studs (как в Sky Pilot)
+World.SEA = 0 -- уровень моря
+World.SIZE = 16000 -- половина стороны зоны боя; дальше — предупреждение и урон
+World.lastHit = nil :: string?
+
+-- ===== авианосцы
+World.DECK_H = 46 -- высота полётной палубы над водой
+World.DECK_W = 150
+World.DECK_L = 660
+export type Carrier = { id: string, team: string, name: string, cf: CFrame }
+World.CARRIERS = {
+	{ id = "CV_BLUE", team = "Blue", name = "Авианосец «Синих»", cf = CFrame.new(0, 0, 11500) },
+	{ id = "CV_RED", team = "Red", name = "Авианосец «Красных»", cf = CFrame.new(0, 0, -11500) * CFrame.Angles(0, math.pi, 0) },
+} :: { Carrier }
+-- надстройка («остров») по правому борту, в координатах авианосца (нос корабля — -Z)
+World.TOWER = { x0 = 52, x1 = 74, z0 = -60, z1 = 40, h = 95 }
+
+function World.carrierOf(team: string): Carrier
+	for _, c in World.CARRIERS do
+		if c.team == team then
+			return c
+		end
+	end
+	return World.CARRIERS[1]
+end
+
+-- ===== острова (базы, которые можно захватывать)
+export type Island = {
+	id: string, name: string, x: number, z: number, r: number, h: number, yaw: number,
+	owner: string, hills: { { number } }, -- холм: {вдоль полосы, поперёк полосы, радиус, высота}
+}
+World.BEACH = 140
+World.RUNWAY_LEN = 1100
+World.RUNWAY_W = 70
+World.ISLANDS = {
+	{ id = "A", name = "Альфа", x = -5200, z = 5200, r = 760, h = 26, yaw = 20, owner = "Blue", hills = { { -150, -400, 300, 260 }, { 250, 380, 220, 160 } } },
+	{ id = "B", name = "Браво", x = 5600, z = 3000, r = 720, h = 30, yaw = -35, owner = "", hills = { { 100, 400, 280, 300 } } },
+	{ id = "C", name = "Центр", x = 0, z = 0, r = 900, h = 34, yaw = 90, owner = "", hills = { { 0, 520, 360, 420 }, { 150, -500, 260, 240 } } },
+	{ id = "D", name = "Дельта", x = -5600, z = -3000, r = 720, h = 28, yaw = 145, owner = "", hills = { { -100, -400, 280, 300 } } },
+	{ id = "E", name = "Эхо", x = 5200, z = -5200, r = 760, h = 26, yaw = 200, owner = "Red", hills = { { 150, 400, 300, 260 }, { -250, -380, 220, 160 } } },
+} :: { Island }
+World.CAPTURE_R = 1500 -- радиус зоны захвата
+World.CAPTURE_ALT = 700 -- выше этой высоты над островом базу не захватить
+
+function World.islandById(id: string): Island?
+	for _, i in World.ISLANDS do
+		if i.id == id then
+			return i
+		end
+	end
+	return nil
+end
+
+-- направление полосы острова (единичный вектор в плоскости XZ)
+function World.runwayDir(i: Island): Vector3
+	local a = math.rad(i.yaw)
+	return Vector3.new(math.sin(a), 0, -math.cos(a))
+end
+
+-- центр холма в мировых координатах
+function World.hillPos(i: Island, hl: { number }): Vector3
+	local dir = World.runwayDir(i)
+	local side = Vector3.new(-dir.Z, 0, dir.X)
+	return Vector3.new(i.x, i.h, i.z) + dir * hl[1] + side * hl[2]
+end
+
+-- ===== высота поверхности; -math.huge = открытое море (садиться некуда)
+local function deckLocal(c: Carrier, x: number, z: number): Vector3
+	return c.cf:PointToObjectSpace(Vector3.new(x, 0, z))
+end
+
+local function islandH(i: Island, x: number, z: number): number
+	local dx, dz = x - i.x, z - i.z
+	local d = math.sqrt(dx * dx + dz * dz)
+	if d > i.r + World.BEACH then
+		return -math.huge
+	end
+	local h = if d <= i.r then i.h else 3
+	local dir = World.runwayDir(i)
+	local along = dx * dir.X + dz * dir.Z
+	local side = -dx * dir.Z + dz * dir.X
+	for _, hl in i.hills do
+		local hx, hz = (along - hl[1]) / hl[3], (side - hl[2]) / hl[3]
+		local e = 1 - (hx * hx + hz * hz)
+		if e > 0 then
+			h = math.max(h, i.h + hl[4] * math.sqrt(e))
+		end
+	end
+	return h
+end
+
+function World.groundAt(x: number, z: number): number
+	for _, c in World.CARRIERS do
+		local l = deckLocal(c, x, z)
+		if math.abs(l.X) <= World.DECK_W / 2 and math.abs(l.Z) <= World.DECK_L / 2 then
+			return World.DECK_H
+		end
+	end
+	local best = -math.huge
+	for _, i in World.ISLANDS do
+		local h = islandH(i, x, z)
+		if h > best then
+			best = h
+		end
+	end
+	return best
+end
+
+-- препятствия: надстройка и борт авианосца, вода
+function World.hitsObstacle(p: Vector3): boolean
+	for _, c in World.CARRIERS do
+		local l = c.cf:PointToObjectSpace(p)
+		local t = World.TOWER
+		if l.X >= t.x0 and l.X <= t.x1 and l.Z >= t.z0 and l.Z <= t.z1 and l.Y <= World.DECK_H + t.h then
+			World.lastHit = "Врезался в надстройку авианосца!"
+			return true
+		end
+		if math.abs(l.X) <= World.DECK_W / 2 + 4 and math.abs(l.Z) <= World.DECK_L / 2 + 4 and l.Y < World.DECK_H - 2 and l.Y > -10 then
+			World.lastHit = "Врезался в борт авианосца!"
+			return true
+		end
+	end
+	if p.Y < World.SEA + 1.5 and World.groundAt(p.X, p.Z) == -math.huge then
+		World.lastHit = "Упал в океан!"
+		return true
+	end
+	World.lastHit = nil
+	return false
+end
+
+function World.isWater(x: number, z: number): boolean
+	return World.groundAt(x, z) == -math.huge
+end
+
+-- палуба или полоса под точкой: id авианосца / острова, иначе nil
+function World.runwayAt(x: number, z: number, margin: number?): string?
+	local m = margin or 0
+	for _, c in World.CARRIERS do
+		local l = deckLocal(c, x, z)
+		if math.abs(l.X) <= World.DECK_W / 2 + m and math.abs(l.Z) <= World.DECK_L / 2 + m then
+			return c.id
+		end
+	end
+	for _, i in World.ISLANDS do
+		local dir = World.runwayDir(i)
+		local rel = Vector3.new(x - i.x, 0, z - i.z)
+		local along = rel:Dot(dir)
+		local side = rel:Dot(Vector3.new(-dir.Z, 0, dir.X))
+		if math.abs(along) <= World.RUNWAY_LEN / 2 + m and math.abs(side) <= World.RUNWAY_W / 2 + m then
+			return i.id
+		end
+	end
+	return nil
+end
+
+-- ===== точки появления
+-- id: "deck:<team>", "air:<team>", "base:<id>"
+local DECK_SLOTS = { { -30, 250 }, { 0, 200 }, { -50, 160 }, { 20, 290 } }
+function World.spawnCFrame(id: string, cfg: any, slot: number?): (CFrame?, boolean)
+	local kind, arg = id:match("^(%a+):(%w+)$")
+	local s = slot or 1
+	if kind == "deck" and arg then
+		local c = World.carrierOf(arg)
+		local sl = DECK_SLOTS[(s - 1) % #DECK_SLOTS + 1]
+		return c.cf * CFrame.new(sl[1], World.DECK_H + cfg.gearHeight, sl[2]), false
+	elseif kind == "air" and arg then
+		local c = World.carrierOf(arg)
+		local off = (s - 1) % 4
+		return c.cf * CFrame.new(-300 + off * 200, 1400 + off * 60, -1800), true
+	elseif kind == "base" and arg then
+		local i = World.islandById(arg)
+		if not i then
+			return nil, false
+		end
+		local dir = World.runwayDir(i)
+		local side = Vector3.new(-dir.Z, 0, dir.X)
+		local lane = ((s - 1) % 2 - 0.5) * 30
+		local start = Vector3.new(i.x, i.h + cfg.gearHeight, i.z) - dir * (World.RUNWAY_LEN / 2 - 80 - ((s - 1) // 2) * 120) + side * lane
+		return CFrame.lookAt(start, start + dir), false
+	end
+	return nil, false
+end
+
+function World.headingDeg(look: Vector3): number
+	local h = math.deg(math.atan2(look.X, -look.Z))
+	return (h + 360) % 360
+end
+
+World.TEAM_COLOR = {
+	Blue = Color3.fromRGB(92, 200, 255),
+	Red = Color3.fromRGB(255, 96, 86),
+	[""] = Color3.fromRGB(200, 206, 214),
+} :: { [string]: Color3 }
+World.TEAM_NAME = { Blue = "Синие", Red = "Красные", [""] = "Нейтральная" } :: { [string]: string }
+
+return World
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+<Item class="ServerScriptService" referent="RBX00000010"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000008"><Properties><string name="Name">CarrierStrikeServer</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Carrier Strike — сервер: команды, вылеты, бой (пушка и ракеты проверяются здесь),
+-- захват островов, очки команд, боты.
+local Players = game:GetService("Players")
+local Teams = game:GetService("Teams")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PhysicsService = game:GetService("PhysicsService")
+local Debris = game:GetService("Debris")
+
+local Shared = ReplicatedStorage:WaitForChild("CarrierStrike")
+local World = require(Shared:WaitForChild("World"))
+local Jets = require(Shared:WaitForChild("Jets"))
+local FlightPhysics = require(Shared:WaitForChild("FlightPhysics"))
+local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
+local WorldBuilder = require(script:WaitForChild("WorldBuilder"))
+local Bots = require(script:WaitForChild("Bots"))
+
+local rng = Random.new()
+
+-- ===== группы столкновений: самолёты не цепляются за мир (столкновения считает физика игры)
+local FLYING, DEBRIS = "CSFlying", "CSDebris"
+for _, g in { FLYING, DEBRIS } do
+	if not PhysicsService:IsCollisionGroupRegistered(g) then
+		PhysicsService:RegisterCollisionGroup(g)
+	end
+end
+PhysicsService:CollisionGroupSetCollidable(FLYING, "Default", false)
+PhysicsService:CollisionGroupSetCollidable(FLYING, FLYING, false)
+PhysicsService:CollisionGroupSetCollidable(FLYING, DEBRIS, false)
+PhysicsService:CollisionGroupSetCollidable(DEBRIS, DEBRIS, false)
+local function setGroup(inst: Instance, group: string)
+	for _, d in inst:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CollisionGroup = group
+		end
+	end
+end
+
+-- ===== удалённые события
+local remotes = Instance.new("Folder")
+remotes.Name = "CSRemotes"
+local function remote(name: string): RemoteEvent
+	local r = Instance.new("RemoteEvent")
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local SpawnR = remote("Spawn") -- клиент → сервер: (jetId, spawnId)
+local StartedR = remote("Started") -- сервер → клиент: (model, jetId, spawnCF, air)
+local ReadyR = remote("Ready")
+local StateR = remote("State") -- (gear, throttle)
+local GunR = remote("Gun") -- (target|nil): выстрел; target — модель, в которую клиент попал
+local MissileR = remote("Missile") -- (target)
+local FlareR = remote("Flare")
+local CrashR = remote("Crash") -- (reason)
+local RearmR = remote("Rearm")
+local LeaveR = remote("Leave")
+local KilledR = remote("Killed") -- сервер → клиент: (text)
+local NotifyR = remote("Notify") -- (text, color)
+local FeedR = remote("Feed") -- всем: строка ленты
+local WarnR = remote("Warn") -- цели: ракета летит (missile part)
+local HitR = remote("Hit") -- стрелку: попадание (для маркера)
+remotes.Parent = ReplicatedStorage
+
+-- ===== мир и команды
+WorldBuilder.build()
+local planes = Instance.new("Folder")
+planes.Name = "Planes"
+planes.Parent = workspace
+local missilesFolder = Instance.new("Folder")
+missilesFolder.Name = "Missiles"
+missilesFolder.Parent = workspace
+
+local TEAM: { [string]: Team } = {}
+for _, t in { { "Blue", "Синие", BrickColor.new("Bright blue") }, { "Red", "Красные", BrickColor.new("Bright red") } } do
+	local team = Instance.new("Team")
+	team.Name = t[2]
+	team.TeamColor = t[3]
+	team.AutoAssignable = true
+	team:SetAttribute("Side", t[1])
+	team.Parent = Teams
+	TEAM[t[1]] = team
+	-- точка появления персонажа — на палубе своего авианосца (сам персонаж в бою не нужен)
+	local c = World.carrierOf(t[1])
+	local sp = Instance.new("SpawnLocation")
+	sp.Name = "Deck_" .. t[1]
+	sp.Size = Vector3.new(12, 1, 12)
+	sp.CFrame = c.cf * CFrame.new(40, World.DECK_H + 0.5, 120)
+	sp.Anchored = true
+	sp.Neutral = false
+	sp.TeamColor = t[3]
+	sp.Transparency = 1
+	sp.CanCollide = true
+	sp.Duration = 0
+	sp.Parent = workspace
+	-- невидимый пол палубы для персонажа
+	local floor = Instance.new("Part")
+	floor.Name = "DeckFloor_" .. t[1]
+	floor.Anchored = true
+	floor.Transparency = 1
+	floor.Size = Vector3.new(World.DECK_W, 1, World.DECK_L)
+	floor.CFrame = c.cf * CFrame.new(0, World.DECK_H - 0.5, 0)
+	floor.Parent = workspace
+end
+local function sideOf(p: Player): string
+	return if p.Team == TEAM.Red then "Red" else "Blue"
+end
+local function other(side: string): string
+	return if side == "Blue" then "Red" else "Blue"
+end
+
+-- состояние матча — атрибуты на ReplicatedStorage.CSMatch (клиент их читает)
+local match = Instance.new("Configuration")
+match.Name = "CSMatch"
+match.Parent = ReplicatedStorage
+local tickets = { Blue = Jets.TICKETS, Red = Jets.TICKETS }
+local bases: { [string]: { owner: string, cap: number } } = {}
+local function publish()
+	match:SetAttribute("TicketsBlue", math.max(0, math.floor(tickets.Blue)))
+	match:SetAttribute("TicketsRed", math.max(0, math.floor(tickets.Red)))
+	for id, b in bases do
+		match:SetAttribute("Owner_" .. id, b.owner)
+		match:SetAttribute("Cap_" .. id, math.round(b.cap * 100) / 100)
+	end
+end
+local function resetBases()
+	for _, i in World.ISLANDS do
+		bases[i.id] = { owner = i.owner, cap = if i.owner == "Blue" then 1 elseif i.owner == "Red" then -1 else 0 }
+		WorldBuilder.setOwner(i.id, i.owner)
+	end
+end
+resetBases()
+publish()
+
+-- ===== счёт игроков
+local function stats(p: Player)
+	local ls = Instance.new("Folder")
+	ls.Name = "leaderstats"
+	for _, n in { "Сбито", "Потери", "Базы" } do
+		local v = Instance.new("IntValue")
+		v.Name = n
+		v.Parent = ls
+	end
+	ls.Parent = p
+end
+local function addStat(p: Player?, name: string, d: number)
+	local ls = p and p:FindFirstChild("leaderstats")
+	local v = ls and ls:FindFirstChild(name) :: IntValue?
+	if v then
+		v.Value += d
+	end
+end
+
+-- ===== боевые единицы (игроки и боты)
+type Unit = {
+	model: Model, root: BasePart, side: string, cfg: any, name: string,
+	player: Player?, bot: any?, flight: any?,
+	hp: number, maxHp: number, missiles: number, flares: number,
+	flareUntil: number, lastShot: number, lastMsl: number, lastRearm: number,
+	alive: boolean, ready: boolean, born: number, conns: { RBXScriptConnection },
+}
+local units: { [Model]: Unit } = {}
+local byPlayer: { [Player]: Unit } = {}
+
+local function setAttrs(u: Unit)
+	u.model:SetAttribute("HP", math.max(0, math.ceil(u.hp)))
+	u.model:SetAttribute("MaxHP", u.maxHp)
+	u.model:SetAttribute("Missiles", u.missiles)
+	u.model:SetAttribute("Flares", u.flares)
+end
+
+local function vel(u: Unit): Vector3
+	if u.flight then
+		return u.flight.vel
+	end
+	return u.root.AssemblyLinearVelocity
+end
+
+local function explode(model: Model)
+	local root = model.PrimaryPart
+	if not root then
+		model:Destroy()
+		return
+	end
+	local pos = root.Position
+	local v = root.AssemblyLinearVelocity * 0.25
+	local ex = Instance.new("Explosion")
+	ex.Position = pos
+	ex.BlastRadius = 0
+	ex.BlastPressure = 0
+	ex.DestroyJointRadiusPercent = 0
+	ex.Parent = workspace
+	local fire = Instance.new("Part")
+	fire.Anchored, fire.CanCollide, fire.CanQuery, fire.CanTouch = true, false, false, false
+	fire.Transparency = 1
+	fire.Size = Vector3.one
+	fire.Position = Vector3.new(pos.X, math.max(pos.Y, World.SEA + 1), pos.Z)
+	local sm = Instance.new("Smoke")
+	sm.Size = 30
+	sm.RiseVelocity = 14
+	sm.Color = Color3.fromRGB(40, 40, 40)
+	sm.Parent = fire
+	local fl = Instance.new("Fire")
+	fl.Size = 18
+	fl.Parent = fire
+	fire.Parent = workspace
+	Debris:AddItem(fire, 8)
+	model.Name = "Wreck"
+	for _, d in model:GetDescendants() do
+		if d:IsA("JointInstance") or d:IsA("WeldConstraint") or d:IsA("Seat") or d:IsA("BillboardGui") or d:IsA("Trail") then
+			d:Destroy()
+		end
+	end
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = false
+			d.CanCollide = true
+			d.CollisionGroup = DEBRIS
+			d.AssemblyLinearVelocity = v + Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(0.2, 1.4), rng:NextNumber(-1, 1)) * rng:NextNumber(20, 90)
+		end
+	end
+	Debris:AddItem(model, 7)
+end
+
+local function removeUnit(u: Unit, blowUp: boolean)
+	if not u.alive then
+		return
+	end
+	u.alive = false
+	units[u.model] = nil
+	if u.player and byPlayer[u.player] == u then
+		byPlayer[u.player] = nil
+	end
+	for _, c in u.conns do
+		c:Disconnect()
+	end
+	if blowUp then
+		explode(u.model)
+	else
+		u.model:Destroy()
+	end
+	local p = u.player
+	if p and p.Parent then
+		task.delay(0.2, function()
+			if p.Parent and not byPlayer[p] then
+				p:LoadCharacter()
+			end
+		end)
+	end
+end
+
+local function loseTickets(side: string, n: number)
+	tickets[side] -= n
+	publish()
+end
+
+-- урон; attacker = кто стрелял (для счёта)
+local function damage(victim: Unit, dmg: number, attacker: Unit?, weapon: string)
+	if not victim.alive or victim.born + 3 > os.clock() then
+		return -- 3 с неуязвимости после появления
+	end
+	victim.hp -= dmg
+	setAttrs(victim)
+	if attacker and attacker.player then
+		HitR:FireClient(attacker.player, victim.model, victim.hp <= 0)
+	end
+	if victim.hp > 0 then
+		return
+	end
+	local by = if attacker then attacker.name else "ПВО"
+	FeedR:FireAllClients(string.format("%s  [%s]  %s", by, weapon, victim.name), if attacker then attacker.side else "", victim.side)
+	if attacker then
+		addStat(attacker.player, "Сбито", 1)
+	end
+	addStat(victim.player, "Потери", 1)
+	loseTickets(victim.side, 3)
+	if victim.player then
+		KilledR:FireClient(victim.player, "Сбит: " .. by .. " (" .. weapon .. ")")
+	end
+	removeUnit(victim, true)
+end
+
+-- ===== появление
+local function spawnAllowed(side: string, spawnId: string): boolean
+	local kind, arg = spawnId:match("^(%a+):(%w+)$")
+	if kind == "deck" or kind == "air" then
+		return arg == side
+	elseif kind == "base" and arg then
+		return bases[arg] ~= nil and bases[arg].owner == side
+	end
+	return false
+end
+
+local function slotFor(spawnId: string, cfg: any): (CFrame?, boolean)
+	for s = 1, 8 do
+		local cf, air = World.spawnCFrame(spawnId, cfg, s)
+		if not cf then
+			return nil, false
+		end
+		local free = true
+		for _, u in units do
+			if (u.root.Position - cf.Position).Magnitude < 45 then
+				free = false
+				break
+			end
+		end
+		if free then
+			return cf, air
+		end
+	end
+	return World.spawnCFrame(spawnId, cfg, 1)
+end
+
+local function teamTint(cfg: any, side: string): any
+	local c = table.clone(cfg)
+	c.colors = table.clone(cfg.colors)
+	c.colors.tail = if side == "Blue" then Color3.fromRGB(46, 104, 170) else Color3.fromRGB(170, 52, 46)
+	c.colors.accent = c.colors.tail
+	return c
+end
+
+local function makeUnit(cfg: any, side: string, name: string, cf: CFrame, seat: boolean): Unit
+	local model = PlaneBuilder.build(teamTint(cfg, side), { seat = seat, label = name })
+	model:SetAttribute("Side", side)
+	model:SetAttribute("Pilot", name)
+	model:SetAttribute("Gear", true)
+	model:SetAttribute("Throttle", 0)
+	model:PivotTo(cf)
+	local tag = model.PrimaryPart and model.PrimaryPart:FindFirstChild("Tag")
+	local lbl = tag and tag:FindFirstChildOfClass("TextLabel")
+	if lbl then
+		lbl.TextColor3 = World.TEAM_COLOR[side]
+	end
+	local root = model.PrimaryPart :: BasePart
+	root.Anchored = true
+	setGroup(model, FLYING)
+	local u: Unit = {
+		model = model, root = root, side = side, cfg = cfg, name = name,
+		hp = cfg.hp, maxHp = cfg.hp, missiles = cfg.missiles, flares = Jets.FLARES,
+		flareUntil = 0, lastShot = 0, lastMsl = 0, lastRearm = 0,
+		alive = true, ready = false, born = os.clock(), conns = {},
+	}
+	setAttrs(u)
+	model.Parent = planes
+	units[model] = u
+	return u
+end
+
+local lastSpawn: { [Player]: number } = {}
+SpawnR.OnServerEvent:Connect(function(p, jetId, spawnId)
+	if type(jetId) ~= "string" or type(spawnId) ~= "string" then
+		return
+	end
+	local cfg = Jets.JETS[jetId]
+	local side = sideOf(p)
+	if not cfg or not spawnAllowed(side, spawnId) or byPlayer[p] then
+		return
+	end
+	local now = os.clock()
+	if lastSpawn[p] and now - lastSpawn[p] < 2 then
+		return
+	end
+	lastSpawn[p] = now
+	local cf, air = slotFor(spawnId, cfg)
+	if not cf then
+		return
+	end
+	local ch = p.Character
+	local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then
+		p:LoadCharacter()
+		ch = p.Character or p.CharacterAdded:Wait()
+		hum = (ch :: Model):WaitForChild("Humanoid", 5) :: Humanoid?
+	end
+	if not hum or not p.Parent or byPlayer[p] then
+		return
+	end
+	local u = makeUnit(cfg, side, p.DisplayName, cf, true)
+	u.player = p
+	u.model.Name = p.Name .. "_Jet"
+	u.model:SetAttribute("Owner", p.UserId)
+	u.model:SetAttribute("Gear", not air)
+	byPlayer[p] = u
+	for _, d in (ch :: Model):GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CollisionGroup = FLYING
+		end
+	end
+	local seat = u.model:FindFirstChild("PilotSeat") :: Seat
+	seat:Sit(hum)
+	table.insert(u.conns, hum.Died:Connect(function()
+		removeUnit(u, true)
+	end))
+	StartedR:FireClient(p, u.model, jetId, cf, air)
+end)
+
+ReadyR.OnServerEvent:Connect(function(p, model)
+	local u = byPlayer[p]
+	if not u or u.ready or model ~= u.model then
+		return
+	end
+	u.ready = true
+	u.root.Anchored = false
+	pcall(function()
+		u.root:SetNetworkOwner(p)
+	end)
+end)
+
+StateR.OnServerEvent:Connect(function(p, gear, throttle)
+	local u = byPlayer[p]
+	if u and type(gear) == "boolean" and type(throttle) == "number" then
+		u.model:SetAttribute("Gear", gear)
+		u.model:SetAttribute("Throttle", math.clamp(throttle, 0, 1))
+	end
+end)
+
+-- ===== пушка: клиент сообщает о выстреле и (если попал) о цели; сервер проверяет дистанцию, угол и темп
+local function inCone(from: Unit, to: Vector3, deg: number, range: number): boolean
+	local d = to - from.root.Position
+	local dist = d.Magnitude
+	if dist > range or dist < 1 then
+		return false
+	end
+	return from.root.CFrame.LookVector:Dot(d / dist) >= math.cos(math.rad(deg))
+end
+
+local function shoot(u: Unit, target: Unit?)
+	local now = os.clock()
+	if now - u.lastShot < Jets.GUN_RATE * 0.8 then
+		return
+	end
+	u.lastShot = now
+	u.model:SetAttribute("FiringUntil", workspace:GetServerTimeNow() + 0.2)
+	-- запас по углу и дальности на сетевую задержку
+	if target and target.alive and target.side ~= u.side and inCone(u, target.root.Position, Jets.GUN_CONE * 2.2, Jets.GUN_RANGE * 1.15) then
+		damage(target, Jets.GUN_DMG, u, "пушка")
+	end
+end
+
+GunR.OnServerEvent:Connect(function(p, target)
+	local u = byPlayer[p]
+	if not u or not u.ready then
+		return
+	end
+	local t = if typeof(target) == "Instance" then units[target :: any] else nil
+	shoot(u, t)
+end)
+
+-- ===== ракеты (летят на сервере)
+type Missile = { part: BasePart, owner: Unit, target: Unit, dir: Vector3, t: number, decoy: Vector3?, flareChecked: number }
+local missiles: { Missile } = {}
+
+local function launch(u: Unit, target: Unit): boolean
+	local now = os.clock()
+	if u.missiles <= 0 or now - u.lastMsl < 1 or not target.alive or target.side == u.side then
+		return false
+	end
+	if not inCone(u, target.root.Position, Jets.MSL_CONE * 1.6, Jets.MSL_RANGE * 1.15) then
+		return false
+	end
+	u.lastMsl = now
+	u.missiles -= 1
+	setAttrs(u)
+	local part = Instance.new("Part")
+	part.Name = "Missile"
+	part.Anchored, part.CanCollide, part.CanQuery, part.CanTouch = true, false, false, false
+	part.Size = Vector3.new(0.9, 0.9, 9)
+	part.Color = Color3.fromRGB(230, 230, 230)
+	part.Material = Enum.Material.Metal
+	local start = u.root.CFrame * CFrame.new(0, -3, -u.cfg.length * 0.3)
+	part.CFrame = start
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 0.3, 4.5)
+	a0.Parent = part
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -0.3, 4.5)
+	a1.Parent = part
+	local trail = Instance.new("Trail")
+	trail.Attachment0, trail.Attachment1 = a0, a1
+	trail.Lifetime = 1.6
+	trail.WidthScale = NumberSequence.new(3, 9)
+	trail.Color = ColorSequence.new(Color3.fromRGB(240, 240, 240))
+	trail.Transparency = NumberSequence.new(0.2, 1)
+	trail.FaceCamera = true
+	trail.Parent = part
+	local glow = Instance.new("PointLight")
+	glow.Color = Color3.fromRGB(255, 170, 80)
+	glow.Range = 20
+	glow.Parent = part
+	part:SetAttribute("Side", u.side)
+	part.Parent = missilesFolder
+	table.insert(missiles, { part = part, owner = u, target = target, dir = start.LookVector, t = 0, decoy = nil, flareChecked = 0 })
+	if target.player then
+		WarnR:FireClient(target.player, part)
+	end
+	return true
+end
+
+MissileR.OnServerEvent:Connect(function(p, target)
+	local u = byPlayer[p]
+	local t = if typeof(target) == "Instance" then units[target :: any] else nil
+	if u and u.ready and t then
+		launch(u, t)
+	end
+end)
+
+local function flare(u: Unit)
+	if u.flares <= 0 or os.clock() < u.flareUntil - Jets.FLARE_TIME + 0.6 then
+		return
+	end
+	u.flares -= 1
+	u.flareUntil = os.clock() + Jets.FLARE_TIME
+	setAttrs(u)
+	u.model:SetAttribute("FlareAt", workspace:GetServerTimeNow())
+end
+FlareR.OnServerEvent:Connect(function(p)
+	local u = byPlayer[p]
+	if u then
+		flare(u)
+	end
+end)
+
+local function stepMissiles(dt: number)
+	for i = #missiles, 1, -1 do
+		local m = missiles[i]
+		m.t += dt
+		local tg = m.target
+		local pos = m.part.Position
+		local done = m.t > Jets.MSL_LIFE or not tg.alive
+		if not done then
+			-- ловушки: ракета проверяет каждую новую порцию ловушек один раз
+			if tg.flareUntil > os.clock() and m.flareChecked ~= tg.flareUntil and not m.decoy then
+				m.flareChecked = tg.flareUntil
+				if rng:NextNumber() < Jets.FLARE_CHANCE then
+					m.decoy = tg.root.Position - tg.root.CFrame.LookVector * 60 + Vector3.new(0, -30, 0)
+				end
+			end
+			local aim = if m.decoy then m.decoy else Bots.lead(pos, tg.root.Position, vel(tg), Jets.MSL_SPEED)
+			local want = (aim - pos)
+			if want.Magnitude > 1 then
+				want = want.Unit
+				local ang = math.acos(math.clamp(m.dir:Dot(want), -1, 1))
+				local maxA = Jets.MSL_TURN * dt
+				if ang > 1e-4 then
+					local k = math.min(1, maxA / ang)
+					m.dir = m.dir:Lerp(want, k).Unit
+				end
+			end
+			local np = pos + m.dir * Jets.MSL_SPEED * dt
+			m.part.CFrame = CFrame.lookAt(np, np + m.dir)
+			if not m.decoy and (tg.root.Position - np).Magnitude < 55 then
+				damage(tg, Jets.MSL_DMG, m.owner, "ракета")
+				done = true
+			elseif m.decoy and (m.decoy - np).Magnitude < 40 then
+				done = true
+			elseif np.Y < math.max(World.groundAt(np.X, np.Z), World.SEA) then
+				done = true
+			end
+		end
+		if done then
+			local ex = Instance.new("Explosion")
+			ex.Position = m.part.Position
+			ex.BlastRadius = 0
+			ex.BlastPressure = 0
+			ex.Parent = workspace
+			m.part.Anchored = true
+			m.part.Transparency = 1
+			Debris:AddItem(m.part, 1.7)
+			table.remove(missiles, i)
+		end
+	end
+end
+
+-- ===== крушение, перевооружение, выход
+CrashR.OnServerEvent:Connect(function(p, reason)
+	local u = byPlayer[p]
+	if not u then
+		return
+	end
+	local r = if type(reason) == "string" then reason:sub(1, 80) else "Крушение"
+	FeedR:FireAllClients(string.format("%s  [%s]", u.name, r), "", u.side)
+	addStat(p, "Потери", 1)
+	loseTickets(u.side, 2)
+	removeUnit(u, true)
+end)
+
+RearmR.OnServerEvent:Connect(function(p)
+	local u = byPlayer[p]
+	if not u or not u.ready or os.clock() - u.lastRearm < 2 then
+		return
+	end
+	-- только на своей палубе / своей полосе и почти без скорости
+	local pos = u.root.Position
+	local where = World.runwayAt(pos.X, pos.Z, 10)
+	local mine = where == World.carrierOf(u.side).id or (where ~= nil and bases[where] ~= nil and bases[where].owner == u.side)
+	if not mine or u.root.AssemblyLinearVelocity.Magnitude > 25 then
+		return
+	end
+	u.lastRearm = os.clock()
+	local before = u.hp + u.missiles + u.flares
+	u.hp = math.min(u.maxHp, u.hp + 30)
+	u.missiles = u.cfg.missiles
+	u.flares = Jets.FLARES
+	setAttrs(u)
+	if u.hp + u.missiles + u.flares > before then
+		NotifyR:FireClient(p, "Ремонт и перезарядка…", "cyan")
+	end
+end)
+
+LeaveR.OnServerEvent:Connect(function(p)
+	local u = byPlayer[p]
+	if u then
+		removeUnit(u, false)
+	end
+end)
+
+Players.PlayerAdded:Connect(function(p)
+	stats(p)
+end)
+for _, p in Players:GetPlayers() do
+	stats(p)
+end
+Players.PlayerRemoving:Connect(function(p)
+	local u = byPlayer[p]
+	if u then
+		removeUnit(u, false)
+	end
+	lastSpawn[p] = nil
+end)
+
+-- ===== боты
+local BOT_NAMES = { "Сокол", "Гроза", "Вихрь", "Беркут", "Кобра", "Тайфун", "Ястреб", "Шторм", "Молния", "Стриж" }
+local botSeq = 0
+local function spawnBot(side: string)
+	botSeq += 1
+	local id = Jets.ORDER[rng:NextInteger(1, #Jets.ORDER)]
+	local cfg = Jets.JETS[id]
+	local cf = World.spawnCFrame("air:" .. side, cfg, rng:NextInteger(1, 4)) :: CFrame
+	cf = cf + Vector3.new(rng:NextNumber(-300, 300), rng:NextNumber(0, 400), rng:NextNumber(-300, 300))
+	local u = makeUnit(cfg, side, "[ИИ] " .. BOT_NAMES[(botSeq - 1) % #BOT_NAMES + 1], cf, false)
+	u.flight = FlightPhysics.new(cfg, cf, true)
+	u.bot = { skill = rng:NextNumber(0.3, 0.9), target = nil :: Unit?, goal = nil :: string?, retarget = 0, lastMsl = os.clock() + 6, aimErr = rng:NextNumber(0.5, 1.5), stuck = 0 }
+	u.ready = true
+	u.model:SetAttribute("Gear", false)
+	u.model:SetAttribute("Throttle", 0.85)
+end
+
+local function playersOn(side: string): number
+	local n = 0
+	for _, p in Players:GetPlayers() do
+		if sideOf(p) == side then
+			n += 1
+		end
+	end
+	return n
+end
+
+local function botCount(side: string): number
+	local n = 0
+	for _, u in units do
+		if u.bot and u.side == side then
+			n += 1
+		end
+	end
+	return n
+end
+
+local function nearestEnemy(u: Unit, maxDist: number): Unit?
+	local best, bd = nil, maxDist
+	for _, o in units do
+		if o.alive and o.side ~= u.side and o.ready then
+			local d = (o.root.Position - u.root.Position).Magnitude
+			if d < bd then
+				best, bd = o, d
+			end
+		end
+	end
+	return best
+end
+
+local function botGoal(u: Unit): Vector3
+	-- ближайшая чужая или нейтральная база; если все наши — к авианосцу врага
+	local best, bd = nil, math.huge
+	for _, i in World.ISLANDS do
+		if bases[i.id].owner ~= u.side then
+			local d = (Vector3.new(i.x, 0, i.z) - u.root.Position).Magnitude
+			if d < bd then
+				best, bd = i, d
+			end
+		end
+	end
+	if best then
+		return Vector3.new(best.x, best.h + 420, best.z)
+	end
+	local c = World.carrierOf(other(u.side))
+	return c.cf.Position + Vector3.new(0, 1500, 0)
+end
+
+local function stepBot(u: Unit, dt: number)
+	local f = u.flight
+	local b = u.bot
+	b.retarget -= dt
+	if b.retarget <= 0 then
+		b.retarget = 1.5
+		b.target = nearestEnemy(u, 6500)
+	end
+	local tg: Unit? = b.target
+	if tg and not tg.alive then
+		tg = nil
+		b.target = nil
+	end
+	local dir: Vector3
+	if tg then
+		local aim = Bots.lead(f.pos, tg.root.Position, vel(tg), math.max(f.speed, 300) + 900)
+		dir = (aim - f.pos).Unit
+		-- огонь
+		local d = (tg.root.Position - f.pos).Magnitude
+		local cosA = f.att.LookVector:Dot(dir)
+		if d < Jets.GUN_RANGE * 0.85 and cosA > math.cos(math.rad(Jets.GUN_CONE * b.aimErr)) then
+			if rng:NextNumber() < 0.45 * (0.6 + b.skill * 0.6) then
+				shoot(u, tg)
+			else
+				shoot(u, nil)
+			end
+		end
+		if u.missiles > 0 and d < Jets.MSL_RANGE * 0.8 and d > 900 and cosA > math.cos(math.rad(Jets.MSL_CONE * 0.6)) and os.clock() > b.lastMsl then
+			if launch(u, tg) then
+				b.lastMsl = os.clock() + rng:NextNumber(8, 16)
+			end
+		end
+	else
+		dir = (botGoal(u) - f.pos)
+		dir = if dir.Magnitude > 1 then dir.Unit else f.att.LookVector
+	end
+	-- уклонение: ракета летит в бота — ловушки и резкий вираж
+	for _, m in missiles do
+		if m.target == u and not m.decoy and (m.part.Position - f.pos).Magnitude < 2500 then
+			if rng:NextNumber() < 0.04 + b.skill * 0.04 then
+				flare(u)
+			end
+			dir = (dir + f.att.RightVector * 1.5).Unit
+			break
+		end
+	end
+	local input = Bots.steer(f, dir, b.skill)
+	FlightPhysics.step(f, input, dt)
+	if f.crashed then
+		FeedR:FireAllClients(string.format("%s  [%s]", u.name, f.crashReason or "крушение"), "", u.side)
+		loseTickets(u.side, 2)
+		removeUnit(u, true)
+		return
+	end
+	u.root.CFrame = FlightPhysics.pose(f)
+end
+
+-- ===== главный цикл
+local capAcc, bleedAcc, botAcc = 0, 0, 0
+local roundOver = false
+
+local function endRound(winner: string)
+	roundOver = true
+	FeedR:FireAllClients("ПОБЕДА: " .. World.TEAM_NAME[winner] .. "! Новый раунд через 15 с", winner, "")
+	NotifyR:FireAllClients("Раунд окончен — победили " .. World.TEAM_NAME[winner], if winner == "Blue" then "cyan" else "red")
+	task.delay(15, function()
+		for _, u in units do
+			if u.player then
+				KilledR:FireClient(u.player, "Новый раунд")
+			end
+			removeUnit(u, false)
+		end
+		for _, m in missiles do
+			m.part:Destroy()
+		end
+		table.clear(missiles)
+		tickets.Blue, tickets.Red = Jets.TICKETS, Jets.TICKETS
+		resetBases()
+		publish()
+		roundOver = false
+	end)
+end
+
+RunService.Heartbeat:Connect(function(dt)
+	dt = math.min(dt, 0.1)
+	for _, u in units do
+		if u.bot and u.alive then
+			stepBot(u, dt)
+		end
+	end
+	stepMissiles(dt)
+
+	-- вне зоны боя — урон; ниже палубы игрок проверяется на клиенте
+	capAcc += dt
+	if capAcc >= 0.5 then
+		local step = capAcc
+		capAcc = 0
+		for _, u in units do
+			local p = u.root.Position
+			if u.alive and (math.abs(p.X) > World.SIZE or math.abs(p.Z) > World.SIZE) then
+				u.born = 0
+				damage(u, 6 * step, nil, "вне зоны")
+			end
+		end
+		-- захват баз: кто держит самолёты низко над островом
+		for _, i in World.ISLANDS do
+			local nb, nr = 0, 0
+			for _, u in units do
+				if u.alive and u.ready then
+					local p = u.root.Position
+					local dx, dz = p.X - i.x, p.Z - i.z
+					if dx * dx + dz * dz < World.CAPTURE_R * World.CAPTURE_R and p.Y < i.h + World.CAPTURE_ALT then
+						if u.side == "Blue" then
+							nb += 1
+						else
+							nr += 1
+						end
+					end
+				end
+			end
+			local b = bases[i.id]
+			if nb ~= nr then
+				local was = b.owner
+				b.cap = math.clamp(b.cap + (nb - nr) * 0.045 * step / 0.5, -1, 1)
+				if b.cap >= 1 then
+					b.owner = "Blue"
+				elseif b.cap <= -1 then
+					b.owner = "Red"
+				elseif (b.owner == "Blue" and b.cap <= 0) or (b.owner == "Red" and b.cap >= 0) then
+					b.owner = ""
+				end
+				if b.owner ~= was then
+					WorldBuilder.setOwner(i.id, b.owner)
+					if b.owner ~= "" then
+						FeedR:FireAllClients(string.format("%s захватили базу «%s»", World.TEAM_NAME[b.owner], i.name), b.owner, "")
+						for _, u in units do
+							if u.player and u.side == b.owner then
+								local p = u.root.Position
+								if (Vector3.new(p.X - i.x, 0, p.Z - i.z)).Magnitude < World.CAPTURE_R then
+									addStat(u.player, "Базы", 1)
+								end
+							end
+						end
+					else
+						FeedR:FireAllClients(string.format("База «%s» стала нейтральной", i.name), "", "")
+					end
+				end
+			end
+		end
+		publish()
+	end
+
+	-- у кого меньше баз — теряет очки
+	bleedAcc += dt
+	if bleedAcc >= Jets.BLEED_EVERY and not roundOver then
+		bleedAcc = 0
+		local nb, nr = 0, 0
+		for _, b in bases do
+			if b.owner == "Blue" then
+				nb += 1
+			elseif b.owner == "Red" then
+				nr += 1
+			end
+		end
+		if nb > nr then
+			loseTickets("Red", nb - nr)
+		elseif nr > nb then
+			loseTickets("Blue", nr - nb)
+		end
+	end
+	if not roundOver then
+		if tickets.Blue <= 0 then
+			endRound("Red")
+		elseif tickets.Red <= 0 then
+			endRound("Blue")
+		end
+	end
+
+	-- держим нужное число ботов
+	botAcc += dt
+	if botAcc >= 3 and not roundOver then
+		botAcc = 0
+		for _, side in { "Blue", "Red" } do
+			local want = math.max(0, Jets.BOTS_PER_TEAM - playersOn(side))
+			local have = botCount(side)
+			if have < want then
+				spawnBot(side)
+			elseif have > want then
+				for _, u in units do
+					if u.bot and u.side == side then
+						removeUnit(u, false)
+						break
+					end
+				end
+			end
+		end
+	end
+end)
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">Bots</string><ProtectedString name="Source"><![CDATA[--!strict
+-- «Мозг» бота: по положению своего самолёта и цели выдаёт ввод для FlightPhysics
+-- (тот же ввод, что у игрока: p — на себя, r — крен вправо, y — педали, throttle).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local World = require(ReplicatedStorage:WaitForChild("CarrierStrike"):WaitForChild("World"))
+
+local Bots = {}
+
+local function clamp(v: number, a: number, b: number): number
+	return math.min(b, math.max(a, v))
+end
+
+-- dir — куда хотим лететь (мировой вектор); skill 0..1 — резкость манёвров
+function Bots.steer(f: any, dir: Vector3, skill: number): any
+	local att: CFrame = f.att
+	local pos: Vector3 = f.pos
+	-- безопасность: низко над водой/землёй — вверх, слишком высоко — вниз
+	local ground = math.max(World.groundAt(pos.X, pos.Z), World.SEA)
+	local ahead = pos + att.LookVector * math.max(f.speed, 200) * 2.5
+	local groundAhead = math.max(World.groundAt(ahead.X, ahead.Z), World.SEA)
+	local floor = math.max(ground, groundAhead) + 380
+	-- у воды не пикируем круче ~25°
+	if pos.Y < floor + 1500 and dir.Y < -0.42 then
+		local flat = Vector3.new(dir.X, 0, dir.Z)
+		flat = if flat.Magnitude > 0.01 then flat.Unit else Vector3.new(att.LookVector.X, 0, att.LookVector.Z).Unit
+		dir = (flat * 0.9 + Vector3.new(0, -0.42, 0)).Unit
+	end
+	-- прогноз высоты через 3 с по вертикальной скорости
+	local predY = pos.Y + math.min(f.vel.Y, 0) * 3
+	if predY < floor then
+		local flat = Vector3.new(dir.X, 0, dir.Z)
+		flat = if flat.Magnitude > 0.01 then flat.Unit else Vector3.new(att.LookVector.X, 0, att.LookVector.Z).Unit
+		dir = (flat + Vector3.new(0, 1.2 + (floor - pos.Y) / 200, 0)).Unit
+	elseif pos.Y > 7000 then
+		dir = (dir + Vector3.new(0, -0.6, 0)).Unit
+	end
+	-- граница карты: разворот к центру
+	if math.abs(pos.X) > World.SIZE * 0.92 or math.abs(pos.Z) > World.SIZE * 0.92 then
+		dir = (Vector3.new(-pos.X, 0, -pos.Z).Unit + Vector3.new(0, 0.1, 0)).Unit
+	end
+
+	local ld = att:VectorToObjectSpace(dir)
+	-- крен: развернуть «пол» самолёта так, чтобы цель оказалась над головой
+	local rollErr = math.atan2(ld.X, math.max(ld.Y, 0.05) + (if ld.Z < 0 then -ld.Z * 0.35 else 0))
+	local bank = math.asin(clamp(-att.RightVector.Y, -1, 1))
+	-- почти по курсу: выравниваем крыло (без лишнего крена)
+	local offAxis = math.acos(clamp(-ld.Z, -1, 1))
+	if offAxis < math.rad(8) then
+		rollErr = -bank * 0.8 + ld.X * 2
+	end
+	local r = clamp(rollErr * (1.4 + skill), -1, 1)
+	local pitchErr = math.atan2(ld.Y, math.max(-ld.Z, 0.15))
+	local p = clamp(pitchErr * (2 + skill * 2), -0.5, 1)
+	if ld.Z > 0 then
+		p = 1 -- цель сзади: тянем на себя
+	end
+	-- тяга: ниже сваливания — форсаж, иначе крейсер
+	local thr = if f.speed < f.cfg.stallKts * 1.5 then 1 else 0.85
+	return { p = p, r = r, y = clamp(ld.X * 2, -1, 1) * 0.3, throttle = thr }
+end
+
+-- упреждение: куда целиться, чтобы снаряды/самолёт встретили цель
+function Bots.lead(from: Vector3, to: Vector3, tvel: Vector3, speed: number): Vector3
+	local t = (to - from).Magnitude / math.max(speed, 1)
+	return to + tvel * math.min(t, 3)
+end
+
+return Bots
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">WorldBuilder</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Строит мир по описанию World: океан, авианосцы, острова с полосами и флагами баз, свет и небо.
+-- Всё из обычных деталей — никаких внешних моделей.
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local World = require(ReplicatedStorage:WaitForChild("CarrierStrike"):WaitForChild("World"))
+
+local WorldBuilder = {}
+
+local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, mat: Enum.Material?, shape: Enum.PartType?): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = size.Magnitude < 2000
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if shape then
+		p.Shape = shape
+	end
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Material = mat or Enum.Material.SmoothPlastic
+	p.Parent = parent
+	return p
+end
+
+local function ellipsoid(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, mat: Enum.Material?): Part
+	local p = part(parent, name, size, cf, color, mat)
+	local m = Instance.new("SpecialMesh")
+	m.MeshType = Enum.MeshType.Sphere
+	m.Parent = p
+	return p
+end
+
+-- плоский диск (цилиндр лёжа)
+local function disc(parent: Instance, name: string, r: number, h: number, pos: Vector3, color: Color3, mat: Enum.Material?): Part
+	r = math.min(r, 1024) -- предел размера детали в Roblox — 2048
+	return part(parent, name, Vector3.new(h, r * 2, r * 2), CFrame.new(pos) * CFrame.Angles(0, 0, math.pi / 2), color, mat, Enum.PartType.Cylinder)
+end
+
+local function ocean(f: Folder)
+	local tile = 2048
+	local n = math.ceil((World.SIZE + 6000) * 2 / tile)
+	local half = n * tile / 2
+	for ix = 0, n - 1 do
+		for iz = 0, n - 1 do
+			local p = part(f, "Sea", Vector3.new(tile, 4, tile), CFrame.new(-half + tile * (ix + 0.5), World.SEA - 2, -half + tile * (iz + 0.5)), Color3.fromRGB(22, 74, 112), Enum.Material.Glass)
+			p.Reflectance = 0.12
+			p.Transparency = 0.05
+			p.CastShadow = false
+		end
+	end
+	-- граница зоны боя: светящиеся буи по периметру
+	local s = World.SIZE
+	for i = -8, 8 do
+		for _, pos in { Vector3.new(i * s / 8, 6, -s), Vector3.new(i * s / 8, 6, s), Vector3.new(-s, 6, i * s / 8), Vector3.new(s, 6, i * s / 8) } do
+			part(f, "Buoy", Vector3.new(10, 12, 10), CFrame.new(pos), Color3.fromRGB(255, 170, 40), Enum.Material.Neon, Enum.PartType.Cylinder)
+		end
+	end
+end
+
+local function carrier(f: Folder, c: any)
+	local m = Instance.new("Model")
+	m.Name = c.id
+	local cf: CFrame = c.cf
+	local W, L, H = World.DECK_W, World.DECK_L, World.DECK_H
+	local hull = Color3.fromRGB(96, 104, 114)
+	local deckCol = Color3.fromRGB(58, 62, 68)
+	local teamCol = World.TEAM_COLOR[c.team]
+	-- корпус: прямоугольная часть + клиновидный нос
+	part(m, "Hull", Vector3.new(W * 0.8, H, L * 0.86), cf * CFrame.new(0, H / 2, L * 0.07), hull, Enum.Material.Metal)
+	local bow = Instance.new("WedgePart")
+	bow.Name = "Bow"
+	bow.Anchored, bow.CanCollide, bow.CanTouch, bow.CanQuery = true, false, false, false
+	bow.Size = Vector3.new(W * 0.8, H, L * 0.14)
+	bow.CFrame = cf * CFrame.new(0, H / 2, -L / 2 + L * 0.07) * CFrame.Angles(0, math.pi, 0)
+	bow.Color = hull
+	bow.Material = Enum.Material.Metal
+	bow.Parent = m
+	-- полётная палуба шире корпуса
+	part(m, "Deck", Vector3.new(W, 3, L), cf * CFrame.new(0, H - 1.5, 0), deckCol, Enum.Material.Asphalt)
+	-- разметка: осевая и угловая палуба
+	for i = 0, 15 do
+		part(m, "Mark", Vector3.new(2, 0.2, 18), cf * CFrame.new(-30, H + 0.1, L / 2 - 30 - i * 40), Color3.fromRGB(235, 235, 235), Enum.Material.SmoothPlastic)
+	end
+	part(m, "AngleLine", Vector3.new(2.5, 0.2, L * 0.55), cf * CFrame.new(-18, H + 0.1, L * 0.18) * CFrame.Angles(0, math.rad(-9), 0), Color3.fromRGB(240, 210, 60))
+	part(m, "AngleLine", Vector3.new(2.5, 0.2, L * 0.55), cf * CFrame.new(-62, H + 0.1, L * 0.18) * CFrame.Angles(0, math.rad(-9), 0), Color3.fromRGB(240, 210, 60))
+	-- катапульты
+	for _, x in { -30, 0 } do
+		part(m, "Catapult", Vector3.new(1.5, 0.25, 220), cf * CFrame.new(x, H + 0.12, -L / 2 + 140), Color3.fromRGB(150, 150, 150), Enum.Material.Metal)
+	end
+	-- аэрофинишёры (тросы) у кормы
+	for i = 0, 3 do
+		part(m, "Wire", Vector3.new(80, 0.3, 0.6), cf * CFrame.new(-35, H + 0.2, L / 2 - 120 - i * 22) * CFrame.Angles(0, math.rad(-9), 0), Color3.fromRGB(30, 30, 30), Enum.Material.Metal)
+	end
+	-- надстройка
+	local t = World.TOWER
+	local tc = cf * CFrame.new((t.x0 + t.x1) / 2, H + t.h * 0.3, (t.z0 + t.z1) / 2)
+	part(m, "Tower", Vector3.new(t.x1 - t.x0, t.h * 0.6, t.z1 - t.z0), tc, hull, Enum.Material.Metal)
+	part(m, "Bridge", Vector3.new(t.x1 - t.x0 + 4, t.h * 0.18, (t.z1 - t.z0) * 0.7), cf * CFrame.new((t.x0 + t.x1) / 2, H + t.h * 0.69, (t.z0 + t.z1) / 2 - 8), Color3.fromRGB(80, 86, 94), Enum.Material.Metal)
+	part(m, "Windows", Vector3.new(t.x1 - t.x0 + 4.4, 4, (t.z1 - t.z0) * 0.7 - 2), cf * CFrame.new((t.x0 + t.x1) / 2, H + t.h * 0.7, (t.z0 + t.z1) / 2 - 8), Color3.fromRGB(30, 40, 52), Enum.Material.Glass)
+	part(m, "Mast", Vector3.new(3, t.h * 0.25, 3), cf * CFrame.new((t.x0 + t.x1) / 2, H + t.h * 0.9, (t.z0 + t.z1) / 2), Color3.fromRGB(70, 74, 80), Enum.Material.Metal)
+	part(m, "Radar", Vector3.new(18, 6, 1.5), cf * CFrame.new((t.x0 + t.x1) / 2, H + t.h * 0.85, (t.z0 + t.z1) / 2 + 14), Color3.fromRGB(120, 126, 134), Enum.Material.Metal)
+	-- полоса цвета команды по борту и огонь на мачте
+	part(m, "TeamStripe", Vector3.new(W * 0.8 + 0.6, 4, L * 0.7), cf * CFrame.new(0, H - 8, L * 0.05), teamCol, Enum.Material.SmoothPlastic)
+	local beacon = part(m, "Beacon", Vector3.new(4, 4, 4), cf * CFrame.new((t.x0 + t.x1) / 2, H + t.h + 2, (t.z0 + t.z1) / 2), teamCol, Enum.Material.Neon, Enum.PartType.Ball)
+	local pl = Instance.new("PointLight")
+	pl.Range = 60
+	pl.Color = teamCol
+	pl.Brightness = 3
+	pl.Parent = beacon
+	-- кильватерный след
+	local wake = part(m, "Wake", Vector3.new(W * 0.9, 0.4, 900), cf * CFrame.new(0, World.SEA + 0.3, L / 2 + 450), Color3.fromRGB(200, 225, 240), Enum.Material.SmoothPlastic)
+	wake.Transparency = 0.55
+	-- табличка над кораблём
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(260, 36)
+	bb.StudsOffsetWorldSpace = Vector3.new(0, H + t.h + 30, 0)
+	bb.MaxDistance = 30000
+	bb.LightInfluence = 0
+	bb.AlwaysOnTop = true
+	local tl = Instance.new("TextLabel")
+	tl.Size = UDim2.fromScale(1, 1)
+	tl.BackgroundTransparency = 1
+	tl.Text = "⚓ " .. c.name
+	tl.TextColor3 = teamCol
+	tl.TextStrokeTransparency = 0.3
+	tl.Font = Enum.Font.GothamBold
+	tl.TextScaled = true
+	tl.Parent = bb
+	bb.Parent = beacon
+	m.Parent = f
+end
+
+local function island(f: Folder, i: any): BasePart
+	local m = Instance.new("Model")
+	m.Name = "Island_" .. i.id
+	local sand = Color3.fromRGB(214, 196, 148)
+	local grass = Color3.fromRGB(86, 128, 70)
+	-- мелководье, пляж, плато
+	local shallow = disc(m, "Shallow", i.r + World.BEACH + 260, 1, Vector3.new(i.x, World.SEA + 0.1, i.z), Color3.fromRGB(60, 150, 170), Enum.Material.Glass)
+	shallow.Transparency = 0.35
+	shallow.CastShadow = false
+	disc(m, "Beach", i.r + World.BEACH, 6, Vector3.new(i.x, 0, i.z), sand, Enum.Material.Sand)
+	disc(m, "Plateau", i.r, i.h, Vector3.new(i.x, i.h / 2, i.z), grass, Enum.Material.Grass)
+	-- холмы (та же форма, что в World.groundAt: полуэллипсоид)
+	for _, hl in i.hills do
+		local c = World.hillPos(i, hl)
+		ellipsoid(m, "Hill", Vector3.new(hl[3] * 2, hl[4] * 2, hl[3] * 2), CFrame.new(c), Color3.fromRGB(96, 120, 72), Enum.Material.Grass)
+		ellipsoid(m, "Rock", Vector3.new(hl[3] * 0.9, hl[4] * 0.6, hl[3] * 0.9), CFrame.new(c + Vector3.new(0, hl[4] * 0.72, 0)), Color3.fromRGB(128, 124, 116), Enum.Material.Rock)
+	end
+	-- полоса
+	local dir = World.runwayDir(i)
+	local rcf = CFrame.lookAt(Vector3.new(i.x, i.h + 0.25, i.z), Vector3.new(i.x, i.h + 0.25, i.z) + dir)
+	local rw = part(m, "RunwaySurface", Vector3.new(World.RUNWAY_W, 0.5, World.RUNWAY_LEN), rcf, Color3.fromRGB(48, 50, 54), Enum.Material.Asphalt)
+	for k = -10, 10 do
+		part(m, "Mark", Vector3.new(1.5, 0.2, 22), rcf * CFrame.new(0, 0.35, k * 50), Color3.fromRGB(235, 235, 235))
+	end
+	for _, s in { -1, 1 } do
+		for k = -3, 3 do
+			part(m, "Threshold", Vector3.new(4, 0.2, 40), rcf * CFrame.new(k * 8, 0.35, s * (World.RUNWAY_LEN / 2 - 30)), Color3.fromRGB(235, 235, 235))
+		end
+	end
+	-- ангары и вышка в стороне от полосы
+	local side = Vector3.new(-dir.Z, 0, dir.X)
+	for k = -1, 1 do
+		local hp = Vector3.new(i.x, i.h, i.z) + side * 110 + dir * (k * 120)
+		part(m, "Hangar", Vector3.new(70, 26, 60), CFrame.lookAt(hp + Vector3.new(0, 13, 0), hp + Vector3.new(0, 13, 0) + dir), Color3.fromRGB(150, 156, 160), Enum.Material.CorrodedMetal)
+	end
+	-- флагшток базы: цвет флага = владелец (меняет сервер)
+	local fp = Vector3.new(i.x, i.h, i.z) - side * 120
+	part(m, "Pole", Vector3.new(2, 60, 2), CFrame.new(fp + Vector3.new(0, 30, 0)), Color3.fromRGB(210, 210, 210), Enum.Material.Metal)
+	local flag = part(m, "Flag", Vector3.new(1, 18, 30), CFrame.new(fp + Vector3.new(0, 50, 15)), World.TEAM_COLOR[i.owner], Enum.Material.Neon)
+	flag.Name = "Flag"
+	-- граница зоны захвата: кольцо светящихся буёв (видно с воздуха)
+	local ring = Instance.new("Model")
+	ring.Name = "CaptureRing"
+	for k = 0, 35 do
+		local a = k / 36 * math.pi * 2
+		local bp = Vector3.new(i.x + math.cos(a) * World.CAPTURE_R, World.SEA + 4, i.z + math.sin(a) * World.CAPTURE_R)
+		part(ring, "RingBuoy", Vector3.new(8, 8, 8), CFrame.new(bp), World.TEAM_COLOR[i.owner], Enum.Material.Neon, Enum.PartType.Ball).CastShadow = false
+	end
+	ring.Parent = m
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "Label"
+	bb.Size = UDim2.fromOffset(200, 34)
+	bb.StudsOffsetWorldSpace = Vector3.new(0, 40, 0)
+	bb.MaxDistance = 30000
+	bb.AlwaysOnTop = true
+	bb.LightInfluence = 0
+	local tl = Instance.new("TextLabel")
+	tl.Name = "Text"
+	tl.Size = UDim2.fromScale(1, 1)
+	tl.BackgroundTransparency = 1
+	tl.Text = "◆ База " .. i.name
+	tl.TextColor3 = World.TEAM_COLOR[i.owner]
+	tl.TextStrokeTransparency = 0.3
+	tl.Font = Enum.Font.GothamBold
+	tl.TextScaled = true
+	tl.Parent = bb
+	bb.Parent = flag
+	m.Parent = f
+	return flag
+end
+
+-- перекрасить базу под владельца
+function WorldBuilder.setOwner(id: string, owner: string)
+	local f = workspace:FindFirstChild("CarrierStrikeWorld")
+	local m = f and f:FindFirstChild("Island_" .. id)
+	if not m then
+		return
+	end
+	local col = World.TEAM_COLOR[owner] or World.TEAM_COLOR[""]
+	local flag = m:FindFirstChild("Flag") :: BasePart?
+	local ring = m:FindFirstChild("CaptureRing")
+	if flag then
+		flag.Color = col
+		local lbl = flag:FindFirstChild("Label")
+		local t = lbl and lbl:FindFirstChild("Text") :: TextLabel?
+		if t then
+			t.TextColor3 = col
+		end
+	end
+	if ring then
+		for _, b in ring:GetChildren() do
+			(b :: BasePart).Color = col
+		end
+	end
+end
+
+function WorldBuilder.build()
+	local f = Instance.new("Folder")
+	f.Name = "CarrierStrikeWorld"
+	ocean(f)
+	for _, c in World.CARRIERS do
+		carrier(f, c)
+	end
+	for _, i in World.ISLANDS do
+		island(f, i)
+	end
+	f.Parent = workspace
+
+	-- свет: ясный день над морем, лёгкая дымка у горизонта
+	Lighting.ClockTime = 15.2
+	Lighting.Brightness = 2.4
+	Lighting.Ambient = Color3.fromRGB(70, 78, 90)
+	Lighting.OutdoorAmbient = Color3.fromRGB(120, 130, 145)
+	Lighting.EnvironmentDiffuseScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.8
+	Lighting.GlobalShadows = true
+	local atm = Instance.new("Atmosphere")
+	atm.Density = 0.28
+	atm.Offset = 0.1
+	atm.Color = Color3.fromRGB(200, 214, 230)
+	atm.Decay = Color3.fromRGB(110, 130, 160)
+	atm.Glare = 0.4
+	atm.Haze = 1.4
+	atm.Parent = Lighting
+	local bloom = Instance.new("BloomEffect")
+	bloom.Intensity = 0.4
+	bloom.Size = 30
+	bloom.Threshold = 1.6
+	bloom.Parent = Lighting
+	local cc = Instance.new("ColorCorrectionEffect")
+	cc.Contrast = 0.06
+	cc.Saturation = 0.08
+	cc.Parent = Lighting
+	local clouds = Instance.new("Clouds")
+	clouds.Cover = 0.5
+	clouds.Density = 0.6
+	clouds.Parent = workspace.Terrain
+end
+
+return WorldBuilder
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+<Item class="StarterPlayer" referent="RBX00000012"><Properties><string name="Name">StarterPlayer</string><bool name="EnableMouseLockOption">false</bool><float name="CameraMaxZoomDistance">400</float></Properties><Item class="StarterPlayerScripts" referent="RBX00000011"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX0000000D"><Properties><string name="Name">CarrierStrikeClient</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Carrier Strike — клиент: меню вылета, локальная физика своего самолёта (как в Sky Pilot),
+-- катапульта и тросы, пушка/ракеты/ловушки, метки, радар, камера.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Debris = game:GetService("Debris")
+
+local player = Players.LocalPlayer
+local Shared = ReplicatedStorage:WaitForChild("CarrierStrike")
+local World = require(Shared:WaitForChild("World"))
+local Jets = require(Shared:WaitForChild("Jets"))
+local FlightPhysics = require(Shared:WaitForChild("FlightPhysics"))
+local R = ReplicatedStorage:WaitForChild("CSRemotes")
+local match = ReplicatedStorage:WaitForChild("CSMatch")
+
+local Hud = require(script:WaitForChild("Hud"))
+local Controls = require(script:WaitForChild("Controls"))
+local CameraRig = require(script:WaitForChild("CameraRig"))
+local Animator = require(script:WaitForChild("Animator"))
+
+local function ev(name: string): RemoteEvent
+	return R:WaitForChild(name) :: RemoteEvent
+end
+local SpawnR, StartedR, ReadyR, StateR = ev("Spawn"), ev("Started"), ev("Ready"), ev("State")
+local GunR, MissileR, FlareR, CrashR = ev("Gun"), ev("Missile"), ev("Flare"), ev("Crash")
+local RearmR, LeaveR, KilledR, NotifyR = ev("Rearm"), ev("Leave"), ev("Killed"), ev("Notify")
+local FeedR, WarnR, HitR = ev("Feed"), ev("Warn"), ev("Hit")
+
+local ui = Hud.new()
+ui.setJets(Jets.ORDER, Jets.JETS)
+local cameraRig = CameraRig.new(ui)
+
+local function mySide(): string
+	local t = player.Team
+	local s = t and t:GetAttribute("Side")
+	return if type(s) == "string" then s else "Blue"
+end
+
+-- персонаж в этой игре не ходит: только сидит в кабине
+local controlsModule: any = nil
+local function setCharacterControls(enabled: boolean)
+	if not controlsModule then
+		local ok, pm = pcall(function()
+			return require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule") :: ModuleScript) :: any
+		end)
+		if ok and pm then
+			controlsModule = pm:GetControls()
+		end
+	end
+	if controlsModule then
+		if enabled then
+			controlsModule:Enable()
+		else
+			controlsModule:Disable()
+		end
+	end
+end
+task.spawn(setCharacterControls, false)
+
+-- ===== состояние полёта
+local flight: any = nil
+local model: Model? = nil
+local root: BasePart? = nil
+local cfg: any = nil
+local simulating = false
+local parkBrake = false
+local assist = false -- катапульта / ускоритель взлёта
+local crashPose: CFrame? = nil
+local deadUntil = 0
+local lastSync = 0
+local lastShot = 0
+local lastRearm = 0
+local lock = { target = nil :: Model?, t = 0 }
+local incoming: { BasePart } = {}
+local inMenu = true
+
+-- ===== меню
+local function refreshMenu()
+	local side = mySide()
+	ui.setTeam(side, World.TEAM_NAME[side])
+	local list = {
+		{ id = "deck:" .. side, title = "⚓ Палуба авианосца", sub = "Взлёт с катапульты: тяга 100% — и в небо", ok = true },
+		{ id = "air:" .. side, title = "✈ В воздухе у авианосца", sub = "Сразу в бой, высота ~2 400 ft", ok = true },
+	}
+	for _, i in World.ISLANDS do
+		local owner = match:GetAttribute("Owner_" .. i.id) or i.owner
+		local ok = owner == side
+		table.insert(list, {
+			id = "base:" .. i.id, title = "◆ База «" .. i.name .. "»",
+			sub = if ok then "Своя полоса на острове" elseif owner == "" then "Нейтральная — захвати, чтобы взлетать отсюда" else "У противника — отбей", ok = ok,
+		})
+	end
+	ui.setSpawns(list)
+end
+
+local function refreshMatch()
+	local b = match:GetAttribute("TicketsBlue") or 0
+	local r = match:GetAttribute("TicketsRed") or 0
+	ui.setTickets(b, r)
+	local bases = {}
+	local nb, nr = 0, 0
+	for _, i in World.ISLANDS do
+		local owner = match:GetAttribute("Owner_" .. i.id) or i.owner
+		table.insert(bases, { id = i.id, owner = owner, cap = match:GetAttribute("Cap_" .. i.id) or 0 })
+		if owner == "Blue" then
+			nb += 1
+		elseif owner == "Red" then
+			nr += 1
+		end
+	end
+	ui.setBases(bases)
+	ui.setScoreLine(string.format("Синие %d · Красные %d   ·   базы %d : %d", b, r, nb, nr))
+	if inMenu then
+		refreshMenu()
+	end
+end
+match.AttributeChanged:Connect(refreshMatch)
+player:GetPropertyChangedSignal("Team"):Connect(refreshMenu)
+refreshMatch()
+refreshMenu()
+
+ui.onLaunch(function(jetId: string, spawnId: string)
+	SpawnR:FireServer(jetId, spawnId)
+end)
+
+-- ===== начало и конец вылета
+local function stopFlight()
+	flight, model, root, cfg, simulating, crashPose = nil, nil, nil, nil, false, nil
+	assist, parkBrake = false, false
+	lock.target, lock.t = nil, 0
+	table.clear(incoming)
+	Animator.setLocal(nil)
+	ui.setFlying(false)
+	ui.showMenu(true)
+	inMenu = true
+	refreshMenu()
+end
+
+local function die(text: string)
+	if flight and not flight.crashed then
+		flight.crashed = true
+	end
+	if flight then
+		crashPose = FlightPhysics.pose(flight)
+	end
+	deadUntil = os.clock() + 4
+	ui.showDead(text)
+	task.delay(4, function()
+		if os.clock() >= deadUntil - 0.05 then
+			ui.showDead(nil)
+			stopFlight()
+		end
+	end)
+end
+
+StartedR.OnClientEvent:Connect(function(m: Model, jetId: string, spawnCF: CFrame, air: boolean)
+	local c = Jets.JETS[jetId]
+	if not c or not m then
+		return
+	end
+	cfg = c
+	model = m
+	root = m:WaitForChild("Root", 5) :: BasePart?
+	local f = FlightPhysics.new(c, spawnCF, air)
+	f.hard = false
+	if air then
+		f.speed = math.min(c.maxKts * 0.6, 430)
+		f.vel = spawnCF.LookVector * f.speed
+		f.throttle = 0.85
+		f.gear = false
+	end
+	flight = f
+	simulating = false
+	crashPose = nil
+	parkBrake = not air
+	assist = false
+	inMenu = false
+	ui.showMenu(false)
+	ui.showDead(nil)
+	ui.setFlying(true)
+	ui.setThrottleKnob(f.throttle)
+	cameraRig.reset(spawnCF.Rotation, c)
+	Animator.setLocal(m, f.gear, 0, f.throttle)
+	setCharacterControls(false)
+	if air then
+		ui.toast("В воздухе! Ищи цели на радаре и в красных рамках", "accent")
+	elseif World.runwayAt(spawnCF.Position.X, spawnCF.Position.Z, 5) == World.carrierOf(mySide()).id then
+		ui.toast("Катапульта: тяга на 100% (Shift / ползунок) — разгонит сама", "accent")
+	else
+		ui.toast("Полоса базы: тяга на 100% — ускоритель взлёта разгонит", "accent")
+	end
+	ReadyR:FireServer(m)
+end)
+
+KilledR.OnClientEvent:Connect(function(text: string)
+	if flight then
+		die(text)
+	end
+end)
+NotifyR.OnClientEvent:Connect(function(text: string, colr: string?)
+	ui.toast(text, colr)
+end)
+FeedR.OnClientEvent:Connect(function(text: string, sideA: string?, _sideB: string?)
+	ui.feed(text, World.TEAM_COLOR[sideA or ""] or Hud.C.text)
+end)
+HitR.OnClientEvent:Connect(function(_m: Model, kill: boolean)
+	ui.hit(kill)
+end)
+WarnR.OnClientEvent:Connect(function(part: BasePart)
+	table.insert(incoming, part)
+end)
+
+-- ===== цели
+local function enemies(): { Model }
+	local out = {}
+	local folder = workspace:FindFirstChild("Planes")
+	if not folder then
+		return out
+	end
+	local side = mySide()
+	for _, m in folder:GetChildren() do
+		if m:IsA("Model") and m ~= model and m.Name ~= "Wreck" and m.PrimaryPart and m:GetAttribute("Side") ~= side and (m:GetAttribute("HP") or 0) > 0 then
+			table.insert(out, m)
+		end
+	end
+	return out
+end
+
+local function bestInCone(look: Vector3, from: Vector3, deg: number, range: number): Model?
+	local best, bestA = nil, math.cos(math.rad(deg))
+	for _, m in enemies() do
+		local d = (m.PrimaryPart :: BasePart).Position - from
+		local dist = d.Magnitude
+		if dist < range and dist > 1 then
+			local c = look:Dot(d / dist)
+			if c > bestA then
+				best, bestA = m, c
+			end
+		end
+	end
+	return best
+end
+
+-- ===== эффекты: трассеры и ловушки (только у себя на экране)
+type Fx = { part: BasePart, vel: Vector3, t: number, life: number, grav: number }
+local fx: { Fx } = {}
+local fxFolder = Instance.new("Folder")
+fxFolder.Name = "LocalFx"
+fxFolder.Parent = workspace
+local function addFx(size: Vector3, cf: CFrame, color: Color3, vel: Vector3, life: number, grav: number)
+	if #fx > 160 then
+		return
+	end
+	local p = Instance.new("Part")
+	p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+	p.Material = Enum.Material.Neon
+	p.Color = color
+	p.Size = size
+	p.CFrame = cf
+	p.Parent = fxFolder
+	table.insert(fx, { part = p, vel = vel, t = 0, life = life, grav = grav })
+end
+local function tracer(from: CFrame, speed: number)
+	local dir = from.LookVector
+	addFx(Vector3.new(0.35, 0.35, 26), from * CFrame.new(0, 0, -20), Color3.fromRGB(255, 214, 120), dir * (2600 + speed), 0.7, 0)
+end
+local function flaresFx(cf: CFrame)
+	for k = 1, 6 do
+		local side = if k % 2 == 0 then 1 else -1
+		local v = cf.RightVector * side * (30 + k * 8) - cf.UpVector * 20 - cf.LookVector * 40
+		addFx(Vector3.new(2.2, 2.2, 2.2), cf * CFrame.new(0, -2, 10), Color3.fromRGB(255, 236, 170), v, 1.8, 30)
+	end
+end
+local seenFlare: { [Model]: number } = {}
+local lastTracer: { [Model]: number } = {}
+
+-- ===== действия (клавиши, геймпад и сенсорные кнопки — один обработчик)
+local controls: any = nil
+local function act(a: string)
+	local f = flight
+	if a == "cam" then
+		ui.toast("Камера: " .. cameraRig.cycle())
+		return
+	end
+	if not f or f.crashed then
+		return
+	end
+	if a == "missile" then
+		if lock.target and lock.t >= 0 then
+			local need = Jets.MSL_LOCK * ((Jets.JETS[lock.target:GetAttribute("PlaneId") :: any] or {}).lockMul or 1)
+			if lock.t >= need then
+				if ((model and model:GetAttribute("Missiles")) or 0) > 0 then
+					MissileR:FireServer(lock.target)
+					lock.t = 0
+					ui.toast("Пуск!", "amber")
+				else
+					ui.toast("Ракеты кончились — сядь на палубу или свою базу", "amber")
+				end
+				return
+			end
+		end
+		ui.toast("Нет захвата: держи врага в рамке ~1.5 с", "amber")
+	elseif a == "flare" then
+		FlareR:FireServer()
+	elseif a == "gear" then
+		local text = FlightPhysics.action(f, "gear")
+		if text then
+			ui.toast(text)
+		end
+	elseif a == "mouse" then
+		controls.mouseYoke = not controls.mouseYoke
+		ui.toast(if controls.mouseYoke then "Мышь-штурвал включён (C)" else "Мышь-штурвал выключен")
+	elseif a == "brake" then
+		ui.touch.brake = not ui.touch.brake
+		ui.toast(if ui.touch.brake then "Тормоз включён" else "Тормоз выключен")
+	elseif a == "idle" then
+		FlightPhysics.action(f, "idle")
+		ui.setThrottleKnob(0)
+	elseif a == "menu" then
+		if f.onGround and f.speed < 25 then
+			LeaveR:FireServer()
+			stopFlight()
+		else
+			ui.toast("В меню — только на земле (палуба или своя база)", "amber")
+		end
+	end
+end
+controls = Controls.new(ui, act)
+ui.onAction(function(a: string)
+	if a ~= "gun" then
+		act(a)
+	end
+end)
+
+-- ===== физика: каждый шаг перед симуляцией Roblox
+RunService.PreSimulation:Connect(function(dt)
+	local f = flight
+	local r = root
+	if not f or f.crashed or not r or not model then
+		return
+	end
+	if not simulating then
+		if r.Anchored then
+			return
+		end
+		simulating = true
+	end
+	if not model.Parent or model.Name == "Wreck" then
+		die("Самолёт уничтожен")
+		return
+	end
+	local input = controls.read()
+	if input.throttle then
+		ui.setThrottleKnob(input.throttle)
+	end
+	-- стояночный тормоз до полной тяги, затем катапульта / ускоритель
+	if parkBrake then
+		input.brakes = true
+		if f.throttle >= 0.9 or (input.throttle and input.throttle >= 0.9) then
+			parkBrake = false
+			assist = true
+			ui.toast("СТАРТ!", "accent")
+		end
+	end
+	if assist and f.onGround and f.speed >= cfg.vrKts then
+		input.p = math.max(input.p, 0.35) -- автоматический отрыв носа
+	end
+	FlightPhysics.step(f, input, dt)
+	if assist then
+		if f.onGround then
+			f.speed = math.min(f.speed + 110 * dt, cfg.vrKts + 40)
+		else
+			assist = false
+		end
+	end
+	-- аэрофинишёр: на палубе при малой тяге самолёт быстро тормозит
+	if f.onGround and not assist and f.speed > 5 then
+		local where = World.runwayAt(f.pos.X, f.pos.Z, 0)
+		if where and where:sub(1, 3) == "CV_" and f.throttle < 0.5 then
+			f.speed = math.max(0, f.speed - 70 * dt)
+		end
+	end
+	if not f.crashed and f.pos.Y < World.SEA + 1 and World.isWater(f.pos.X, f.pos.Z) then
+		f.crashed = true
+		f.crashReason = "Упал в океан!"
+	end
+	if f.crashed then
+		CrashR:FireServer(f.crashReason or "Крушение")
+		die(f.crashReason or "Крушение")
+		return
+	end
+	r.CFrame = FlightPhysics.pose(f)
+	r.AssemblyLinearVelocity = f.vel
+	r.AssemblyAngularVelocity = Vector3.zero
+	Animator.setLocal(model, f.gear, f.flaps, f.throttle)
+	Animator.setInputs(f.inP, f.inR, f.inY)
+	local now = os.clock()
+	if now - lastSync > 0.25 then
+		lastSync = now
+		StateR:FireServer(f.gear, f.throttle)
+	end
+end)
+
+-- ===== кадр: камера, оружие, приборы
+local function fmtDist(d: number): string
+	local m = d * 0.515
+	return if m >= 1000 then string.format("%.1f км", m / 1000) else string.format("%d м", math.round(m / 10) * 10)
+end
+
+RunService:BindToRenderStep("CarrierStrike", Enum.RenderPriority.Camera.Value + 1, function(dt)
+	local now = os.clock()
+	Animator.step(dt, now)
+	local cam = workspace.CurrentCamera
+	local serverNow = workspace:GetServerTimeNow()
+
+	-- эффекты
+	for i = #fx, 1, -1 do
+		local e = fx[i]
+		e.t += dt
+		if e.t >= e.life then
+			e.part:Destroy()
+			table.remove(fx, i)
+		else
+			e.vel -= Vector3.new(0, e.grav * dt, 0)
+			e.part.CFrame = e.part.CFrame + e.vel * dt
+			if e.grav > 0 then
+				e.part.Transparency = e.t / e.life
+			end
+		end
+	end
+	-- чужие выстрелы и ловушки
+	local folder = workspace:FindFirstChild("Planes")
+	if folder then
+		for _, m in folder:GetChildren() do
+			if m:IsA("Model") and m.PrimaryPart and m.Name ~= "Wreck" then
+				local fu = m:GetAttribute("FiringUntil")
+				if m ~= model and type(fu) == "number" and fu > serverNow and now - (lastTracer[m] or 0) > 0.09 then
+					lastTracer[m] = now
+					tracer(m.PrimaryPart.CFrame, m.PrimaryPart.AssemblyLinearVelocity.Magnitude)
+				end
+				local fa = m:GetAttribute("FlareAt")
+				if type(fa) == "number" and seenFlare[m] ~= fa then
+					local first = seenFlare[m] == nil
+					seenFlare[m] = fa
+					if not first or serverNow - fa < 1 then
+						flaresFx(m.PrimaryPart.CFrame)
+					end
+				end
+			end
+		end
+	end
+
+	local f = flight
+	if not f then
+		-- меню: облёт своего авианосца
+		local c = World.carrierOf(mySide())
+		local a = now / 16
+		local center = c.cf.Position + Vector3.new(0, World.DECK_H + 20, 0)
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.FieldOfView = 60
+		cam.CFrame = CFrame.lookAt(center + Vector3.new(math.sin(a) * 760, 210 + math.sin(a * 0.7) * 50, math.cos(a) * 760), center)
+		return
+	end
+	if f.crashed then
+		cameraRig.update(dt, crashPose or FlightPhysics.pose(f), f.cfg, 0, false, true)
+		return
+	end
+	local pose = if root and simulating then (root :: BasePart).CFrame else FlightPhysics.pose(f)
+	cameraRig.update(dt, pose, f.cfg, f.speed, f.onGround, false, f.buffet)
+
+	-- пушка
+	if simulating and controls.firing() and now - lastShot >= Jets.GUN_RATE then
+		lastShot = now
+		local t = bestInCone(f.att.LookVector, f.pos, Jets.GUN_CONE, Jets.GUN_RANGE)
+		GunR:FireServer(t)
+		tracer(FlightPhysics.pose(f) * CFrame.new(if math.random() < 0.5 then 1.5 else -1.5, 0, -f.cfg.length * 0.5), f.speed)
+	end
+
+	-- захват ракетой
+	local cand = bestInCone(f.att.LookVector, f.pos, Jets.MSL_CONE, Jets.MSL_RANGE)
+	if cand ~= lock.target then
+		lock.target = cand
+		lock.t = 0
+	elseif cand then
+		lock.t += dt
+	end
+	local lockInfo = nil
+	if lock.target and lock.target.PrimaryPart then
+		local sp, on = cam:WorldToViewportPoint(lock.target.PrimaryPart.Position)
+		if on then
+			local need = Jets.MSL_LOCK * ((Jets.JETS[lock.target:GetAttribute("PlaneId") :: any] or {}).lockMul or 1)
+			lockInfo = { x = sp.X, y = sp.Y, k = math.clamp(lock.t / need, 0, 1), locked = lock.t >= need }
+		end
+	end
+
+	-- метки и радар
+	local side = mySide()
+	local marks = {}
+	local dots = {}
+	local myPos = f.pos
+	local att = f.att
+	local RANGE = 9000
+	if folder then
+		for _, m in folder:GetChildren() do
+			if m:IsA("Model") and m ~= model and m.PrimaryPart and m.Name ~= "Wreck" then
+				local p = m.PrimaryPart.Position
+				local s = m:GetAttribute("Side")
+				local colr = World.TEAM_COLOR[s :: any] or Hud.C.text
+				local dist = (p - myPos).Magnitude
+				local sp, on = cam:WorldToViewportPoint(p)
+				if on and dist < 14000 and #marks < 28 then
+					local enemy = s ~= side
+					table.insert(marks, { x = sp.X, y = sp.Y, color = colr, size = if enemy then 20 else 12, text = if enemy then fmtDist(dist) else "" })
+				end
+				local rel = att:VectorToObjectSpace(p - myPos)
+				local v = Vector2.new(rel.X, rel.Z) / RANGE
+				if v.Magnitude > 1 then
+					v = v.Unit
+				end
+				table.insert(dots, { dx = v.X, dy = v.Y, color = colr, big = false })
+			end
+		end
+	end
+	for _, i in World.ISLANDS do
+		local rel = att:VectorToObjectSpace(Vector3.new(i.x, myPos.Y, i.z) - myPos)
+		local v = Vector2.new(rel.X, rel.Z) / RANGE
+		if v.Magnitude > 1 then
+			v = v.Unit
+		end
+		table.insert(dots, { dx = v.X, dy = v.Y, color = World.TEAM_COLOR[(match:GetAttribute("Owner_" .. i.id) or "") :: any] or Hud.C.text, big = true })
+	end
+	ui.setMarkers(marks)
+	ui.setRadar(dots)
+
+	-- предупреждения и подсказки
+	local warn: string? = nil
+	local nearest = math.huge
+	for i = #incoming, 1, -1 do
+		local p = incoming[i]
+		if not p.Parent or p.Transparency >= 1 then
+			table.remove(incoming, i)
+		else
+			nearest = math.min(nearest, (p.Position - myPos).Magnitude)
+		end
+	end
+	if nearest < 9000 and (now % 0.5) < 0.33 then
+		warn = "⚠ РАКЕТА " .. fmtDist(nearest) .. " — ЛОВУШКИ (X) И ВИРАЖ!"
+	end
+	local outside = math.abs(myPos.X) > World.SIZE or math.abs(myPos.Z) > World.SIZE
+	if outside then
+		warn = "ВНЕ ЗОНЫ БОЯ — РАЗВОРАЧИВАЙСЯ!"
+	end
+	local hp = (model and model:GetAttribute("HP") or 0) :: number
+	local maxHp = (model and model:GetAttribute("MaxHP") or 100) :: number
+	if not warn and hp < maxHp * 0.3 then
+		warn = "КОРПУС ПОВРЕЖДЁН — НА РЕМОНТ (палуба / своя база)"
+	end
+	local info: string? = nil
+	if parkBrake then
+		info = "Тяга на 100% (Shift / ползунок) — старт"
+	elseif f.onGround and f.speed < 15 then
+		local where = World.runwayAt(myPos.X, myPos.Z, 10)
+		local mine = where == World.carrierOf(side).id or (where ~= nil and match:GetAttribute("Owner_" .. where) == side)
+		if mine then
+			info = "Ремонт и перезарядка… · M — в меню"
+			if now - lastRearm > 2 then
+				lastRearm = now
+				RearmR:FireServer()
+			end
+		end
+	else
+		for _, i in World.ISLANDS do
+			local dx, dz = myPos.X - i.x, myPos.Z - i.z
+			if dx * dx + dz * dz < World.CAPTURE_R * World.CAPTURE_R then
+				local cap = (match:GetAttribute("Cap_" .. i.id) or 0) :: number
+				local pct = math.floor(math.abs(cap) * 100)
+				local whose = if cap >= 0 then "Синие" else "Красные"
+				if myPos.Y < i.h + World.CAPTURE_ALT then
+					info = string.format("Захват «%s»: %s %d%%", i.name, whose, pct)
+				else
+					info = string.format("База «%s»: снизься ниже %d ft для захвата", i.name, math.floor((i.h + World.CAPTURE_ALT) * World.FT))
+				end
+			end
+		end
+	end
+	local vs = cam.ViewportSize
+	local aim = cam:WorldToViewportPoint(f.pos + f.att.LookVector * 1500)
+	ui.update({
+		speed = f.speed, alt = (myPos.Y - World.SEA) * World.FT, thr = f.throttle, hp = hp, maxHp = maxHp,
+		missiles = model and model:GetAttribute("Missiles") or 0, flares = model and model:GetAttribute("Flares") or 0,
+		gear = f.gear, lock = lockInfo, warn = warn, info = info,
+		aim = Vector2.new(math.clamp(aim.X, 0, vs.X), math.clamp(aim.Y, 0, vs.Y)),
+	})
+end)
+
+Players.LocalPlayer.CharacterAdded:Connect(function()
+	task.wait(0.5)
+	setCharacterControls(false)
+end)
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Локальная анимация всех самолётов (своих, чужих и ИИ): винт, огни, шасси, закрылки,
+-- инверсионный след, форсаж. Состояние приходит атрибутами модели от сервера,
+-- а для своего самолёта — прямо из локальной физики (без задержки сети).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("CarrierStrike")
+local PlaneBuilder = require(Shared:WaitForChild("PlaneBuilder"))
+local World = require(Shared:WaitForChild("World"))
+
+local Animator = {}
+
+type Cache = {
+	lights: { BasePart }, trails: { Trail }, props: { Weld }, discs: { BasePart }, fans: { Weld }, fanAngle: number, ab: BasePart?,
+	angle: number, gear: boolean?, flaps: number?,
+}
+local caches: { [Model]: Cache } = {}
+local localModel: Model? = nil
+local localState: { gear: boolean, flaps: number, throttle: number } = { gear = true, flaps = 0, throttle = 0 }
+
+local ctrlIn = { p = 0, r = 0, y = 0 }
+function Animator.setInputs(p: number, r: number, y: number)
+	ctrlIn.p, ctrlIn.r, ctrlIn.y = p, r, y
+end
+
+function Animator.setLocal(model: Model?, gear: boolean?, flaps: number?, throttle: number?)
+	localModel = model
+	if gear ~= nil then
+		localState.gear = gear
+	end
+	if flaps ~= nil then
+		localState.flaps = flaps
+	end
+	if throttle ~= nil then
+		localState.throttle = throttle
+	end
+end
+
+local function cacheFor(m: Model): Cache
+	local c = caches[m]
+	if c then
+		return c
+	end
+	local lights, trails = {}, {}
+	for _, d in m:GetDescendants() do
+		if d:IsA("BasePart") and d:GetAttribute("LightKind") then
+			table.insert(lights, d)
+		elseif d:IsA("Trail") then
+			table.insert(trails, d)
+		end
+	end
+	local engines = m:FindFirstChild("Engines")
+	local fans: { Weld } = {}
+	if engines then
+		for _, d in engines:GetDescendants() do
+			if d:IsA("Weld") and d.Name == "FanWeld" then
+				table.insert(fans, d)
+			end
+		end
+	end
+	-- винты (у Cessna один, у ATR 72 — два) и их «диски» размытия
+	local props: { Weld } = {}
+	local discs: { BasePart } = {}
+	if engines then
+		for _, d in engines:GetDescendants() do
+			if d:IsA("Weld") and d.Name == "PropWeld" then
+				table.insert(props, d)
+			elseif d:IsA("BasePart") and d.Name == "PropDisc" then
+				table.insert(discs, d)
+			end
+		end
+	end
+	c = {
+		lights = lights, trails = trails, props = props, discs = discs, fans = fans, fanAngle = 0,
+		ab = engines and engines:FindFirstChild("Afterburner") :: BasePart?,
+		angle = 0, gear = nil, flaps = nil,
+	}
+	caches[m] = c
+	m.Destroying:Connect(function()
+		caches[m] = nil
+	end)
+	return c
+end
+
+function Animator.step(dt: number, now: number)
+	local folder = workspace:FindFirstChild("Planes")
+	if not folder then
+		return
+	end
+	for _, m in folder:GetChildren() do
+		if not m:IsA("Model") or m.Name == "Wreck" then
+			continue
+		end
+		local root = m.PrimaryPart
+		if not root then
+			continue
+		end
+		local c = cacheFor(m)
+		local gear, flaps, thr
+		if m == localModel then
+			gear, flaps, thr = localState.gear, localState.flaps, localState.throttle
+		else
+			gear = m:GetAttribute("Gear") ~= false
+			flaps = (m:GetAttribute("Flaps") or 0) :: number
+			thr = (m:GetAttribute("Throttle") or 0) :: number
+		end
+		if c.gear ~= gear then
+			c.gear = gear
+			PlaneBuilder.setGearVisible(m, gear)
+		end
+		if c.flaps ~= flaps then
+			c.flaps = flaps
+			PlaneBuilder.setFlaps(m, flaps)
+		end
+		if m == localModel then
+			PlaneBuilder.setControls(m, ctrlIn.p, ctrlIn.r, ctrlIn.y)
+		end
+		-- вентиляторы турбовентиляторных двигателей: быстрее при большей тяге
+		if #c.fans > 0 then
+			c.fanAngle = (c.fanAngle + dt * (5 + thr * 38)) % (math.pi * 2)
+			for _, w in c.fans do
+				local base = w:GetAttribute("Base")
+				if typeof(base) == "CFrame" then
+					w.C0 = base * CFrame.Angles(c.fanAngle, 0, 0)
+				end
+			end
+		end
+		-- винт
+		if #c.props > 0 then
+			c.angle = (c.angle + dt * (8 + thr * 70)) % (math.pi * 2)
+			for _, w in c.props do
+				local base = w:GetAttribute("Base")
+				if typeof(base) == "CFrame" then
+					w.C0 = base * CFrame.Angles(0, 0, c.angle)
+				end
+			end
+			for _, d in c.discs do
+				d.Transparency = 1 - math.min(0.18, thr * 0.25)
+			end
+		end
+		if c.ab then
+			c.ab.Transparency = if thr > 0.92 then 0.15 + math.random() * 0.2 else 1
+		end
+		-- огни: навигация горит, строб / маяк мигают
+		for _, l in c.lights do
+			local kind = l:GetAttribute("LightKind")
+			local on = true
+			if kind == "strobe" then
+				on = (now % 1.2) < 0.06 or ((now - 0.15) % 1.2) < 0.05
+			elseif kind == "beacon" then
+				on = (now % 1.0) < 0.12
+			end
+			l.Transparency = if on then 0 else 0.85
+		end
+		-- инверсионный след выше 18 000 ft
+		-- плюс конденсационные следы с законцовок при большой перегрузке или во влажном воздухе (атрибут Vapor от клиента)
+		local contrail = (root.Position.Y * World.FT > 18000 and thr > 0.3) or m:GetAttribute("Vapor") == true
+		for _, t in c.trails do
+			if t.Enabled ~= contrail then
+				t.Enabled = contrail
+			end
+		end
+	end
+end
+
+return Animator
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">CameraRig</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Камеры: сзади (плавная), кабина, орбита. Плюс облёт аэропорта в ангаре.
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("CarrierStrike")
+local World = require(Shared:WaitForChild("World"))
+
+local CameraRig = {}
+CameraRig.NAMES = { "сзади", "кабина", "орбита" }
+
+function CameraRig.new(ui: any)
+	local self: any = { mode = 1, orbit = { yaw = 0.6, pitch = 0.25, dist = 100 } }
+	local cam = workspace.CurrentCamera
+	local camRot = CFrame.identity
+	local dragging = false
+	local lastPos: Vector3? = nil
+	local rng = Random.new()
+
+	UserInputService.InputBegan:Connect(function(i, processed)
+		if self.mode ~= 3 then
+			return
+		end
+		if i.UserInputType == Enum.UserInputType.MouseButton2 or (i.UserInputType == Enum.UserInputType.Touch and not processed) then
+			dragging = true
+			lastPos = i.Position
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton2 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+			lastPos = nil
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(i, processed)
+		if self.mode ~= 3 then
+			return
+		end
+		if i.UserInputType == Enum.UserInputType.MouseWheel and not processed then
+			self.orbit.dist = math.clamp(self.orbit.dist * (if i.Position.Z < 0 then 1.1 else 0.9), 20, 3000)
+		elseif dragging and lastPos and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			if ui.isTouchingControls() then
+				return
+			end
+			local d = i.Position - lastPos
+			lastPos = i.Position
+			self.orbit.yaw -= d.X * 0.008
+			self.orbit.pitch = math.clamp(self.orbit.pitch + d.Y * 0.006, -0.2, 1.3)
+		end
+	end)
+
+	function self.cycle(): string
+		self.mode = self.mode % 3 + 1
+		return CameraRig.NAMES[self.mode]
+	end
+
+	function self.reset(att: CFrame, cfg: any)
+		camRot = att
+		self.orbit.dist = cfg.length * 1.2 + 40
+	end
+
+	-- pose — фактическое положение модели (то, что рисуется), cfg — конфиг
+	function self.update(dt: number, pose: CFrame, cfg: any, speed: number, onGround: boolean, crashed: boolean, buffet: number?)
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.FieldOfView = 66 + math.clamp(speed / cfg.maxKts, 0, 1) * 14
+		local base = pose.Position
+		local att = pose.Rotation
+		if self.mode == 1 or crashed then
+			camRot = camRot:Lerp(att, math.min(1, dt * 4))
+			local back = cfg.length * 0.8 + 32
+			local upOff = cfg.diameter * 1.25 + cfg.length * 0.09 + 6
+			local eye = base + camRot * Vector3.new(0, upOff, back)
+			local target = base + camRot * Vector3.new(0, upOff * 0.3, -cfg.length * 0.4)
+			if buffet and buffet > 0.02 then
+				local k = buffet * math.clamp(cfg.length / 60, 0.6, 2)
+				eye += Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(-1, 1), rng:NextNumber(-1, 1)) * k
+			end
+			if onGround and speed > 30 then
+				eye += Vector3.new(0, (rng:NextNumber() - 0.5) * math.min(0.6, speed / 400), 0)
+			end
+			local gmin = math.max(World.groundAt(eye.X, eye.Z), World.SEA)
+			if eye.Y < gmin + 3 then
+				eye = Vector3.new(eye.X, gmin + 3, eye.Z)
+			end
+			cam.CFrame = CFrame.lookAt(eye, target, camRot.UpVector)
+		elseif self.mode == 2 then
+			local eye = pose * Vector3.new(0, cfg.diameter * 0.36, -cfg.length * 0.5 - 1.5)
+			cam.CFrame = CFrame.new(eye) * att
+			camRot = att
+		else
+			local o = self.orbit
+			local off = Vector3.new(math.sin(o.yaw) * math.cos(o.pitch), math.sin(o.pitch), math.cos(o.yaw) * math.cos(o.pitch)) * o.dist
+			cam.CFrame = CFrame.lookAt(base + off, base)
+			camRot = att
+		end
+	end
+
+	-- медленный облёт аэропорта (ангар / ожидание)
+	function self.idle(t: number)
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.FieldOfView = 66
+		local a = t / 14
+		local eye = Vector3.new(math.sin(a) * 900 + 650, 90 + math.sin(a * 0.7) * 30, math.cos(a) * 900 + 300)
+		cam.CFrame = CFrame.lookAt(eye, Vector3.new(680, 20, 300))
+	end
+
+	function self.release()
+		cam.CameraType = Enum.CameraType.Custom
+		cam.FieldOfView = 70
+	end
+
+	return self
+end
+
+return CameraRig
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Ввод: клавиатура, мышь, геймпад и сенсор → ввод физики + оружие.
+local UserInputService = game:GetService("UserInputService")
+
+local Controls = {}
+
+local ONCE: { [Enum.KeyCode]: string } = {
+	[Enum.KeyCode.F] = "missile", [Enum.KeyCode.X] = "flare", [Enum.KeyCode.G] = "gear", [Enum.KeyCode.V] = "cam",
+	[Enum.KeyCode.C] = "mouse", [Enum.KeyCode.M] = "menu", [Enum.KeyCode.Z] = "idle",
+	-- геймпад
+	[Enum.KeyCode.ButtonX] = "missile", [Enum.KeyCode.ButtonB] = "flare", [Enum.KeyCode.ButtonY] = "gear",
+	[Enum.KeyCode.ButtonSelect] = "cam", [Enum.KeyCode.ButtonStart] = "menu",
+}
+
+local function expo(v: number): number
+	return v * (0.4 + 0.6 * v * v)
+end
+local function dz(v: number, d: number): number
+	if math.abs(v) < d then
+		return 0
+	end
+	return math.sign(v) * (math.abs(v) - d) / (1 - d)
+end
+
+function Controls.new(ui: any, onAction: (string) -> ())
+	local self: any = { mouseYoke = false }
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then
+			onAction("missile")
+			return
+		end
+		local a = ONCE[input.KeyCode]
+		if a then
+			onAction(a)
+		end
+	end)
+
+	local function key(k: Enum.KeyCode): number
+		return if UserInputService:IsKeyDown(k) then 1 else 0
+	end
+
+	function self.firing(): boolean
+		if ui.touch.fire then
+			return true
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+			return true
+		end
+		if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and not UserInputService:GetFocusedTextBox() then
+			-- клики по меню не считаются выстрелом: меню скрыто во время полёта
+			return true
+		end
+		if UserInputService.GamepadEnabled and UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonR1) then
+			return true
+		end
+		return false
+	end
+
+	function self.read(): any
+		local kp = math.max(key(Enum.KeyCode.S), key(Enum.KeyCode.Down)) - math.max(key(Enum.KeyCode.W), key(Enum.KeyCode.Up))
+		local kr = math.max(key(Enum.KeyCode.D), key(Enum.KeyCode.Right)) - math.max(key(Enum.KeyCode.A), key(Enum.KeyCode.Left))
+		local ky = key(Enum.KeyCode.E) - key(Enum.KeyCode.Q)
+		local thrUp = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+		local thrDn = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+		local brakes = UserInputService:IsKeyDown(Enum.KeyCode.B) or ui.touch.brake
+
+		local t = ui.touch
+		local p = kp + expo(t.y)
+		local r = kr + expo(t.x)
+		local y = ky
+
+		if UserInputService.GamepadEnabled then
+			for _, s in UserInputService:GetGamepadState(Enum.UserInputType.Gamepad1) do
+				local kc = s.KeyCode
+				if kc == Enum.KeyCode.Thumbstick1 then
+					p += expo(-dz(s.Position.Y, 0.12))
+					r += expo(dz(s.Position.X, 0.12))
+				elseif kc == Enum.KeyCode.Thumbstick2 then
+					y += dz(s.Position.X, 0.2)
+				elseif kc == Enum.KeyCode.ButtonR2 and s.Position.Z > 0.25 then
+					thrUp = true
+				elseif kc == Enum.KeyCode.ButtonL2 and s.Position.Z > 0.25 then
+					thrDn = true
+				end
+			end
+			if UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonL1) then
+				brakes = true
+			end
+		end
+
+		if self.mouseYoke then
+			local cam = workspace.CurrentCamera
+			local m = UserInputService:GetMouseLocation()
+			local vs = cam.ViewportSize
+			local span = math.min(vs.X, vs.Y) * 0.32
+			p += expo(dz(math.clamp((m.Y - vs.Y / 2) / span, -1, 1), 0.05))
+			r += expo(dz(math.clamp((m.X - vs.X / 2) / span, -1, 1), 0.05))
+		end
+
+		local input = { p = p, r = r, y = y, thrUp = thrUp, thrDn = thrDn, brakes = brakes, throttle = t.throttle }
+		t.throttle = nil
+		return input
+	end
+
+	return self
+end
+
+return Controls
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[--!strict
+-- Интерфейс: меню вылета, приборы, радар, метки целей, лента событий, сенсорное управление.
+-- Стиль: тёмно-синие панели, сталь и голубой акцент (как в обновлённой веб-версии).
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local Hud = {}
+
+local C = {
+	bg = Color3.fromRGB(10, 16, 26),
+	panel = Color3.fromRGB(16, 26, 40),
+	line = Color3.fromRGB(46, 72, 100),
+	text = Color3.fromRGB(226, 236, 248),
+	dim = Color3.fromRGB(140, 160, 184),
+	accent = Color3.fromRGB(92, 200, 255),
+	cyan = Color3.fromRGB(92, 200, 255),
+	amber = Color3.fromRGB(255, 186, 72),
+	red = Color3.fromRGB(255, 92, 86),
+	green = Color3.fromRGB(120, 230, 160),
+	Blue = Color3.fromRGB(92, 200, 255),
+	Red = Color3.fromRGB(255, 96, 86),
+}
+Hud.C = C
+
+local function new(cls: string, props: { [string]: any }, parent: Instance?): any
+	local o = Instance.new(cls)
+	for k, v in props do
+		(o :: any)[k] = v
+	end
+	if parent then
+		o.Parent = parent
+	end
+	return o
+end
+local function corner(p: Instance, r: number?)
+	new("UICorner", { CornerRadius = UDim.new(0, r or 10) }, p)
+end
+local function stroke(p: Instance, col: Color3?, th: number?)
+	new("UIStroke", { Color = col or C.line, Thickness = th or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, p)
+end
+local function label(parent: Instance, text: string, size: number, col: Color3?, bold: boolean?, props: { [string]: any }?): TextLabel
+	local l = new("TextLabel", {
+		BackgroundTransparency = 1, Text = text, TextSize = size, TextColor3 = col or C.text,
+		Font = if bold then Enum.Font.GothamBold else Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, 0, 0, size + 6),
+	}, parent)
+	for k, v in props or {} do
+		(l :: any)[k] = v
+	end
+	return l
+end
+local function button(parent: Instance, text: string, size: UDim2, pos: UDim2, col: Color3?): TextButton
+	local b = new("TextButton", {
+		Size = size, Position = pos, BackgroundColor3 = col or C.panel, BackgroundTransparency = 0.1,
+		Text = text, TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 16, AutoButtonColor = true,
+	}, parent)
+	corner(b, 10)
+	stroke(b, C.line)
+	return b
+end
+
+function Hud.new(): any
+	local ui: any = {}
+	local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	ui.isTouch = isTouch
+	local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local gui = new("ScreenGui", { Name = "CarrierStrikeUI", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, pg)
+
+	-- ================= МЕНЮ =================
+	local menu = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, gui)
+	local shade = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.bg, BackgroundTransparency = 0.35, BorderSizePixel = 0 }, menu)
+	new("UIGradient", { Rotation = 0, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.55, 0.4), NumberSequenceKeypoint.new(1, 1) }) }, shade)
+	local col = new("ScrollingFrame", {
+		Size = UDim2.new(0, math.min(460, 9999), 1, -40), Position = UDim2.fromOffset(24, 20), BackgroundTransparency = 1,
+		ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, BorderSizePixel = 0,
+	}, menu)
+	new("UISizeConstraint", { MaxSize = Vector2.new(460, math.huge) }, col)
+	col.Size = UDim2.new(0.9, 0, 1, -40)
+	new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, col)
+	label(col, "CARRIER STRIKE", 34, C.text, true, { LayoutOrder = 1 })
+	local teamLbl = label(col, "Команда: —", 18, C.accent, true, { LayoutOrder = 2 })
+	local scoreLbl = label(col, "", 15, C.dim, false, { LayoutOrder = 3 })
+	label(col, "1 · САМОЛЁТ", 14, C.dim, true, { LayoutOrder = 4 })
+	local jetGrid = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 5 }, col)
+	new("UIGridLayout", { CellSize = UDim2.new(0.5, -5, 0, 62), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, jetGrid)
+	label(col, "2 · ТОЧКА ВЫЛЕТА", 14, C.dim, true, { LayoutOrder = 6 })
+	local spawnList = new("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 7 }, col)
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spawnList)
+	local go = button(col, "В БОЙ  ▶", UDim2.new(1, 0, 0, 56), UDim2.new(), C.accent)
+	go.LayoutOrder = 8
+	go.TextColor3 = C.bg
+	go.TextSize = 22
+	local help = label(col, "", 13, C.dim, false, { LayoutOrder = 9, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0) })
+	help.Text = if isTouch
+		then "Левый стик — штурвал (к себе = вверх). Справа: ОГОНЬ (держать), РАКЕТА (нужен захват), ЛОВУШКИ. Ползунок справа — тяга. С палубы: тяга на максимум — катапульта разгонит сама."
+		else "W/S — нос вниз/вверх · A/D — крен · Q/E — рули · Shift/Ctrl — тяга\nЛКМ или Пробел — пушка · F или ПКМ — ракета (держи цель в круге) · X — ловушки\nG — шасси · V — камера · C — мышь-штурвал · B — тормоз · M — в меню (на земле)\nС палубы: тяга 100% — катапульта. Садись на свою палубу или базу — ремонт и перезарядка."
+
+	local selJet = "F16"
+	local selSpawn = ""
+	local jetBtns: { [string]: TextButton } = {}
+	local spawnBtns: { [string]: TextButton } = {}
+	local function paintSel()
+		for id, b in jetBtns do
+			(b:FindFirstChildOfClass("UIStroke") :: UIStroke).Color = if id == selJet then C.accent else C.line
+			b.BackgroundColor3 = if id == selJet then Color3.fromRGB(22, 46, 70) else C.panel
+		end
+		for id, b in spawnBtns do
+			(b:FindFirstChildOfClass("UIStroke") :: UIStroke).Color = if id == selSpawn then C.accent else C.line
+			b.BackgroundColor3 = if id == selSpawn then Color3.fromRGB(22, 46, 70) else C.panel
+		end
+	end
+	function ui.setJets(order: { string }, jets: { [string]: any })
+		for i, id in order do
+			local j = jets[id]
+			local b = button(jetGrid, "", UDim2.new(), UDim2.new())
+			b.LayoutOrder = i
+			label(b, j.name, 15, C.text, true, { Position = UDim2.fromOffset(12, 8), Size = UDim2.new(1, -16, 0, 20), TextTruncate = Enum.TextTruncate.AtEnd })
+			label(b, string.format("%s · %d HP · %d ракет", j.role, j.hp, j.missiles), 12, C.dim, false, { Position = UDim2.fromOffset(12, 32), Size = UDim2.new(1, -16, 0, 18), TextTruncate = Enum.TextTruncate.AtEnd })
+			b.MouseButton1Click:Connect(function()
+				selJet = id
+				paintSel()
+			end)
+			jetBtns[id] = b
+		end
+		paintSel()
+	end
+	-- spawns: { {id, title, sub, ok} }
+	function ui.setSpawns(list: { any })
+		local seen = {}
+		for i, s in list do
+			seen[s.id] = true
+			local b = spawnBtns[s.id]
+			if not b then
+				b = button(spawnList, "", UDim2.new(1, 0, 0, 48), UDim2.new())
+				label(b, "", 15, C.text, true, { Name = "T", Position = UDim2.fromOffset(14, 6), Size = UDim2.new(1, -20, 0, 20) })
+				label(b, "", 12, C.dim, false, { Name = "S", Position = UDim2.fromOffset(14, 26), Size = UDim2.new(1, -20, 0, 16) })
+				local id = s.id
+				b.MouseButton1Click:Connect(function()
+					if b:GetAttribute("Ok") then
+						selSpawn = id
+						paintSel()
+					end
+				end)
+				spawnBtns[s.id] = b
+			end
+			b.LayoutOrder = i
+			b:SetAttribute("Ok", s.ok)
+			;(b:FindFirstChild("T") :: TextLabel).Text = s.title
+			;(b:FindFirstChild("S") :: TextLabel).Text = s.sub
+			b.TextTransparency = 0
+			b.BackgroundTransparency = if s.ok then 0.1 else 0.6
+			;(b:FindFirstChild("T") :: TextLabel).TextColor3 = if s.ok then C.text else C.dim
+		end
+		for id, b in spawnBtns do
+			if not seen[id] then
+				b:Destroy()
+				spawnBtns[id] = nil
+			end
+		end
+		local cur = spawnBtns[selSpawn]
+		if not cur or not cur:GetAttribute("Ok") then
+			selSpawn = list[1] and list[1].id or ""
+		end
+		paintSel()
+	end
+	function ui.setTeam(side: string, name: string)
+		teamLbl.Text = "Команда: " .. name
+		teamLbl.TextColor3 = C[side] or C.accent
+	end
+	function ui.setScoreLine(t: string)
+		scoreLbl.Text = t
+	end
+	local launchCb: ((string, string) -> ())? = nil
+	function ui.onLaunch(cb: (string, string) -> ())
+		launchCb = cb
+	end
+	go.MouseButton1Click:Connect(function()
+		if launchCb and selSpawn ~= "" then
+			launchCb(selJet, selSpawn)
+		end
+	end)
+	function ui.showMenu(v: boolean)
+		menu.Visible = v
+	end
+
+	-- ================= ПРИБОРЫ =================
+	local hud = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, gui)
+	-- счёт сверху
+	local top = new("Frame", { Size = UDim2.fromOffset(420, 58), Position = UDim2.new(0.5, -210, 0, 8), BackgroundColor3 = C.bg, BackgroundTransparency = 0.25 }, gui)
+	corner(top, 12)
+	stroke(top)
+	local tBlue = label(top, "250", 22, C.Blue, true, { Position = UDim2.fromOffset(14, 4), Size = UDim2.fromOffset(70, 28) })
+	local tRed = label(top, "250", 22, C.Red, true, { Position = UDim2.new(1, -84, 0, 4), Size = UDim2.fromOffset(70, 28), TextXAlignment = Enum.TextXAlignment.Right })
+	local baseRow = new("Frame", { Size = UDim2.fromOffset(240, 26), Position = UDim2.new(0.5, -120, 0, 6), BackgroundTransparency = 1 }, top)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center }, baseRow)
+	local baseChips: { [string]: Frame } = {}
+	function ui.setBases(list: { any })
+		for i, b in list do
+			local chip = baseChips[b.id]
+			if not chip then
+				chip = new("Frame", { Size = UDim2.fromOffset(40, 26), BackgroundColor3 = C.panel, LayoutOrder = i }, baseRow)
+				corner(chip, 6)
+				new("Frame", { Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = C.Blue, BorderSizePixel = 0 }, chip)
+				corner(chip:FindFirstChild("Fill") :: Instance, 6)
+				label(chip, b.id, 15, C.text, true, { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 2 })
+				baseChips[b.id] = chip
+			end
+			local fill = chip:FindFirstChild("Fill") :: Frame
+			fill.Size = UDim2.fromScale(math.abs(b.cap), 1)
+			fill.BackgroundColor3 = if b.cap >= 0 then C.Blue else C.Red
+			fill.BackgroundTransparency = if b.owner == "" then 0.55 else 0.1
+		end
+	end
+	local topSub = label(top, "очки команд · базы", 11, C.dim, false, { Position = UDim2.new(0, 0, 1, -18), Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Center })
+	function ui.setTickets(b: number, r: number)
+		tBlue.Text = tostring(b)
+		tRed.Text = tostring(r)
+	end
+	function ui.setTopHint(t: string)
+		topSub.Text = t
+	end
+
+	-- приборная панель слева снизу
+	local dash = new("Frame", { Size = UDim2.fromOffset(230, 132), Position = UDim2.new(0, 16, 1, -148), BackgroundColor3 = C.bg, BackgroundTransparency = 0.3 }, hud)
+	corner(dash, 12)
+	stroke(dash)
+	local spdL = label(dash, "0", 30, C.text, true, { Position = UDim2.fromOffset(14, 6), Size = UDim2.fromOffset(110, 34) })
+	label(dash, "СКОР kt", 11, C.dim, true, { Position = UDim2.fromOffset(14, 40), Size = UDim2.fromOffset(100, 14) })
+	local altL = label(dash, "0", 30, C.text, true, { Position = UDim2.fromOffset(120, 6), Size = UDim2.fromOffset(100, 34) })
+	label(dash, "ВЫС ft", 11, C.dim, true, { Position = UDim2.fromOffset(120, 40), Size = UDim2.fromOffset(100, 14) })
+	local function bar(y: number, name: string, colr: Color3): (Frame, TextLabel)
+		label(dash, name, 11, C.dim, true, { Position = UDim2.fromOffset(14, y), Size = UDim2.fromOffset(60, 14) })
+		local bg = new("Frame", { Size = UDim2.fromOffset(150, 8), Position = UDim2.fromOffset(66, y + 4), BackgroundColor3 = C.panel }, dash)
+		corner(bg, 4)
+		local fill = new("Frame", { Size = UDim2.fromScale(0.5, 1), BackgroundColor3 = colr, BorderSizePixel = 0 }, bg)
+		corner(fill, 4)
+		local v = label(dash, "", 11, C.dim, false, { Position = UDim2.fromOffset(66, y + 12), Size = UDim2.fromOffset(150, 12) })
+		return fill, v
+	end
+	local thrFill = bar(62, "ТЯГА", C.accent)
+	local hpFill, hpTxt = bar(88, "КОРПУС", C.green)
+	local ammoL = label(dash, "", 12, C.text, true, { Position = UDim2.fromOffset(14, 112), Size = UDim2.fromOffset(210, 16) })
+
+	-- прицел и захват
+	local cross = new("Frame", { Size = UDim2.fromOffset(34, 34), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1 }, hud)
+	local crossRing = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, cross)
+	corner(crossRing, 17)
+	stroke(crossRing, C.accent, 2)
+	new("Frame", { Size = UDim2.fromOffset(4, 4), Position = UDim2.new(0.5, -2, 0.5, -2), BackgroundColor3 = C.accent, BorderSizePixel = 0 }, cross)
+	local lockBox = new("Frame", { Size = UDim2.fromOffset(46, 46), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, Visible = false }, hud)
+	local lockStroke = new("UIStroke", { Color = C.amber, Thickness = 2 }, lockBox)
+	local lockTxt = label(lockBox, "", 12, C.amber, true, { Position = UDim2.new(0, -20, 1, 4), Size = UDim2.new(1, 40, 0, 14), TextXAlignment = Enum.TextXAlignment.Center })
+
+	local warnL = label(hud, "", 22, C.red, true, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 78), Size = UDim2.fromOffset(500, 28), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.4 })
+	local infoL = label(hud, "", 16, C.amber, true, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 108), Size = UDim2.fromOffset(560, 22), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.5 })
+	local hitL = label(hud, "", 16, C.amber, true, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 46), Size = UDim2.fromOffset(200, 20), TextXAlignment = Enum.TextXAlignment.Center })
+
+	-- метки самолётов (пул)
+	local markers: { Frame } = {}
+	for i = 1, 28 do
+		local m = new("Frame", { Size = UDim2.fromOffset(18, 18), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, Visible = false }, hud)
+		new("UIStroke", { Name = "S", Color = C.Red, Thickness = 2 }, m)
+		label(m, "", 11, C.Red, true, { Name = "D", Position = UDim2.new(0, -30, 1, 2), Size = UDim2.new(1, 60, 0, 13), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.5 })
+		markers[i] = m
+	end
+	-- list: {x, y, color, text, size}
+	function ui.setMarkers(list: { any })
+		for i, m in markers do
+			local it = list[i]
+			if it then
+				m.Visible = true
+				m.Position = UDim2.fromOffset(it.x, it.y)
+				m.Size = UDim2.fromOffset(it.size, it.size)
+				;(m:FindFirstChild("S") :: UIStroke).Color = it.color
+				local d = m:FindFirstChild("D") :: TextLabel
+				d.Text = it.text
+				d.TextColor3 = it.color
+			else
+				m.Visible = false
+			end
+		end
+	end
+
+	-- радар справа сверху
+	local radar = new("Frame", { Size = UDim2.fromOffset(150, 150), Position = UDim2.new(1, -166, 0, 76), BackgroundColor3 = C.bg, BackgroundTransparency = 0.3 }, hud)
+	corner(radar, 75)
+	stroke(radar)
+	new("Frame", { Size = UDim2.new(0, 1, 1, -16), Position = UDim2.new(0.5, 0, 0, 8), BackgroundColor3 = C.line, BorderSizePixel = 0 }, radar)
+	new("Frame", { Size = UDim2.new(1, -16, 0, 1), Position = UDim2.new(0, 8, 0.5, 0), BackgroundColor3 = C.line, BorderSizePixel = 0 }, radar)
+	local me = new("Frame", { Size = UDim2.fromOffset(8, 8), Position = UDim2.new(0.5, -4, 0.5, -4), BackgroundColor3 = C.text, BorderSizePixel = 0 }, radar)
+	corner(me, 4)
+	local dots: { Frame } = {}
+	for i = 1, 40 do
+		local d = new("Frame", { Size = UDim2.fromOffset(6, 6), AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, Visible = false }, radar)
+		corner(d, 3)
+		dots[i] = d
+	end
+	-- list: {dx, dy (−1..1), color, big}
+	function ui.setRadar(list: { any })
+		for i, d in dots do
+			local it = list[i]
+			if it then
+				d.Visible = true
+				d.Position = UDim2.new(0.5 + it.dx * 0.45, 0, 0.5 + it.dy * 0.45, 0)
+				d.BackgroundColor3 = it.color
+				local s = if it.big then 11 else 6
+				d.Size = UDim2.fromOffset(s, s)
+			else
+				d.Visible = false
+			end
+		end
+	end
+
+	-- лента событий
+	local feed = new("Frame", { Size = UDim2.fromOffset(340, 160), Position = UDim2.new(1, -356, 0, 236), BackgroundTransparency = 1 }, gui)
+	new("UIListLayout", { Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Top, HorizontalAlignment = Enum.HorizontalAlignment.Right }, feed)
+	function ui.feed(text: string, colr: Color3)
+		local l = label(feed, text, 13, colr, true, { TextXAlignment = Enum.TextXAlignment.Right, BackgroundTransparency = 0.35, BackgroundColor3 = C.bg, Size = UDim2.new(1, 0, 0, 20), TextTruncate = Enum.TextTruncate.AtEnd })
+		new("UIPadding", { PaddingRight = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8) }, l)
+		corner(l, 6)
+		local kids = feed:GetChildren()
+		local n = 0
+		for _, k in kids do
+			if k:IsA("TextLabel") then
+				n += 1
+			end
+		end
+		if n > 6 then
+			for _, k in kids do
+				if k:IsA("TextLabel") and k ~= l then
+					k:Destroy()
+					break
+				end
+			end
+		end
+		task.delay(9, function()
+			if l.Parent then
+				TweenService:Create(l, TweenInfo.new(0.6), { TextTransparency = 1, BackgroundTransparency = 1 }):Play()
+				task.wait(0.7)
+				l:Destroy()
+			end
+		end)
+	end
+
+	-- всплывающие подсказки
+	local toastL = label(gui, "", 17, C.text, true, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -170), Size = UDim2.fromOffset(620, 30), TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = C.bg, BackgroundTransparency = 1, TextTransparency = 1, TextWrapped = true })
+	corner(toastL, 8)
+	local toastSeq = 0
+	function ui.toast(text: string, colr: string?)
+		toastSeq += 1
+		local s = toastSeq
+		toastL.Text = text
+		toastL.TextColor3 = (colr and C[colr]) or C.text
+		toastL.TextTransparency = 0
+		toastL.BackgroundTransparency = 0.3
+		task.delay(3.5, function()
+			if s == toastSeq then
+				TweenService:Create(toastL, TweenInfo.new(0.5), { TextTransparency = 1, BackgroundTransparency = 1 }):Play()
+			end
+		end)
+	end
+
+	-- экран «сбит»
+	local dead = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(30, 6, 6), BackgroundTransparency = 0.45, Visible = false }, gui)
+	local deadT = label(dead, "", 34, C.text, true, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(700, 44), TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true })
+	label(dead, "Возврат на авианосец…", 16, C.dim, false, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.53), Size = UDim2.fromOffset(500, 20), TextXAlignment = Enum.TextXAlignment.Center })
+	function ui.showDead(text: string?)
+		dead.Visible = text ~= nil
+		deadT.Text = text or ""
+	end
+
+	-- ================= СЕНСОРНОЕ УПРАВЛЕНИЕ =================
+	ui.touch = { x = 0, y = 0, rr = 0, rl = 0, brake = false, throttle = nil :: number?, fire = false }
+	local touchBtns: { [string]: TextButton } = {}
+	local activeTouches: { [InputObject]: boolean } = {}
+	function ui.isTouchingControls(): boolean
+		return next(activeTouches) ~= nil
+	end
+	local actionCb: ((string) -> ())? = nil
+	function ui.onAction(cb: (string) -> ())
+		actionCb = cb
+	end
+	local touchLayer = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, hud)
+	if isTouch then
+		touchLayer.Visible = true
+		-- стик
+		local stickBase = new("Frame", { Size = UDim2.fromOffset(170, 170), Position = UDim2.new(0, 36, 1, -330), BackgroundColor3 = C.bg, BackgroundTransparency = 0.5 }, touchLayer)
+		corner(stickBase, 85)
+		stroke(stickBase, C.line, 2)
+		local knob = new("Frame", { Size = UDim2.fromOffset(70, 70), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.accent, BackgroundTransparency = 0.25 }, stickBase)
+		corner(knob, 35)
+		local stickInput: InputObject? = nil
+		stickBase.InputBegan:Connect(function(i)
+			if i.UserInputType == Enum.UserInputType.Touch and not stickInput then
+				stickInput = i
+				activeTouches[i] = true
+			end
+		end)
+		UserInputService.TouchMoved:Connect(function(i)
+			if i == stickInput then
+				local c = stickBase.AbsolutePosition + stickBase.AbsoluteSize / 2
+				local d = Vector2.new(i.Position.X, i.Position.Y) - c
+				local r = stickBase.AbsoluteSize.X / 2
+				if d.Magnitude > r then
+					d = d.Unit * r
+				end
+				knob.Position = UDim2.new(0.5, d.X, 0.5, d.Y)
+				ui.touch.x = d.X / r
+				ui.touch.y = d.Y / r -- вниз = на себя = нос вверх
+			end
+		end)
+		UserInputService.TouchEnded:Connect(function(i)
+			activeTouches[i] = nil
+			if i == stickInput then
+				stickInput = nil
+				knob.Position = UDim2.fromScale(0.5, 0.5)
+				ui.touch.x, ui.touch.y = 0, 0
+			end
+		end)
+		-- тяга: вертикальный ползунок у правого края
+		local thrBar = new("Frame", { Size = UDim2.fromOffset(46, 220), Position = UDim2.new(1, -70, 1, -330), BackgroundColor3 = C.bg, BackgroundTransparency = 0.4 }, touchLayer)
+		corner(thrBar, 12)
+		stroke(thrBar, C.line, 2)
+		local thrKnob = new("Frame", { Size = UDim2.new(1, -8, 0, 30), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, -15), BackgroundColor3 = C.accent }, thrBar)
+		corner(thrKnob, 8)
+		label(thrBar, "ТЯГА", 11, C.dim, true, { Position = UDim2.new(0, 0, 1, 4), Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Center })
+		local thrInput: InputObject? = nil
+		local function setThr(y: number)
+			local a = thrBar.AbsolutePosition.Y + 15
+			local b = thrBar.AbsolutePosition.Y + thrBar.AbsoluteSize.Y - 15
+			local v = math.clamp((b - y) / (b - a), 0, 1)
+			ui.touch.throttle = v
+			ui.setThrottleKnob(v)
+		end
+		function ui.setThrottleKnob(v: number)
+			thrKnob.Position = UDim2.new(0.5, 0, 1 - v, 15 - v * 30)
+		end
+		thrBar.InputBegan:Connect(function(i)
+			if i.UserInputType == Enum.UserInputType.Touch then
+				thrInput = i
+				activeTouches[i] = true
+				setThr(i.Position.Y)
+			end
+		end)
+		UserInputService.TouchMoved:Connect(function(i)
+			if i == thrInput then
+				setThr(i.Position.Y)
+			end
+		end)
+		UserInputService.TouchEnded:Connect(function(i)
+			if i == thrInput then
+				thrInput = nil
+			end
+		end)
+		-- кнопки оружия
+		local function tbtn(name: string, text: string, size: number, pos: UDim2, colr: Color3, hold: boolean)
+			local b = new("TextButton", { Size = UDim2.fromOffset(size, size), Position = pos, BackgroundColor3 = colr, BackgroundTransparency = 0.25, Text = text, TextColor3 = C.bg, Font = Enum.Font.GothamBold, TextSize = 15, AutoButtonColor = false }, touchLayer)
+			corner(b, size // 2)
+			stroke(b, C.text, 1)
+			b.InputBegan:Connect(function(i)
+				if i.UserInputType == Enum.UserInputType.Touch then
+					activeTouches[i] = true
+					if hold then
+						ui.touch.fire = true
+					elseif actionCb then
+						actionCb(name)
+					end
+					b.BackgroundTransparency = 0.05
+				end
+			end)
+			b.InputEnded:Connect(function(i)
+				if i.UserInputType == Enum.UserInputType.Touch then
+					activeTouches[i] = nil
+					if hold then
+						ui.touch.fire = false
+					end
+					b.BackgroundTransparency = 0.25
+				end
+			end)
+			touchBtns[name] = b
+		end
+		tbtn("gun", "ОГОНЬ", 110, UDim2.new(1, -200, 1, -230), C.red, true)
+		tbtn("missile", "РАКЕТА", 74, UDim2.new(1, -290, 1, -300), C.amber, false)
+		tbtn("flare", "ЛОВУШ.", 64, UDim2.new(1, -170, 1, -320), C.text, false)
+		-- верхние мелкие
+		local small = { { "cam", "КАМЕРА" }, { "gear", "ШАССИ" }, { "brake", "ТОРМОЗ" }, { "menu", "МЕНЮ" } }
+		for k, s in small do
+			local b = new("TextButton", { Size = UDim2.fromOffset(84, 34), Position = UDim2.new(0, 16 + (k - 1) * 92, 0, 76), BackgroundColor3 = C.bg, BackgroundTransparency = 0.3, Text = s[2], TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 13 }, touchLayer)
+			corner(b, 17)
+			stroke(b, C.line)
+			b.Activated:Connect(function()
+				if actionCb then
+					actionCb(s[1])
+				end
+			end)
+		end
+	else
+		function ui.setThrottleKnob(_v: number) end
+	end
+
+	-- ================= ОБНОВЛЕНИЕ ПРИБОРОВ =================
+	function ui.setFlying(v: boolean)
+		hud.Visible = v
+	end
+	local hitT = 0
+	function ui.hit(kill: boolean)
+		hitT = os.clock()
+		hitL.Text = if kill then "✖ СБИТ!" else "✕ попадание"
+		hitL.TextColor3 = if kill then C.green else C.amber
+	end
+	function ui.update(d: any)
+		spdL.Text = tostring(math.round(d.speed))
+		altL.Text = tostring(math.round(d.alt))
+		thrFill.Size = UDim2.fromScale(d.thr, 1)
+		thrFill.BackgroundColor3 = if d.thr > 0.92 then C.amber else C.accent
+		local hpk = math.clamp(d.hp / math.max(d.maxHp, 1), 0, 1)
+		hpFill.Size = UDim2.fromScale(hpk, 1)
+		hpFill.BackgroundColor3 = if hpk > 0.5 then C.green elseif hpk > 0.25 then C.amber else C.red
+		hpTxt.Text = string.format("%d / %d", math.ceil(d.hp), d.maxHp)
+		ammoL.Text = string.format("РАКЕТЫ %d   ЛОВУШКИ %d   %s", d.missiles, d.flares, if d.gear then "ШАССИ ▼" else "")
+		cross.Position = UDim2.fromOffset(d.aim.X, d.aim.Y)
+		if d.lock then
+			lockBox.Visible = true
+			lockBox.Position = UDim2.fromOffset(d.lock.x, d.lock.y)
+			lockStroke.Color = if d.lock.locked then C.red else C.amber
+			lockTxt.TextColor3 = lockStroke.Color
+			lockTxt.Text = if d.lock.locked then "ЗАХВАТ — ПУСК!" else string.format("захват %d%%", math.floor(d.lock.k * 100))
+		else
+			lockBox.Visible = false
+		end
+		warnL.Text = d.warn or ""
+		infoL.Text = d.info or ""
+		if os.clock() - hitT > 0.6 then
+			hitL.Text = ""
+		end
+	end
+
+	return ui
+end
+
+return Hud
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+</Item>
+</roblox>
